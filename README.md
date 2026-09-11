@@ -1,18 +1,26 @@
 # Driftlock
 
-**Dependabot for API changes.** A GitHub App that watches the third-party APIs your codebase depends on, catches when a vendor changes something underneath you, and opens a suggested-fix PR — without ever needing the vendor's cooperation.
+**Your vendor changes something. Your code breaks silently. You find out at 2am.**
+
+Driftlock notices the change before you do, opens a PR with the fix, and you review and merge. No vendor cooperation needed.
 
 ---
 
-## Problem
+## The problem
 
-API vendors ship breaking changes with little warning. Useful new features launch quietly. Changelogs don't get read. Docs drift from reality. The cost lands on the *consumer* of the API — outages, silent bugs, wasted debugging time.
+Stripe renames a field. Twilio deprecates an endpoint. Shopify changes a response type. You don't find out until production breaks.
 
-Precedent: 30%+ of downtime at a major cloud provider traced to unnoticed external API/package changes.
+Changelogs don't get read. Docs drift from reality. 30%+ of downtime at a major cloud provider was traced to unnoticed external API changes. The cost always lands on the consumer — you.
 
 ## Why now
 
 Agentic coding tools (Claude Code, Devin, CodeRabbit, Greptile) have normalized giving an external tool write-adjacent access to a codebase. The trust curve that used to block this has already been crossed by code-review bots. We're applying the same trust model to a new trigger source: third-party API drift.
+
+## What makes it hard
+
+- **Knowing what actually changed.** Not "Stripe updated" — "field X was renamed to Y in this endpoint."
+- **Knowing who it affects.** Only repos that call that specific endpoint with that specific field.
+- **Suggesting the right fix.** Not "something changed" — "replace `charge.amount` with `charge.value` on line 42."
 
 ## How it works
 
