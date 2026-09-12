@@ -1,0 +1,17 @@
+FROM oven/bun:1
+
+# Install common test dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create workspace directory
+RUN mkdir -p /workspace
+WORKDIR /workspace
+
+# Set resource limits
+ENV NODE_OPTIONS="--max-old-space-size=4096"
+
+# Default command (overridden by runner)
+CMD ["sh", "-c", "echo 'No test command specified'"]

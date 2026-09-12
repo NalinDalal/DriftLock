@@ -1,0 +1,23 @@
+{
+  "name": "@driftlock/parser",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "bun build src/index.ts --outdir dist --target node",
+    "dev": "bun --watch src/index.ts",
+    "test": "bun test",
+    "test:watch": "bun test --watch"
+  },
+  "dependencies": {
+    "@driftlock/core": "workspace:*",
+    "tree-sitter": "^0.22.0",
+    "tree-sitter-typescript": "^0.22.0",
+    "tree-sitter-javascript": "^0.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.0"
+  }
+}
