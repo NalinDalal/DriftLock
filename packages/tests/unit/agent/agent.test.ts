@@ -1,4 +1,4 @@
-import { describe, expect, test, mock, beforeEach } from "bun:test";
+import { describe, expect, test, mock } from "bun:test";
 import { Agent } from "@driftlock/agent";
 import type { DriftEvent, DiffSummary } from "@driftlock/core";
 
@@ -33,13 +33,26 @@ function createDriftEvent(overrides: Partial<DriftEvent> = {}): DriftEvent {
     };
 }
 
+function createMockedAgent(content: string) {
+    const agent = new Agent("test-key");
+    const create = mock(async () => ({
+        choices: [{ message: { content } }],
+    }));
+    // Replace only this instance's SDK boundary, leaving other tests untouched.
+    const boundary = agent as unknown as {
+        openai: { chat: { completions: { create: typeof create } } };
+    };
+    boundary.openai.chat.completions.create = create;
+    return { agent, create };
+}
+
 describe("Agent", () => {
-    test("constructor requires API key", () => {
+    test("constructor accepts an API key", () => {
         expect(() => new Agent("test-key")).not.toThrow();
     });
 
-    test("constructor throws without API key", () => {
-        expect(() => new Agent("")).toBeDefined();
+    test("constructor accepts an empty API key", () => {
+        expect(() => new Agent("")).not.toThrow();
     });
 
     test("analyzeChange is a function", () => {
@@ -52,25 +65,72 @@ describe("Agent", () => {
         expect(typeof agent.generateFix).toBe("function");
     });
 
-    test("analyzeChange returns a promise", () => {
-        const agent = new Agent("test-key");
-        const result = agent.analyzeChange(
-            { version: "1.0" },
-            { version: "2.0" },
-            createDiffSummary(),
-        );
-        expect(result).toBeInstanceOf(Promise);
-        // Don't await - OpenAI won't work in test env
-        result.catch(() => {});
-    });
+    test.each(["breaking", "non-breaking", "unknown"] as const)(
+        "analyzeChange parses %s impact and analysis content",
+        async (impact) => {
+            const { agent, create } = createMockedAgent(
+                [
+                    "Summary: API version changed",
+                    `Impact: ${impact}`,
+                    "Confidence: high",
+                    "Affected: cs_1, cs_2",
+                    "Reasoning: Compared the API snapshots",
+                ].join("\n"),
+            );
+            const result = await agent.analyzeChange(
+                { version: "1.0" },
+                { version: "2.0" },
+                createDiffSummary(),
+            );
 
-    test("generateFix returns a promise", () => {
-        const agent = new Agent("test-key");
-        const result = agent.generateFix(
-            createDriftEvent(),
-            "const x = stripe.charges.create({});",
+            expect(create).toHaveBeenCalledTimes(1);
+            expect(result).toEqual({
+                summary: "API version changed",
+                impact,
+                confidence: "high",
+                affectedCallSites: ["cs_1", "cs_2"],
+                reasoning: "Compared the API snapshots",
+            });
+        },
+    );
+
+    test("generateFix parses a multiline diff after an empty header and skips code fences", async () => {
+        const diff = [
+            "--- a/client.ts",
+            "+++ b/client.ts",
+            "@@ -1 +1 @@",
+            "-const id = response.legacy_id;",
+            "+const id = response.id;",
+        ].join("\n");
+        const { agent, create } = createMockedAgent(
+            [
+                "Description: Use the replacement ID field",
+                "Diff:",
+                "```diff",
+                diff,
+                "```",
+                "Explanation: The legacy ID field was removed",
+            ].join("\n"),
         );
-        expect(result).toBeInstanceOf(Promise);
-        result.catch(() => {});
+        const result = await agent.generateFix(
+            createDriftEvent(),
+            "const id = response.legacy_id;",
+        );
+
+        expect(create).toHaveBeenCalledTimes(1);
+        expect(result).toEqual({
+            fix: {
+                id: "fix_de_1",
+                driftEventId: "de_1",
+                type: "custom",
+                description: "Use the replacement ID field",
+                diff,
+                confidence: "medium",
+                files: [],
+                generatedAt: expect.any(Date),
+            },
+            explanation: "The legacy ID field was removed",
+            alternatives: [],
+        });
     });
 });

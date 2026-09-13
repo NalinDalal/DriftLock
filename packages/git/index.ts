@@ -31,7 +31,53 @@ export class GitTracker {
         return this.git.diff([branch, "--name-status"]);
     }
 
-    async detectChanges(): Promise<ChangeDetection> {
+    async detectChanges(baseBranch?: string): Promise<ChangeDetection> {
+        if (baseBranch !== undefined) {
+            if (!baseBranch || baseBranch.startsWith("-") || baseBranch.includes("\0")) {
+                throw new Error("Invalid base ref");
+            }
+            const commit = (await this.git.raw([
+                "rev-parse", "--verify", "--end-of-options", `${baseBranch}^{commit}`,
+            ])).trim();
+            if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(commit)) {
+                throw new Error("Invalid base commit");
+            }
+
+            // Compare the tracked working tree (including staged changes) to the base.
+            const diff = await this.git.raw([
+                "diff", "--name-status", "-z", "--find-renames", commit, "--",
+            ]);
+            const changes: ChangeDetection = {
+                added: [], modified: [], deleted: [], renamed: [],
+            };
+            const fields = diff.split("\0");
+            for (let i = 0; i < fields.length - 1;) {
+                const status = fields[i++];
+                const path = fields[i++];
+                switch (status[0]) {
+                    case "A":
+                        changes.added.push(path);
+                        break;
+                    case "M":
+                    case "T":
+                        changes.modified.push(path);
+                        break;
+                    case "D":
+                        changes.deleted.push(path);
+                        break;
+                    case "C":
+                        changes.added.push(fields[i++]);
+                        break;
+                    case "R":
+                        changes.renamed.push({ from: path, to: fields[i++] });
+                        break;
+                    default:
+                        throw new Error(`Unsupported diff status: ${status}`);
+                }
+            }
+            return changes;
+        }
+
         const status = await this.git.status();
 
         return {

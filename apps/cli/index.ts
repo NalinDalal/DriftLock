@@ -3,7 +3,6 @@ import chalk from "chalk";
 import ora from "ora";
 import inquirer from "inquirer";
 import { TypeScriptExtractor } from "@driftlock/parser";
-import { Agent } from "@driftlock/agent";
 import { SandboxRunner } from "@driftlock/sandbox";
 import { GitTracker } from "@driftlock/git";
 
@@ -107,8 +106,8 @@ program
                     timeout: parseInt(options.timeout, 10),
                     memoryLimit: "512m",
                     cpuLimit: 1.0,
-                    networkEnabled: true,
-                    allowedEndpoints: ["api.stripe.com:443"],
+                    networkEnabled: false,
+                    allowedEndpoints: [],
                 });
 
                 if (result.exitCode === 0) {
@@ -141,13 +140,13 @@ program
     .command("diff")
     .description("Compare API snapshots")
     .argument("<path>", "Repository path")
-    .option("-b, --base <branch>", "Base branch to compare", "main")
-    .action(async (path: string, options: { base: string }) => {
+    .option("-b, --base <branch>", "Base branch to compare")
+    .action(async (path: string, options: { base?: string }) => {
         const spinner = ora("Comparing snapshots...").start();
 
         try {
             const tracker = new GitTracker(path);
-            const changes = await tracker.detectChanges();
+            const changes = await tracker.detectChanges(options.base);
 
             spinner.succeed("Snapshot comparison complete");
 
@@ -194,48 +193,13 @@ program
 
 program
     .command("fix")
-    .description("Generate fix suggestions")
+    .description("Generate fix suggestions (not yet available)")
     .argument("<path>", "Repository path")
-    .option("-k, --api-key <key>", "OpenAI API key")
-    .action(async (path: string, options: { apiKey?: string }) => {
-        const spinner = ora("Generating fix suggestions...").start();
-
-        try {
-            const apiKey = options.apiKey || process.env.OPENAI_API_KEY;
-            if (!apiKey) {
-                throw new Error(
-                    "OpenAI API key is required. Use --api-key or set OPENAI_API_KEY",
-                );
-            }
-
-            const agent = new Agent(apiKey);
-            const tracker = new GitTracker(path);
-            const extractor = new TypeScriptExtractor();
-
-            // Get current changes
-            const changes = await tracker.detectChanges();
-            console.log(chalk.bold("\nAnalyzing changes..."));
-
-            // For each modified file, analyze potential drift
-            for (const file of changes.modified) {
-                console.log(chalk.cyan(`\nAnalyzing ${file}...`));
-
-                // This is a simplified example - in production, you'd compare snapshots
-                // and generate fixes based on actual drift detection
-            }
-
-            spinner.succeed("Fix suggestions generated");
-            console.log(chalk.bold.green("\nFix generation complete"));
-            console.log(
-                chalk.dim(
-                    "Note: This is a simplified demo. Full implementation requires snapshot comparison.",
-                ),
-            );
-        } catch (error) {
-            spinner.fail("Fix generation failed");
-            console.error(error);
-            process.exit(1);
-        }
+    .action(() => {
+        console.error(
+            "Fix generation is not yet available: snapshot comparison and drift analysis are not implemented in the CLI.",
+        );
+        process.exitCode = 1;
     });
 
 program
@@ -246,13 +210,6 @@ program
 
         try {
             const answers = await inquirer.prompt([
-                {
-                    type: "input",
-                    name: "openaiApiKey",
-                    message: "OpenAI API key:",
-                    validate: (input: string) =>
-                        input.length > 0 || "API key is required",
-                },
                 {
                     type: "input",
                     name: "testCommand",
@@ -269,7 +226,7 @@ program
 
             // Create .driftlock.yml
             const config = `
-openaiApiKey: ${answers.openaiApiKey}
+# Supply credentials through the OPENAI_API_KEY environment variable, never this file.
 testCommand: ${answers.testCommand}
 enableProxy: ${answers.enableProxy}
 sandbox:

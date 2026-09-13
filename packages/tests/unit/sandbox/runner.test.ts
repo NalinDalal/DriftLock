@@ -1,4 +1,4 @@
-import { describe, expect, test, mock, beforeEach } from "bun:test";
+import { describe, expect, test, mock } from "bun:test";
 import { SandboxRunner } from "@driftlock/sandbox";
 import type { SandboxConfig } from "@driftlock/sandbox";
 
@@ -29,13 +29,34 @@ describe("SandboxRunner", () => {
         expect(typeof runner.runTestSuite).toBe("function");
     });
 
-    test("runTestSuite is async", () => {
+    test("runTestSuite returns a promise and reports Docker failures", async () => {
         const runner = new SandboxRunner();
+        const inspect = mock(async () => ({}));
+        const createContainer = mock(async (_options: unknown) => {
+            throw new Error("Container creation failed");
+        });
+        const docker = {
+            getImage: mock((_image: string) => ({ inspect })),
+            createContainer,
+        };
+        (runner as unknown as { docker: typeof docker }).docker = docker;
+
         const result = runner.runTestSuite("/tmp", createConfig());
         expect(result).toBeInstanceOf(Promise);
-        // Don't await - just verify it returns a promise
-        // Clean up by catching any error
-        result.catch(() => {});
+        expect(await result).toEqual({
+            exitCode: 1,
+            stdout: "",
+            stderr: "Container creation failed",
+            duration: expect.any(Number),
+            trafficCaptured: [],
+        });
+        expect(docker.getImage).toHaveBeenCalledWith("node:20-slim");
+        expect(inspect).toHaveBeenCalledTimes(1);
+        expect(createContainer).toHaveBeenCalledWith(
+            expect.objectContaining({
+                HostConfig: expect.objectContaining({ NetworkMode: "none" }),
+            }),
+        );
     });
 });
 
