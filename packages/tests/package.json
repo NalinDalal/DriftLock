@@ -11,7 +11,8 @@
         "test:unit": "bun test unit/",
         "test:integration": "bun test integration/",
         "test:e2e": "bun test e2e/",
-        "test:watch": "bun test --watch"
+        "test:watch": "bun test --watch",
+        "test:coverage": "bun run coverageCheck.ts"
     },
     "dependencies": {
         "@driftlock/agent": "workspace:*",
