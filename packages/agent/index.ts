@@ -170,9 +170,8 @@ Please generate a fix for this API drift issue.
             } else if (line.toLowerCase().includes("impact:")) {
                 const impactStr =
                     line.split(":")[1]?.trim().toLowerCase() || "";
-                if (impactStr.includes("breaking")) impact = "breaking";
-                else if (impactStr.includes("non-breaking"))
-                    impact = "non-breaking";
+                if (impactStr.includes("non-breaking")) impact = "non-breaking";
+                else if (impactStr.includes("breaking")) impact = "breaking";
                 else impact = "unknown";
             } else if (line.toLowerCase().includes("confidence:")) {
                 const confStr = line.split(":")[1]?.trim().toLowerCase() || "";
@@ -250,8 +249,8 @@ Please generate a fix for this API drift issue.
                 currentAlternative.tradeoffs = line.split(":")[1]?.trim() || "";
             } else if (currentSection === "diff" && line.startsWith("```")) {
                 // Skip code block markers
-            } else if (currentSection === "diff" && diff) {
-                diff += "\n" + line;
+            } else if (currentSection === "diff") {
+                diff += (diff ? "\n" : "") + line;
             }
         }
 
