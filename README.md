@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./assets/logo.svg" width="100" />
+<img src="./assets/logo-icon.svg" width="100" />
 
 # DriftLock
 
@@ -31,7 +31,7 @@ Changelogs don't get read. Docs drift from reality. SDK migration guides sit in 
 
 The cost always lands on you — the consumer — not the vendor who made the change.
 
-DriftLock fills the gap: it watches your actual API usage, compares it against what the vendor's API *actually returns* today, and opens a PR when they diverge. No vendor cooperation. No spec publication. No manual doc-checking.
+DriftLock fills the gap: it watches your actual API usage, compares it against what the vendor's API _actually returns_ today, and opens a PR when they diverge. No vendor cooperation. No spec publication. No manual doc-checking.
 
 ---
 
@@ -42,14 +42,14 @@ Install GitHub App → Discover call sites → Classify tests →
 Probe sandbox → Diff specs → Open PR → Report coverage
 ```
 
-| Step | What happens |
-|------|--------------|
-| **Discover** | Static analysis finds every `stripe.*` call in your codebase |
-| **Classify** | Identifies which tests hit real sandbox vs. mocked |
-| **Probe** | Runs your tests, captures actual request/response shapes |
-| **Diff** | Compares new snapshot against previous — shape change = drift |
-| **Fix** | Opens a PR with the diff and a suggested fix |
-| **Report** | Shows which call sites are monitored, blind, or untested |
+| Step         | What happens                                                  |
+| ------------ | ------------------------------------------------------------- |
+| **Discover** | Static analysis finds every `stripe.*` call in your codebase  |
+| **Classify** | Identifies which tests hit real sandbox vs. mocked            |
+| **Probe**    | Runs your tests, captures actual request/response shapes      |
+| **Diff**     | Compares new snapshot against previous — shape change = drift |
+| **Fix**      | Opens a PR with the diff and a suggested fix                  |
+| **Report**   | Shows which call sites are monitored, blind, or untested      |
 
 ---
 
@@ -75,13 +75,13 @@ driftlock fix ./repo
 
 ## What you're used to vs. what DriftLock does
 
-| Today | With DriftLock |
-|-------|----------------|
-| Read changelogs manually (you don't) | Automated drift detection |
-| Find out when prod breaks | Get a PR before it breaks |
-| "Something changed, no idea what" | "Field X renamed to Y on this endpoint" |
-| Fix it yourself, hope you got it right | Suggested fix, ready to merge |
-| No idea which tests are real | Coverage report per call site |
+| Today                                  | With DriftLock                          |
+| -------------------------------------- | --------------------------------------- |
+| Read changelogs manually (you don't)   | Automated drift detection               |
+| Find out when prod breaks              | Get a PR before it breaks               |
+| "Something changed, no idea what"      | "Field X renamed to Y on this endpoint" |
+| Fix it yourself, hope you got it right | Suggested fix, ready to merge           |
+| No idea which tests are real           | Coverage report per call site           |
 
 ---
 
