@@ -1,29 +1,26 @@
 {
-    "name": "@driftlock/cli",
+    "name": "@driftlock/tests",
     "version": "0.1.0",
     "private": true,
     "main": "./index.ts",
     "types": "./index.ts",
     "type": "module",
-    "bin": {
-        "driftlock": "./dist/index.js"
-    },
     "scripts": {
-        "build": "bun build ./index.ts --outdir ./dist --target node --external @driftlock/* --external ssh2 --external cpu-features",
         "typecheck": "tsc --noEmit",
         "lint": "eslint . --ext .ts",
         "test": "bun test",
-        "test:watch": "bun test --watch"
+        "test:unit": "bun test unit/",
+        "test:integration": "bun test integration/",
+        "test:e2e": "bun test e2e/",
+        "test:watch": "bun test --watch",
+        "test:coverage": "bun run coverageCheck.ts"
     },
     "dependencies": {
         "@driftlock/agent": "workspace:*",
+        "@driftlock/core": "workspace:*",
         "@driftlock/git": "workspace:*",
         "@driftlock/parser": "workspace:*",
-        "@driftlock/sandbox": "workspace:*",
-        "chalk": "^5.3.0",
-        "commander": "^12.0.0",
-        "inquirer": "^9.2.0",
-        "ora": "^8.0.0"
+        "@driftlock/sandbox": "workspace:*"
     },
     "devDependencies": {
         "@types/bun": "latest",

@@ -54,22 +54,23 @@ bun run --filter @driftlock/cli driftlock test ./repo --timeout 600000
 ### 3. Compare Snapshots
 
 ```bash
-# Compare with main branch
+# Report working-tree status
 bun run --filter @driftlock/cli driftlock diff ./repo
+
+# Compare with main branch
+bun run --filter @driftlock/cli driftlock diff ./repo --base main
 
 # Compare with specific branch
 bun run --filter @driftlock/cli driftlock diff ./repo --base develop
 ```
 
+With `--base`, the comparison includes committed, staged, and unstaged changes
+to tracked files. Untracked files are included only in the no-base status report.
+
 ### 4. Generate Fixes
 
-```bash
-# Generate fix suggestions (requires OpenAI API key)
-bun run --filter @driftlock/cli driftlock fix ./repo
-
-# With explicit API key
-bun run --filter @driftlock/cli driftlock fix ./repo --api-key sk-...
-```
+The `fix` command is not yet available. It exits with an error until the CLI
+implements snapshot comparison, drift analysis, and suggestion generation.
 
 ## Development
 
@@ -111,10 +112,14 @@ bun run --filter @driftlock/agent test:watch
 
 ## Configuration
 
+Supply credentials through the `OPENAI_API_KEY` environment variable using your
+shell or CI secret manager. Never put API keys in `.driftlock.yml` or commit them.
+The `init` command does not request or store a key. The CLI does not yet load
+credentials or other settings from this file.
+
 Create `.driftlock.yml` in your project root:
 
 ```yaml
-openaiApiKey: sk-...
 testCommand: bun test
 enableProxy: true
 sandbox:
