@@ -115,8 +115,8 @@ ${JSON.stringify(newSnapshot, null, 2)}
 ## Detected Changes
 - Added fields: ${diff.addedFields.join(", ") || "none"}
 - Removed fields: ${diff.removedFields.join(", ") || "none"}
-- Type changes: ${diff.typeChanges.map((c) => `${c.field}: ${c.oldType} → ${c.newType}`).join(", ") || "none"}
-- Optionality changes: ${diff.optionalityChanges.map((c) => `${c.field}: ${c.wasRequired ? "required" : "optional"} → ${c.nowRequired ? "required" : "optional"}`).join(", ") || "none"}
+- Type changes: ${diff.typeChanges.map((c: { field: string; oldType: string; newType: string }) => `${c.field}: ${c.oldType} → ${c.newType}`).join(", ") || "none"}
+- Optionality changes: ${diff.optionalityChanges.map((c: { field: string; wasRequired: boolean; nowRequired: boolean }) => `${c.field}: ${c.wasRequired ? "required" : "optional"} → ${c.nowRequired ? "required" : "optional"}`).join(", ") || "none"}
 
 ## Breaking Changes
 ${diff.breakingChanges.join("\n") || "none"}
