@@ -17,7 +17,7 @@
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push:pg"
   },
   "devDependencies": {
     "prettier": "^3.2.0",
