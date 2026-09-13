@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./assets/logo-wo-bg.svg" width="100" />
+<img src="./assets/logo-icon.svg" width="100" />
 
 # DriftLock
 
