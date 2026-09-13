@@ -1,4 +1,4 @@
-import simpleGit, { SimpleGit, StatusResult, DiffResult } from "simple-git";
+import simpleGit, { SimpleGit, StatusResult } from "simple-git";
 import { CallSite } from "@driftlock/core";
 
 export interface ChangeDetection {

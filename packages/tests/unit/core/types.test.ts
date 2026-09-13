@@ -6,7 +6,6 @@ import type {
     DiffSummary,
     Fix,
     Repository,
-    AnalysisResult,
     TestClassification,
     CoverageReport,
 } from "@driftlock/core";

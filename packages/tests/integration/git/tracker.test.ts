@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { GitTracker } from "@driftlock/git";
-import type { CallSite } from "@driftlock/core";
 
 describe("GitTracker integration: real git operations", () => {
     test("tracks changes in the DriftLock repo itself", async () => {

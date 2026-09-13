@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { TypeScriptExtractor } from "@driftlock/parser";
-import type { CallSite } from "@driftlock/core";
 
 describe("Parser integration: extract from real code patterns", () => {
     const extractor = new TypeScriptExtractor();

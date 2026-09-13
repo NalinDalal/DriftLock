@@ -1,6 +1,5 @@
 import Parser from "tree-sitter";
 import TypeScript from "tree-sitter-typescript";
-import JavaScript from "tree-sitter-javascript";
 import { CallSite } from "@driftlock/core";
 
 export interface ExtractionResult {
@@ -194,7 +193,7 @@ export class TypeScriptExtractor {
         }
     }
 
-    private extractResponseFields(node: Parser.SyntaxNode): string[] {
+    private extractResponseFields(_node: Parser.SyntaxNode): string[] {
         // This would require more sophisticated analysis
         // For now, return empty array
         return [];

@@ -1,4 +1,4 @@
-import { describe, expect, test, mock, beforeEach } from "bun:test";
+import { describe, expect, test, beforeEach } from "bun:test";
 import { TypeScriptExtractor } from "@driftlock/parser";
 
 describe("TypeScriptExtractor", () => {
