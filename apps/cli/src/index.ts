@@ -133,7 +133,7 @@ program
       console.log(chalk.bold('\nChanges:'));
       console.log(`  ${chalk.green('+ Added:')} ${changes.added.length} files`);
       console.log(`  ${chalk.yellow('~ Modified:')} ${changes.modified.length} files`);
-      console.log(`  ${chalk.red('- Deleted:`} ${changes.deleted.length} files`);
+      console.log(`  ${chalk.red('- Deleted:')} ${changes.deleted.length} files`);
       console.log(`  ${chalk.blue('→ Renamed:')} ${changes.renamed.length} files`);
 
       if (changes.added.length > 0) {
@@ -187,7 +187,7 @@ program
 
       // For each modified file, analyze potential drift
       for (const file of changes.modified) {
-        console.log(chalk.cyan(`\nAnalyzing ${file}...`);
+        console.log(chalk.cyan(`\nAnalyzing ${file}...`));
 
         // This is a simplified example - in production, you'd compare snapshots
         // and generate fixes based on actual drift detection
@@ -215,7 +215,7 @@ program
           type: 'input',
           name: 'openaiApiKey',
           message: 'OpenAI API key:',
-          validate: (input) => input.length > 0 || 'API key is required',
+          validate: (input: string) => input.length > 0 || 'API key is required',
         },
         {
           type: 'input',

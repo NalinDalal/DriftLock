@@ -26,7 +26,7 @@ export class GitTracker {
         return this.git.status();
     }
 
-    async getDiff(baseBranch?: string): Promise<DiffResult> {
+    async getDiff(baseBranch?: string): Promise<string> {
         const branch = baseBranch || "main";
         return this.git.diff([branch, "--name-status"]);
     }
