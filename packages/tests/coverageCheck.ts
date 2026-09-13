@@ -6,7 +6,7 @@ const THRESHOLDS = {
 };
 
 async function checkCoverage() {
-    const result = await $`bun test --coverage packages/tests/`.quiet();
+    const result = await $`bun test --coverage`.cwd(import.meta.dir).quiet();
 
     const output = result.stdout.toString() + result.stderr.toString();
 
