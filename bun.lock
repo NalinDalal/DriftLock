@@ -97,9 +97,9 @@
       "version": "0.1.0",
       "dependencies": {
         "@driftlock/core": "workspace:*",
-        "tree-sitter": "^0.25.1",
-        "tree-sitter-javascript": "^0.25.0",
-        "tree-sitter-typescript": "^0.23.2",
+        "tree-sitter": "0.21.1",
+        "tree-sitter-javascript": "0.21.4",
+        "tree-sitter-typescript": "0.21.2",
       },
       "devDependencies": {
         "@types/node": "^20.11.0",
@@ -1043,11 +1043,11 @@
 
     "tr46": ["tr46@0.0.3", "", {}, "sha512-N3WMsuqV66lT30CrXNbEjx4GEwlow3v6rr4mCcv6prnfwhS01rkgyFdjPNBYd9br7LpXV1+Emh01fHnq2Gdgrw=="],
 
-    "tree-sitter": ["tree-sitter@0.25.1", "", { "dependencies": { "node-addon-api": "^8.5.0", "node-gyp-build": "^4.8.4" } }, "sha512-mrcEdkYtHfrK1A6fs3O6FxkBo0Qig5XUXqHhxUOQu0bmPo00QF4XaSx4edpazdHwxnSCjlGKGgIqWdaN4dvTLA=="],
+    "tree-sitter": ["tree-sitter@0.21.1", "", { "dependencies": { "node-addon-api": "^8.0.0", "node-gyp-build": "^4.8.0" } }, "sha512-7dxoA6kYvtgWw80265MyqJlkRl4yawIjO7S5MigytjELkX43fV2WsAXzsNfO7sBpPPCF5Gp0+XzHk0DwLCq3xQ=="],
 
-    "tree-sitter-javascript": ["tree-sitter-javascript@0.25.0", "", { "dependencies": { "node-addon-api": "^8.3.1", "node-gyp-build": "^4.8.4" }, "peerDependencies": { "tree-sitter": "^0.25.0" }, "optionalPeers": ["tree-sitter"] }, "sha512-1fCbmzAskZkxcZzN41sFZ2br2iqTYP3tKls1b/HKGNPQUVOpsUxpmGxdN/wMqAk3jYZnYBR1dd/y/0avMeU7dw=="],
+    "tree-sitter-javascript": ["tree-sitter-javascript@0.21.4", "", { "dependencies": { "node-addon-api": "^8.0.0", "node-gyp-build": "^4.8.1" }, "peerDependencies": { "tree-sitter": "^0.21.1" } }, "sha512-Lrk8yahebwrwc1sWJE9xPcz1OnnqiEV7Dh5fbN6EN3wNAdu9r06HpTqLqDwUUbnG4EB46Sfk+FJFAOldfoKLOw=="],
 
-    "tree-sitter-typescript": ["tree-sitter-typescript@0.23.2", "", { "dependencies": { "node-addon-api": "^8.2.2", "node-gyp-build": "^4.8.2", "tree-sitter-javascript": "^0.23.1" }, "peerDependencies": { "tree-sitter": "^0.21.0" }, "optionalPeers": ["tree-sitter"] }, "sha512-e04JUUKxTT53/x3Uq1zIL45DoYKVfHH4CZqwgZhPg5qYROl5nQjV+85ruFzFGZxu+QeFVbRTPDRnqL9UbU4VeA=="],
+    "tree-sitter-typescript": ["tree-sitter-typescript@0.21.2", "", { "dependencies": { "node-addon-api": "^8.0.0", "node-gyp-build": "^4.8.1" }, "peerDependencies": { "tree-sitter": "^0.21.0" } }, "sha512-/RyNK41ZpkA8PuPZimR6pGLvNR1p0ibRUJwwQn4qAjyyLEIQD/BNlwS3NSxWtGsAWZe9gZ44VK1mWx2+eQVldg=="],
 
     "ts-api-utils": ["ts-api-utils@1.4.3", "", { "peerDependencies": { "typescript": ">=4.2.0" } }, "sha512-i3eMG77UTMD0hZhgRS562pv83RC6ukSAC2GMNWc+9dieh/+jDM5u5YG+NHX6VNDRHQcHwmsTHctP9LhbC3WxVw=="],
 
@@ -1186,8 +1186,6 @@
     "test-exclude/minimatch": ["minimatch@3.1.5", "", { "dependencies": { "brace-expansion": "^1.1.7" } }, "sha512-VgjWUsnnT6n+NUk6eZq77zeFdpW2LWDzP6zFGrCbHXiYNul5Dzqk2HHQ5uFH2DNW5Xbp8+jVzaeNt94ssEEl4w=="],
 
     "tinyglobby/picomatch": ["picomatch@4.0.7", "", {}, "sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA=="],
-
-    "tree-sitter-typescript/tree-sitter-javascript": ["tree-sitter-javascript@0.23.1", "", { "dependencies": { "node-addon-api": "^8.2.2", "node-gyp-build": "^4.8.2" }, "peerDependencies": { "tree-sitter": "^0.21.1" }, "optionalPeers": ["tree-sitter"] }, "sha512-/bnhbrTD9frUYHQTiYnPcxyHORIw157ERBa6dqzaKxvR/x3PC4Yzd+D1pZIMS6zNg2v3a8BZ0oK7jHqsQo9fWA=="],
 
     "@esbuild-kit/core-utils/esbuild/@esbuild/android-arm": ["@esbuild/android-arm@0.18.20", "", { "os": "android", "cpu": "arm" }, "sha512-fyi7TDI/ijKKNZTUJAQqiG5T7YjJXgnzkURqmGj13C6dCqckZBLdl4h7bkhHt/t0WP+zO9/zwroDvANaOqO5Sw=="],
 
