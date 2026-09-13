@@ -2,13 +2,16 @@
   "name": "@driftlock/sandbox",
   "version": "0.1.0",
   "private": true,
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "scripts": {
-    "build": "bun build src/index.ts --outdir dist --target node",
-    "dev": "bun --watch src/index.ts",
+    "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "test:watch": "bun test --watch"
+    "test:unit": "bun test packages/tests/unit/sandbox",
+    "test:integration": "bun test packages/tests/integration/sandbox",
+    "test:e2e": "bun test packages/tests/e2e",
+    "test:watch": "bun test --watch",
+    "test:coverage": "c8 --branches 100 --functions 100 --lines 100 --statements 100 bun test"
   },
   "dependencies": {
     "@driftlock/core": "workspace:*",

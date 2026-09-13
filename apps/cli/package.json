@@ -6,9 +6,10 @@
     "driftlock": "./dist/index.js"
   },
   "scripts": {
-    "build": "bun build src/index.ts --outdir dist --target node",
+    "build": "bun build src/index.ts --compile --outfile dist/driftlock",
     "dev": "bun src/index.ts",
-    "start": "bun dist/index.js"
+    "start": "bun dist/driftlock",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@driftlock/core": "workspace:*",

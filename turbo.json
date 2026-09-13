@@ -10,11 +10,12 @@
       "cache": false,
       "persistent": true
     },
-    "test": {
-      "dependsOn": ["build"]
-    },
-    "lint": {
-      "dependsOn": ["^build"]
-    }
+    "test": {},
+    "test:unit": {},
+    "test:integration": {},
+    "test:e2e": {},
+    "test:coverage": {},
+    "lint": {},
+    "typecheck": {}
   }
 }

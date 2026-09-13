@@ -10,12 +10,24 @@
     "build": "turbo build",
     "dev": "turbo dev",
     "test": "turbo test",
+    "test:unit": "turbo test:unit",
+    "test:integration": "turbo test:integration",
+    "test:e2e": "turbo test:e2e",
+    "test:coverage": "turbo test:coverage",
     "lint": "turbo lint",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\""
+    "typecheck": "turbo typecheck",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "db:push": "drizzle-kit push"
   },
   "devDependencies": {
     "prettier": "^3.2.0",
     "turbo": "^1.12.0",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "c8": "^9.1.0",
+    "drizzle-kit": "^0.20.0",
+    "eslint": "^8.56.0",
+    "@typescript-eslint/parser": "^6.19.0",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "eslint-config-prettier": "^9.1.0"
   }
 }

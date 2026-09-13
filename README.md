@@ -16,6 +16,7 @@ DriftLock notices the change before you do, opens a PR with the fix, and you rev
 [![GitHub stars](https://img.shields.io/github/stars/nerdev-co/DriftLock)](https://github.com/nerdev-co/DriftLock/stargazers)
 [![Build](https://img.shields.io/github/actions/workflow/status/nerdev-co/DriftLock/ci.yml?branch=main)](https://github.com/nerdev-co/DriftLock/actions)
 [![License](https://img.shields.io/github/license/nerdev-co/DriftLock)](./LICENSE)
+[![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/nerdev-co/DriftLock?utm_source=oss&utm_medium=github&utm_campaign=nerdev-co%2FDriftLock&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)](https://coderabbit.ai)
 
 </div>
 
