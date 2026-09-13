@@ -11,10 +11,6 @@
       "persistent": true
     },
     "test": {},
-    "test:unit": {},
-    "test:integration": {},
-    "test:e2e": {},
-    "test:coverage": {},
     "lint": {},
     "typecheck": {}
   }
