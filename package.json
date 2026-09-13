@@ -17,8 +17,7 @@
     "test:coverage": "cd packages/tests && bun run test:coverage",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "db:push": "drizzle-kit push"
+    "format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
   "devDependencies": {
     "@types/inquirer": "^9.0.10",
