@@ -11,14 +11,36 @@ const program = new Command();
 
 program
     .name("driftlock")
-    .description("API drift detection and fix generation")
-    .version("0.1.0");
+    .description("Self-maintaining APIs — detect drift, generate fix PRs")
+    .version("0.1.0")
+    .addHelpText(
+        "after",
+        `
+Examples:
+  $ driftlock analyze ./src
+  $ driftlock test ./repo --command "npm test"
+  $ driftlock diff ./repo --base main
+  $ driftlock fix ./repo --repo owner/repo --dry-run
+  $ driftlock init
+`,
+    );
 
 program
     .command("analyze")
-    .description("Analyze codebase for API call sites")
-    .argument("<path>", "Path to analyze")
+    .description("Scan codebase for API call sites (Stripe, Twilio, etc.)")
+    .argument("<path>", "Directory to scan for TypeScript/JavaScript files")
     .option("-o, --output <format>", "Output format (json, table)", "table")
+    .addHelpText(
+        "after",
+        `
+Scans your codebase using AST analysis to find all API call sites.
+Currently supports Stripe SDK calls (stripe.charges.create, etc.).
+
+Output formats:
+  json   — Machine-readable JSON with call sites and errors
+  table  — Human-readable table with file locations and endpoints
+`,
+    )
     .action(async (path: string, options: { output: string }) => {
         const spinner = ora("Analyzing codebase...").start();
 
@@ -90,10 +112,22 @@ program
 
 program
     .command("test")
-    .description("Run tests in sandbox environment")
-    .argument("<path>", "Path to test")
+    .description("Run tests in isolated Docker sandbox with traffic capture")
+    .argument("<path>", "Repository path to test")
     .option("-c, --command <cmd>", "Test command to run", "npm test")
     .option("-t, --timeout <ms>", "Timeout in milliseconds", "300000")
+    .addHelpText(
+        "after",
+        `
+Runs your test suite in an isolated Docker container with resource limits.
+Captures HTTP traffic to detect which tests hit real APIs vs mocks.
+
+The sandbox ensures:
+  - Network isolation (only allowed endpoints)
+  - Resource limits (CPU, memory)
+  - Reproducible environments
+`,
+    )
     .action(
         async (path: string, options: { command: string; timeout: string }) => {
             const spinner = ora("Running tests in sandbox...").start();
@@ -139,9 +173,18 @@ program
 
 program
     .command("diff")
-    .description("Compare API snapshots")
+    .description("Compare API snapshots between branches or over time")
     .argument("<path>", "Repository path")
-    .option("-b, --base <branch>", "Base branch to compare")
+    .option("-b, --base <branch>", "Base branch to compare against")
+    .addHelpText(
+        "after",
+        `
+Detects file changes in your repository and identifies which
+API call sites are affected by those changes.
+
+Use this to understand the impact of a branch before merging.
+`,
+    )
     .action(async (path: string, options: { base?: string }) => {
         const spinner = ora("Comparing snapshots...").start();
 
@@ -197,8 +240,27 @@ program
     .description("Detect API drift and generate fix PRs")
     .argument("<path>", "Repository path")
     .option("-b, --base <branch>", "Base branch to compare", "main")
-    .option("-r, --repo <repo>", "GitHub repo (owner/repo)")
-    .option("--dry-run", "Skip PR creation, just show changes")
+    .option("-r, --repo <repo>", "GitHub repo (owner/repo) for PR creation")
+    .option("--dry-run", "Show affected call sites without creating PRs")
+    .addHelpText(
+        "after",
+        `
+The core DriftLock loop:
+  1. Scans for API call sites in your codebase
+  2. Detects changes against the base branch
+  3. Identifies affected call sites
+  4. Generates fix suggestions
+  5. Creates a PR with the fix (if --repo is provided)
+
+Environment variables:
+  GITHUB_TOKEN    Required for PR creation (not needed for --dry-run)
+
+Examples:
+  $ driftlock fix ./repo --dry-run
+  $ driftlock fix ./repo --repo owner/repo
+  $ driftlock fix ./repo --base develop --repo owner/repo
+`,
+    )
     .action(
         async (
             repoPath: string,
@@ -260,7 +322,9 @@ program
                 const fixes = allCallSites
                     .filter((cs) =>
                         changes.modified.some(
-                            (m) => m.includes(cs.filePath) || cs.filePath.includes(m),
+                            (m) =>
+                                m.includes(cs.filePath) ||
+                                cs.filePath.includes(m),
                         ),
                     )
                     .map((cs) => ({
@@ -386,7 +450,19 @@ program
 
 program
     .command("init")
-    .description("Initialize DriftLock configuration")
+    .description("Initialize DriftLock configuration in current directory")
+    .addHelpText(
+        "after",
+        `
+Creates a .driftlock.yml configuration file with:
+  - Test command (default: npm test)
+  - HTTPS proxy settings for traffic capture
+  - Sandbox configuration (Docker image, resource limits)
+
+Environment variables:
+  OPENAI_API_KEY   Required for AI-powered fix generation
+`,
+    )
     .action(async () => {
         const spinner = ora("Initializing DriftLock...").start();
 
