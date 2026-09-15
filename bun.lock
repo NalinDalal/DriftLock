@@ -37,6 +37,23 @@
         "typescript": "^5.3.0",
       },
     },
+    "apps/webhook": {
+      "name": "@driftlock/webhook",
+      "version": "0.1.0",
+      "dependencies": {
+        "@driftlock/agent": "workspace:*",
+        "@driftlock/core": "workspace:*",
+        "@driftlock/db": "workspace:*",
+        "@driftlock/git": "workspace:*",
+        "@driftlock/parser": "workspace:*",
+        "hono": "^4.6.0",
+        "octokit": "^4.1.0",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "typescript": "^5.3.0",
+      },
+    },
     "packages/agent": {
       "name": "@driftlock/agent",
       "version": "0.1.0",
@@ -149,6 +166,8 @@
     "@driftlock/sandbox": ["@driftlock/sandbox@workspace:packages/sandbox"],
 
     "@driftlock/tests": ["@driftlock/tests@workspace:packages/tests"],
+
+    "@driftlock/webhook": ["@driftlock/webhook@workspace:apps/webhook"],
 
     "@drizzle-team/brocli": ["@drizzle-team/brocli@0.10.2", "", {}, "sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w=="],
 
@@ -577,6 +596,8 @@
     "has-tostringtag": ["has-tostringtag@1.0.2", "", { "dependencies": { "has-symbols": "^1.0.3" } }, "sha512-NqADB8VjPFLM2V0VvHUewwwsw0ZWBaIdgo+ieHtK3hasLz4qeCRjYcqfB6AQrBggRKppKF8L52/VqdVsO47Dlw=="],
 
     "hasown": ["hasown@2.0.4", "", { "dependencies": { "function-bind": "^1.1.2" } }, "sha512-T2UbfbBEF32wiepXIsMlTW9+dDYC6wMh/t/vYA4tuOMKqWz/n3vr1NFSxQiyP+zk2mXsoMA/i/7qV6LKut1t1A=="],
+
+    "hono": ["hono@4.13.8", "", {}, "sha512-/Gng7NfoykZl2pjukW5Z6+8Yxm3BPRf86GTbQnt0SbySkvax4fyL4H3HhY1cCpBGmiW9XDRFzRV+CXK2W8QudQ=="],
 
     "html-escaper": ["html-escaper@2.0.2", "", {}, "sha512-H2iMtd0I4Mt5eYiapRdIDjp+XzelXQ0tFE4JS7YFwFevXXMmOp9myNrUvCg0D6ws8iqkRPBfKHgbwig1SmlLfg=="],
 

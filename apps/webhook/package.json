@@ -1,0 +1,26 @@
+{
+  "name": "@driftlock/webhook",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./index.ts",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --watch index.ts",
+    "start": "bun run index.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --ext .ts"
+  },
+  "dependencies": {
+    "@driftlock/agent": "workspace:*",
+    "@driftlock/core": "workspace:*",
+    "@driftlock/db": "workspace:*",
+    "@driftlock/git": "workspace:*",
+    "@driftlock/parser": "workspace:*",
+    "hono": "^4.6.0",
+    "octokit": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.3.0"
+  }
+}
