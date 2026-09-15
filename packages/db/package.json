@@ -1,5 +1,5 @@
 {
-  "name": "@driftlock/sandbox",
+  "name": "@driftlock/db",
   "version": "0.1.0",
   "private": true,
   "main": "./index.ts",
@@ -7,17 +7,20 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "lint": "eslint . --ext .ts"
+    "lint": "eslint . --ext .ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@driftlock/core": "workspace:*",
-    "dockerode": "^4.0.0",
-    "http-proxy": "^1.18.0"
+    "drizzle-orm": "^0.36.0",
+    "postgres": "^3.4.0"
   },
   "devDependencies": {
-    "@types/dockerode": "^3.3.0",
-    "@types/http-proxy": "^1.17.0",
     "@types/node": "^20.11.0",
+    "drizzle-kit": "^0.28.0",
     "typescript": "^5.3.0"
   }
 }

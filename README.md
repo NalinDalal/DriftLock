@@ -4,11 +4,11 @@
 
 # DriftLock
 
-**Dependabot for API changes.**
+**Self-maintaining APIs.**
 
-Your vendor renames a field. Your code breaks silently. You find out at 2am.
+API providers announce changes. DriftLock applies them to your codebase.
 
-DriftLock notices the change before you do, opens a PR with the fix, and you review and merge.
+When Stripe ships a breaking change or a new feature, DriftLock scans your codebase, identifies affected usages, and opens a PR with the fix.
 
 [Website](https://driftlock.dev) · [Discord](https://discord.gg/driftlock) · [Issues](https://github.com/nerdev-co/DriftLock/issues)
 
@@ -22,35 +22,50 @@ DriftLock notices the change before you do, opens a PR with the fix, and you rev
 
 ---
 
+```mermaid
+flowchart LR
+    A[Vendor API Changes] --> B[DriftLock]
+    B --> C[Find Affected Code]
+    C --> D[Understand API Diff]
+    D --> E[Generate Fix]
+    E --> F[Pull Request]
+    F --> G[You Review & Merge]
+```
+
+---
+
 ## Why DriftLock
 
-You already use Dependabot for dependency updates. Renovate for version bumps. CodeRabbit for AI review.
+API communication is broken. Breaking changes ship with little warning. Useful features quietly launch and go unnoticed. Changelogs don't get read.
 
-But when Stripe renames `charge.amount` to `charge.value` — nothing catches it.
+The cost always lands on you (the consumer), not the vendor who made the change.
 
-Changelogs don't get read. Docs drift from reality. SDK migration guides sit in bookmarks you'll never open. **30%+ of downtime at a major cloud provider was traced to unnoticed external API changes.**
-
-The cost always lands on you — the consumer — not the vendor who made the change.
-
-DriftLock fills the gap: it watches your actual API usage, compares it against what the vendor's API _actually returns_ today, and opens a PR when they diverge. No vendor cooperation. No spec publication. No manual doc-checking.
+DriftLock makes APIs self-maintaining. When a vendor changes something, your codebase updates automatically. You review the PR and merge. No manual scanning. No migration guides. No 2am pages.
 
 ---
 
 ## How it works
 
-```text
-Install GitHub App → Discover call sites → Classify tests →
-Probe sandbox → Diff specs → Open PR → Report coverage
+```mermaid
+flowchart LR
+    A[Install GitHub App] --> B[Discover Call Sites]
+    B --> C[Classify Tests]
+    C --> D[Probe API]
+    D --> E[Diff API Shapes]
+    E --> F[Generate Fix PR]
+    F --> G[Review & Merge]
 ```
 
-| Step         | What happens                                                  |
-| ------------ | ------------------------------------------------------------- |
-| **Discover** | Static analysis finds every `stripe.*` call in your codebase  |
-| **Classify** | Identifies which tests hit real sandbox vs. mocked            |
-| **Probe**    | Runs your tests, captures actual request/response shapes      |
-| **Diff**     | Compares new snapshot against previous — shape change = drift |
-| **Fix**      | Opens a PR with the diff and a suggested fix                  |
-| **Report**   | Shows which call sites are monitored, blind, or untested      |
+| Step         | What happens                                             |
+| ------------ | -------------------------------------------------------- |
+| **Discover** | Static analysis finds every API call in your codebase    |
+| **Classify** | Identifies which tests hit real sandbox vs. mocked       |
+| **Probe**    | Runs your tests, captures actual request/response shapes |
+| **Diff**     | Compares current shapes against target version           |
+| **Fix**      | Opens PRs with the diffs and suggested fixes             |
+| **Report**   | Shows which call sites are monitored, blind, or untested |
+
+The goal: when Stripe ships a change, your codebase updates automatically. You just review and merge.
 
 ---
 
@@ -76,21 +91,49 @@ driftlock fix ./repo
 
 ## What you're used to vs. what DriftLock does
 
-| Today                                  | With DriftLock                          |
-| -------------------------------------- | --------------------------------------- |
-| Read changelogs manually (you don't)   | Automated drift detection               |
-| Find out when prod breaks              | Get a PR before it breaks               |
-| "Something changed, no idea what"      | "Field X renamed to Y on this endpoint" |
-| Fix it yourself, hope you got it right | Suggested fix, ready to merge           |
-| No idea which tests are real           | Coverage report per call site           |
+| Today                                  | With DriftLock                         |
+| -------------------------------------- | -------------------------------------- |
+| Avoid upgrades because they're tedious | Automated codebase scanning            |
+| Manually find affected call sites      | All affected calls found automatically |
+| Copy-paste migration guide changes     | Fix diffs generated and ready to merge |
+| Weeks to upgrade, so you put it off    | Minutes to review a PR                 |
+| Stuck on old versions                  | Stay current with minimal effort       |
+
+---
+
+## Why not Renovate / Dependabot?
+
+They update the version number in `package.json`. They don't change your code.
+
+When `stripe.charges.create({ amount: 100 })` needs to become `stripe.charges.create({ value: 100 })`, Renovate doesn't touch that. DriftLock does.
+
+| Renovate              | DriftLock                   |
+| --------------------- | --------------------------- |
+| Bumps version         | Updates your code           |
+| Handles `npm install` | Handles call site migration |
+| Dependency management | Code migration              |
+
+---
+
+## Why not just semver?
+
+Semver is a convention, not a guarantee. Many APIs don't follow it strictly. And even when they do, upgrading major versions means manually finding and fixing every affected call site — which is why teams avoid it.
+
+DriftLock works regardless of versioning scheme. It monitors the actual API surface, not the version number.
+
+---
+
+## Why not just test coverage?
+
+High test coverage helps — if your tests aren't mocked. Most are. DriftLock classifies which tests actually hit the real API vs. which just mock the response. You can't catch API drift with mocked tests.
 
 ---
 
 ## First target: Stripe
 
-Stripe has mature test mode, huge installed base, predictable API versioning, and plenty of design partners.
+Stripe has mature test mode, huge installed base, and plenty of teams stuck on old API versions. First vendor — not the only one.
 
-Support for Twilio, Shopify, and others is on the roadmap.
+Twilio, Shopify, and others are on the roadmap.
 
 ---
 
