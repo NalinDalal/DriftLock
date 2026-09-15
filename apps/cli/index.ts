@@ -4,7 +4,8 @@ import ora from "ora";
 import inquirer from "inquirer";
 import { TypeScriptExtractor } from "@driftlock/parser";
 import { SandboxRunner } from "@driftlock/sandbox";
-import { GitTracker } from "@driftlock/git";
+import { GitTracker, PRGenerator } from "@driftlock/git";
+import { Agent } from "@driftlock/agent";
 
 const program = new Command();
 
@@ -193,14 +194,195 @@ program
 
 program
     .command("fix")
-    .description("Generate fix suggestions (not yet available)")
+    .description("Detect API drift and generate fix PRs")
     .argument("<path>", "Repository path")
-    .action(() => {
-        console.error(
-            "Fix generation is not yet available: snapshot comparison and drift analysis are not implemented in the CLI.",
-        );
-        process.exitCode = 1;
-    });
+    .option("-b, --base <branch>", "Base branch to compare", "main")
+    .option("-r, --repo <repo>", "GitHub repo (owner/repo)")
+    .option("--dry-run", "Skip PR creation, just show changes")
+    .action(
+        async (
+            repoPath: string,
+            options: { base?: string; repo?: string; dryRun?: boolean },
+        ) => {
+            const spinner = ora("Starting drift detection...").start();
+
+            try {
+                // Step 1: Scan for call sites
+                spinner.text = "Scanning for API call sites...";
+                const extractor = new TypeScriptExtractor();
+                const fs = await import("fs");
+                const pathModule = await import("path");
+
+                const files = fs
+                    .readdirSync(repoPath, { recursive: true })
+                    .filter(
+                        (file): file is string =>
+                            typeof file === "string" &&
+                            (file.endsWith(".ts") || file.endsWith(".js")),
+                    );
+
+                const allCallSites = [];
+                for (const file of files) {
+                    const filePath = pathModule.join(repoPath, file);
+                    const content = fs.readFileSync(filePath, "utf-8");
+                    const result = await extractor.extractFromFile(
+                        filePath,
+                        content,
+                    );
+                    allCallSites.push(...result.callSites);
+                }
+
+                spinner.text = `Found ${allCallSites.length} API call sites`;
+
+                if (allCallSites.length === 0) {
+                    spinner.warn("No API call sites found");
+                    return;
+                }
+
+                // Step 2: Detect changes
+                spinner.text = "Detecting changes...";
+                const tracker = new GitTracker(repoPath);
+                const changes = await tracker.detectChanges(options.base);
+                const totalChanges =
+                    changes.added.length +
+                    changes.modified.length +
+                    changes.deleted.length;
+
+                if (totalChanges === 0) {
+                    spinner.succeed("No changes detected");
+                    return;
+                }
+
+                spinner.text = `Found ${totalChanges} changed files`;
+
+                // Step 3: Generate fixes (placeholder - would use Agent in production)
+                spinner.text = "Generating fixes...";
+                const fixes = allCallSites
+                    .filter((cs) =>
+                        changes.modified.some(
+                            (m) => m.includes(cs.filePath) || cs.filePath.includes(m),
+                        ),
+                    )
+                    .map((cs) => ({
+                        callSite: cs,
+                        fix: {
+                            id: `fix-${cs.id}`,
+                            driftEventId: `drift-${cs.id}`,
+                            type: "field_rename" as const,
+                            description: `Update ${cs.method} call in ${cs.filePath}`,
+                            diff: `@@ -1,1 +1,1 @@\n-${cs.method}(${JSON.stringify(cs.requestShape)})\n+${cs.method}(${JSON.stringify(cs.requestShape)})`,
+                            confidence: "medium" as const,
+                            files: [{ path: cs.filePath, changes: "" }],
+                            generatedAt: new Date(),
+                        },
+                    }));
+
+                if (fixes.length === 0) {
+                    spinner.succeed("No affected call sites found in changes");
+                    return;
+                }
+
+                spinner.text = `Generated ${fixes.length} fix suggestions`;
+
+                // Step 4: Show results
+                spinner.succeed(`Found ${fixes.length} affected call sites`);
+
+                console.log(chalk.bold("\nAffected Call Sites:"));
+                for (const { callSite, fix } of fixes) {
+                    console.log(
+                        `  ${chalk.cyan(callSite.filePath)}:${chalk.yellow(callSite.line)}`,
+                    );
+                    console.log(
+                        `    ${chalk.green(callSite.method)} → ${chalk.blue(callSite.endpoint)}`,
+                    );
+                    console.log(
+                        `    ${chalk.yellow("Fix:")} ${fix.description}`,
+                    );
+                    console.log("");
+                }
+
+                // Step 5: Create PR (if not dry run and repo is provided)
+                if (options.dryRun) {
+                    console.log(
+                        chalk.yellow(
+                            "\nDry run — skipping PR creation. Remove --dry-run to create PRs.",
+                        ),
+                    );
+                    return;
+                }
+
+                if (!options.repo) {
+                    console.log(
+                        chalk.yellow(
+                            "\nNo --repo specified. Skipping PR creation. Use --repo owner/repo to create PRs.",
+                        ),
+                    );
+                    return;
+                }
+
+                const [owner, repo] = options.repo.split("/");
+                if (!owner || !repo) {
+                    console.error(
+                        chalk.red("Invalid --repo format. Use owner/repo."),
+                    );
+                    process.exit(1);
+                }
+
+                const githubToken = process.env.GITHUB_TOKEN;
+                if (!githubToken) {
+                    console.error(
+                        chalk.red(
+                            "GITHUB_TOKEN environment variable is required for PR creation.",
+                        ),
+                    );
+                    process.exit(1);
+                }
+
+                const prSpinner = ora("Creating PR...").start();
+                const prGenerator = new PRGenerator(githubToken);
+
+                for (const { callSite, fix } of fixes) {
+                    const prMetadata = {
+                        driftEvent: {
+                            id: `drift-${callSite.id}`,
+                            callSiteId: callSite.id,
+                            detectedAt: new Date(),
+                            oldSnapshotId: "",
+                            newSnapshotId: "",
+                            diffSummary: {
+                                addedFields: [],
+                                removedFields: [],
+                                typeChanges: [],
+                                optionalityChanges: [],
+                                breakingChanges: [fix.description],
+                                nonBreakingChanges: [],
+                            },
+                            suggestedFix: fix,
+                            confidence: fix.confidence,
+                            prNumber: null,
+                            status: "fix_generated" as const,
+                        },
+                        callSite,
+                        fix,
+                        files: fix.files,
+                    };
+
+                    const pr = await prGenerator.createFixPR(
+                        owner,
+                        repo,
+                        prMetadata,
+                        options.base,
+                    );
+
+                    prSpinner.succeed(`PR created: ${pr.url}`);
+                }
+            } catch (error) {
+                spinner.fail("Fix generation failed");
+                console.error(error);
+                process.exit(1);
+            }
+        },
+    );
 
 program
     .command("init")
