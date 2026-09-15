@@ -6,9 +6,9 @@ Based on the W26/S26 application format. Draft answers below — refine the voic
 
 ## 1. What does your company do?
 
-Driftlock watches the third-party APIs your codebase depends on, catches when a vendor changes something underneath you, and opens a suggested-fix PR — without ever needing the vendor's cooperation.
+Driftlock makes APIs self-maintaining. When a vendor ships a breaking change or a new feature, Driftlock scans your codebase, identifies affected usages, and opens a PR with the fix — automatically.
 
-Think Dependabot, but for API contracts instead of package versions.
+API providers shouldn't just announce changes. They should apply them.
 
 ## 2. What is the problem you are solving?
 

@@ -6,7 +6,7 @@
 
 **Self-maintaining APIs.**
 
-API providers shouldn't just announce changes, they should apply them.
+API providers announce changes. DriftLock applies them to your codebase.
 
 When Stripe ships a breaking change or a new feature, DriftLock scans your codebase, identifies affected usages, and opens a PR with the fix.
 
@@ -22,11 +22,23 @@ When Stripe ships a breaking change or a new feature, DriftLock scans your codeb
 
 ---
 
+```mermaid
+flowchart LR
+    A[Vendor API Changes] --> B[DriftLock]
+    B --> C[Find Affected Code]
+    C --> D[Understand API Diff]
+    D --> E[Generate Fix]
+    E --> F[Pull Request]
+    F --> G[You Review & Merge]
+```
+
+---
+
 ## Why DriftLock
 
 API communication is broken. Breaking changes ship with little warning. Useful features quietly launch and go unnoticed. Changelogs don't get read.
 
-The cost always lands on you(the consumer), not the vendor who made the change.
+The cost always lands on you (the consumer), not the vendor who made the change.
 
 DriftLock makes APIs self-maintaining. When a vendor changes something, your codebase updates automatically. You review the PR and merge. No manual scanning. No migration guides. No 2am pages.
 
@@ -37,10 +49,11 @@ DriftLock makes APIs self-maintaining. When a vendor changes something, your cod
 ```mermaid
 flowchart LR
     A[Install GitHub App] --> B[Discover Call Sites]
-    B --> C[Check Target Version]
-    C --> D[Diff API Shapes]
-    D --> E[Generate Fix PRs]
-    E --> F[Review & Merge]
+    B --> C[Classify Tests]
+    C --> D[Probe API]
+    D --> E[Diff API Shapes]
+    E --> F[Generate Fix PR]
+    F --> G[Review & Merge]
 ```
 
 | Step         | What happens                                             |
@@ -83,7 +96,7 @@ driftlock fix ./repo
 | Avoid upgrades because they're tedious | Automated codebase scanning            |
 | Manually find affected call sites      | All affected calls found automatically |
 | Copy-paste migration guide changes     | Fix diffs generated and ready to merge |
-| Weeks to upgrade, so you don't         | Minutes to review a PR                 |
+| Weeks to upgrade, so you put it off    | Minutes to review a PR                 |
 | Stuck on old versions                  | Stay current with minimal effort       |
 
 ---
