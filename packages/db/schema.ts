@@ -36,12 +36,28 @@ export const fixTypeEnum = pgEnum("fix_type", [
   "custom",
 ]);
 
+export const installations = pgTable("installations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  installationId: integer("installation_id").notNull().unique(),
+  accountLogin: varchar("account_login", { length: 255 }).notNull(),
+  accountType: varchar("account_type", { length: 50 }).notNull(),
+  appId: integer("app_id").notNull(),
+  targetSelection: varchar("target_selection", { length: 50 }).notNull().default("selected"),
+  permissions: jsonb("permissions").notNull().default({}),
+  events: text("events").array().notNull().default([]),
+  active: varchar("active", { length: 20 }).notNull().default("active"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export const repositories = pgTable("repositories", {
   id: uuid("id").primaryKey().defaultRandom(),
   owner: varchar("owner", { length: 255 }).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   fullName: varchar("full_name", { length: 510 }).notNull(),
-  installationId: integer("installation_id").notNull(),
+  installationId: integer("installation_id")
+    .notNull()
+    .references(() => installations.installationId),
   defaultBranch: varchar("default_branch", { length: 255 }).notNull().default("main"),
   language: text("language").array().notNull().default([]),
   lastAnalyzedAt: timestamp("last_analyzed_at"),
