@@ -6,7 +6,7 @@ Based on the W26/S26 application format. Draft answers below — refine the voic
 
 ## 1. What does your company do?
 
-Driftlock makes APIs self-maintaining. When a vendor ships a breaking change or a new feature, Driftlock scans your codebase, identifies affected usages, and opens a PR with the fix — automatically.
+Driftlock makes APIs self-maintaining. When a vendor ships a breaking change or a new feature, Driftlock scans your codebase, identifies affected usages, and can open a PR with a suggested fix. AI-powered fix generation is on the roadmap.
 
 API providers shouldn't just announce changes. They should apply them.
 

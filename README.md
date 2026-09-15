@@ -8,7 +8,7 @@
 
 API providers announce changes. DriftLock applies them to your codebase.
 
-When Stripe ships a breaking change or a new feature, DriftLock scans your codebase, identifies affected usages, and opens a PR with the fix.
+DriftLock scans your codebase, identifies API call sites affected by git changes, and can open a PR with a suggested fix. AI-powered fix generation is on the roadmap.
 
 [Website](https://driftlock.dev) · [Discord](https://discord.gg/driftlock) · [Issues](https://github.com/nerdev-co/DriftLock/issues)
 
@@ -40,7 +40,7 @@ API communication is broken. Breaking changes ship with little warning. Useful f
 
 The cost always lands on you (the consumer), not the vendor who made the change.
 
-DriftLock makes APIs self-maintaining. When a vendor changes something, your codebase updates automatically. You review the PR and merge. No manual scanning. No migration guides. No 2am pages.
+DriftLock makes APIs self-maintaining. It scans your codebase for API call sites, detects drift from git changes, suggests fixes, and can open a PR. AI-powered fix generation is on the roadmap.
 
 ---
 
@@ -58,14 +58,14 @@ flowchart LR
 
 | Step         | What happens                                             |
 | ------------ | -------------------------------------------------------- |
-| **Discover** | Static analysis finds every API call in your codebase    |
+| **Scan**     | Static analysis finds every API call in your codebase    |
 | **Classify** | Identifies which tests hit real sandbox vs. mocked       |
 | **Probe**    | Runs your tests, captures actual request/response shapes |
-| **Diff**     | Compares current shapes against target version           |
-| **Fix**      | Opens PRs with the diffs and suggested fixes             |
+| **Diff**     | Detects changed files and maps them to affected call sites |
+| **Fix**      | Generates fix suggestions; PR creation available with `--repo` |
 | **Report**   | Shows which call sites are monitored, blind, or untested |
 
-The goal: when Stripe ships a change, your codebase updates automatically. You just review and merge.
+AI-powered fix generation is on the roadmap. The current implementation produces fix suggestions and supports PR creation.
 
 ---
 
@@ -81,8 +81,11 @@ driftlock analyze ./src
 # Run in sandbox
 driftlock test ./repo
 
-# Generate fixes
-driftlock fix ./repo
+# Detect drift
+driftlock fix ./repo --dry-run
+
+# Create PR with suggested fix
+driftlock fix ./repo --repo owner/repo
 ```
 
 [Full documentation →](./docs/architecture.md)
@@ -95,7 +98,7 @@ driftlock fix ./repo
 | -------------------------------------- | -------------------------------------- |
 | Avoid upgrades because they're tedious | Automated codebase scanning            |
 | Manually find affected call sites      | All affected calls found automatically |
-| Copy-paste migration guide changes     | Fix diffs generated and ready to merge |
+| Copy-paste migration guide changes     | Fix suggestions generated, PR creation available |
 | Weeks to upgrade, so you put it off    | Minutes to review a PR                 |
 | Stuck on old versions                  | Stay current with minimal effort       |
 
@@ -134,6 +137,8 @@ High test coverage helps — if your tests aren't mocked. Most are. DriftLock cl
 Stripe has mature test mode, huge installed base, and plenty of teams stuck on old API versions. First vendor — not the only one.
 
 Twilio, Shopify, and others are on the roadmap.
+
+AI-powered fix generation is on the roadmap. The current implementation detects drift and suggests fixes; full automated PR generation with AI-generated patches is planned.
 
 ---
 
