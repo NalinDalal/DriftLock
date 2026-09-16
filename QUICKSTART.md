@@ -77,7 +77,7 @@ baseline snapshot in `.driftlock/snapshots/`. After the vendor API changes,
 re-run to compare captured shapes against the baseline and generate fixes.
 
 ```bash
-# First run — captures a baseline snapshot
+# First run captures a baseline snapshot
 bun run --filter @driftlock/cli driftlock fix ./repo
 
 # After the vendor API changes, re-run to detect drift

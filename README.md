@@ -64,7 +64,7 @@ The original pitch that started DriftLock, verbatim:
 > Dependabot but for APIs. If you're working on this, consider applying to YC.
 
 That last line is the entire product in four words: **"Dependabot, but for
-APIs"** — and the sentence before it is the litmus test we use against every
+APIs"**. The sentence before it is the litmus test we use against every
 feature in this repo:
 
 > *An agent scans customer codebases, identifies affected usages, and opens a
@@ -78,8 +78,8 @@ scope creep. This section is the guard against drift.
 ## What DriftLock is
 
 DriftLock is the application layer connecting API providers to their customers'
-codebases. It's a neutral third-party service tracking changes across vendors —
-the codebase access is a solved problem (agentic tools proved it); the
+codebases. It's a neutral third-party service tracking changes across vendors.
+The codebase access is a solved problem (agentic tools proved it); the
 **application layer** is what's missing.
 
 The cost of a vendor change always lands on the consumer. DriftLock moves it

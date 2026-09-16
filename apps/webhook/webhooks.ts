@@ -13,7 +13,7 @@ function json(data: unknown, status = 200): Response {
 
 function verifySignature(payload: string, signature: string): boolean {
   if (!WEBHOOK_SECRET) {
-    console.warn("No GITHUB_WEBHOOK_SECRET set — skipping signature verification");
+    console.warn("No GITHUB_WEBHOOK_SECRET set. Skipping signature verification");
     return true;
   }
 

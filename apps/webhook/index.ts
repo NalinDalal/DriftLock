@@ -16,7 +16,7 @@ try {
     console.log("Database connection established");
 } catch (error) {
     console.warn(
-        "Database connection failed — webhooks will log but not persist:",
+        "Database connection failed. Webhooks will log but not persist:",
         error,
     );
 }
@@ -58,7 +58,7 @@ Bun.serve({
                 name: "DriftLock",
                 version: "0.1.0",
                 description:
-                    "Self-maintaining APIs — GitHub App webhook handler",
+                    "Self-maintaining APIs. GitHub App webhook handler",
                 endpoints: {
                     webhooks: "/webhooks/github",
                     health: "/health",

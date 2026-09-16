@@ -19,7 +19,7 @@ const program = new Command();
 
 program
     .name("driftlock")
-    .description("Self-maintaining APIs — detect drift, generate fix PRs")
+    .description("Self-maintaining APIs. Detect drift, generate fix PRs")
     .version("0.1.0")
     .addHelpText(
         "after",
@@ -45,8 +45,8 @@ Scans your codebase using AST analysis to find all API call sites.
 Currently supports Stripe SDK calls (stripe.charges.create, etc.).
 
 Output formats:
-  json   — Machine-readable JSON with call sites and errors
-  table  — Human-readable table with file locations and endpoints
+  json   Machine-readable JSON with call sites and errors
+  table  Human-readable table with file locations and endpoints
 `,
     )
     .action(async (path: string, options: { output: string }) => {
@@ -371,7 +371,7 @@ Examples:
                     console.log(chalk.bold("\nBaseline snapshots captured:"));
                     for (const cs of baselines) {
                         console.log(
-                            `  ${chalk.cyan(cs.filePath)}:${chalk.yellow(cs.line)} — ${chalk.green(cs.method)}`,
+                            `  ${chalk.cyan(cs.filePath)}:${chalk.yellow(cs.line)} (${chalk.green(cs.method)})`,
                         );
                     }
                     console.log(
@@ -417,7 +417,7 @@ Examples:
                     if (!applied) {
                         console.log(
                             chalk.yellow(
-                                `  ${drift.callSite.filePath}:${drift.callSite.line} — no static fix applicable`,
+                                `  ${drift.callSite.filePath}:${drift.callSite.line}: no static fix applicable`,
                             ),
                         );
                         continue;
@@ -452,7 +452,7 @@ Examples:
                 if (options.dryRun) {
                     console.log(
                         chalk.yellow(
-                            "\nDry run — skipping PR creation. Remove --dry-run to create PRs.",
+                            "\nDry run, skipping PR creation. Remove --dry-run to create PRs.",
                         ),
                     );
                     return;
