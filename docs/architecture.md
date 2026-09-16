@@ -10,34 +10,41 @@ Driftlock is a GitHub App + background worker. It watches repos where it's insta
 - OAuth/webhook handler for installation events.
 - App-level permissions: read repo contents, read PRs, write PRs (create branches, open PRs).
 - Same permission model as CodeRabbit, Dependabot, Renovate.
+- Two identities: the App installation token (machine, per account, scoped to installed repos) and the human OAuth token (`read:user` + `read:org`, only lists accounts). No `repo` scope on the human token.
 
-### 2. Usage extractor (static analysis)
+### 2. Dashboard (apps/fe)
+- React + Vite + TanStack Router app. Client usage only.
+- Account-first model: list the user's account and orgs where DriftLock is installed, then drill into repos.
+- Calls only the webhook JSON API. Owns no webhook or OAuth handling itself.
+- Control plane: watched repos, read/write permissions per repo or org, API keys and probe credentials, preferences and schedules. PRs always land in GitHub; the dashboard never merges or applies code.
+
+### 3. Usage extractor (static analysis)
 - Parses codebase to find call sites for tracked third-party APIs.
 - Extracts: endpoint paths, HTTP methods, request params/body fields, response fields accessed.
 - Outputs a normalized "inferred spec" per call site.
 
-### 3. Test classifier
+### 4. Test classifier
 - Inspects test files to determine whether a test hits a real sandbox/test-mode endpoint or mocks the HTTP layer.
 - Differentiates: (a) monitored (sandbox-hitting), (b) tested-but-blind (mocked), (c) untested.
 
-### 4. Sandbox prober
+### 5. Sandbox prober
 - Runs the customer's test suite (one command) against their sandbox credentials.
 - Captures real request/response payloads.
 - Stores snapshots keyed by call site + timestamp.
 - **Safety:** skips non-idempotent endpoints by default unless explicitly whitelisted.
 
-### 5. Drift detector
+### 6. Drift detector
 - Compares latest snapshot against the previous one.
 - Identifies: added/removed fields, renamed fields, type changes, status code changes, new required params.
 - Confidence scoring to reduce false positives.
 
-### 6. PR generator
+### 7. PR generator
 - On drift detection, creates a fresh branch.
 - Applies a proposed fix (field rename, default value addition, type coercion, etc.).
 - Opens a PR with: what changed, why it changed, suggested fix.
 - Deletes the branch immediately after merge or close (CodeRabbit hygiene).
 
-### 7. Coverage reporter
+### 8. Coverage reporter
 - Per-call-site status: monitored / tested-but-blind / untested.
 - Exposed in-app or via a status check on the PR.
 

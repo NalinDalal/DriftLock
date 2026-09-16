@@ -14,12 +14,60 @@ Build a complete API drift detection system with parser, AI agent, CLI+UI, git t
 | **Parser** | tree-sitter + @babel/parser | Multi-language AST support, incremental parsing |
 | **Agent** | OpenAI/Anthropic API | Code analysis, fix generation, explanation |
 | **CLI** | Bun + Commander.js | Fast iteration, composable commands |
-| **UI** | Next.js 14 (App Router) | React Server Components, API routes, Vercel-ready |
+| **Frontend** | Vite + TanStack Router (React SPA) | Dashboard for client usage, talks to the webhook JSON API |
 | **Database** | PostgreSQL + Drizzle ORM | Type-safe queries, migrations |
 | **Queue** | BullMQ + Redis | Background jobs, retry logic, rate limiting |
 | **Sandbox** | Docker + dockerode | Isolated test execution, reproducible environments |
 | **Git** | simple-git + Octokit | Local git ops + GitHub API integration |
 | **Diffing** | json-schema-diff + ast-diff | Structural changes, not just line diffs |
+
+---
+
+## Current plan (2026-09)
+
+### App split
+
+- `apps/webhook` (Bun native server, :3001): owns `/webhooks/*` (GitHub
+  events), `/auth/*` (GitHub OAuth), and the JSON API the dashboard reads
+  and writes. One deployable.
+- `apps/fe` (React, Vite, TanStack Router): the customer dashboard. It only
+  calls the webhook JSON API. Install and PR work stays in GitHub and the
+  webhook server.
+
+### Two GitHub identities
+
+| Identity | What it is | What it grants |
+| -------- | ---------- | -------------- |
+| App installation (machine) | Installed per account (user or org) | Read repo contents, write PRs, scoped to installed repos |
+| OAuth (human) | Person signs into the dashboard | `read:user` + `read:org`, only lists the accounts they belong to |
+
+Scopes, human sign-in:
+- `read:user`: the human's profile and own account.
+- `read:org`: which orgs the human belongs to.
+- No `repo` scope on the OAuth token. Repo data flows through the
+  installation token, not the human's token.
+
+### Dashboard model
+
+First screen is the accounts where DriftLock is installed (own account plus
+each org). Then it drills down:
+
+`Account -> Repo -> Call sites, drift events, PRs`
+
+Account-first, not repo-first. Installs are per-account, and that is what the
+human controls.
+
+### What humans do in the dashboard
+
+PRs always land in GitHub. The dashboard never merges or applies code; it is
+the control plane:
+
+- Pick which orgs and repos are watched.
+- Read/write permissions per repo or org, CodeRabbit-style.
+- Store API keys and probe credentials; set preferences and schedules.
+- See what drift was found, which PRs opened, and their status.
+
+Humans act on PRs in GitHub, not in the dashboard.
 
 ---
 
@@ -70,11 +118,17 @@ driftlock/
 │   │   │   ├── ui/              # Terminal UI (Ink)
 │   │   │   └── index.ts
 │   │   └── package.json
-│   └── web/                     # Web UI
+│   ├── fe/                      # React + Vite + TanStack Router dashboard
+│   │   ├── src/
+│   │   │   ├── routes/          # TanStack Router file routes
+│   │   │   ├── components/      # React components
+│   │   │   └── lib/             # API clients, utilities
+│   │   └── package.json
+│   └── webhook/                 # Bun native server: /webhooks/*, /auth/*, JSON API
 │       ├── src/
-│       │   ├── app/             # Next.js App Router
-│       │   ├── components/      # React components
-│       │   └── lib/             # API clients, utilities
+│       │   ├── routes/          # Per-route handler files
+│       │   ├── lib/             # API clients, utilities
+│       │   └── index.ts
 │       └── package.json
 ├── docker/
 │   ├── Dockerfile.sandbox       # Test execution environment
@@ -285,40 +339,37 @@ driftlock/
 
 ---
 
-### Step 7: Web Application
-**Objective:** Web UI for team collaboration and visualization.
+### Step 7: Frontend Dashboard (apps/fe)
+**Objective:** Dashboard for team, organization, and per-repo visibility plus settings.
 
 **Files to Create/Modify:**
-- `apps/web/src/app/` (Next.js pages)
-- `apps/web/src/components/` (React components)
-- `apps/web/src/lib/` (API clients)
-- `apps/web/package.json`
+- `apps/fe/src/routes/` (TanStack Router file routes)
+- `apps/fe/src/components/` (React components)
+- `apps/fe/src/lib/` (API clients)
+- `apps/fe/package.json`
 
 **Dependencies:** Steps 2, 3, 4, 5
 
 **Implementation Details:**
-1. Build dashboard pages:
-   - Overview: recent drift events, coverage stats
-   - Call Sites: list of detected API usage
-   - Drift Events: detailed change history
-   - Fixes: suggested and applied fixes
+1. Build dashboard routes (account-first model):
+   - Accounts: list of the user's account and orgs where DriftLock is installed
+   - Repo: call sites, drift events, PR status for a single repo
+   - Settings: watched repos, read/write permissions per repo or org, API keys and probe credentials, preferences and schedules
 2. Create interactive components:
    - Code viewer with diff highlighting
    - Fix preview with before/after
    - Coverage map visualization
    - Timeline of changes
-3. Implement API routes:
-   - REST API for CLI communication
-   - WebSocket for real-time updates
-   - GitHub webhook endpoints
+3. Hook the dashboard to the webhook JSON API only.
 4. Add authentication:
-   - GitHub OAuth
-   - Team/organization support
+   - GitHub OAuth with `read:user` + `read:org` scopes only
+   - No `repo` scope; repo data comes from installation tokens via the webhook API
 
 **Verification:**
 - [ ] Dashboard loads and displays data
+   - [ ] Account list matches the user's orgs with DriftLock installed
    - [ ] Code viewer renders correctly
-   - [ ] API routes respond correctly
+   - [ ] Settings persist (permissions, API keys, schedules)
    - [ ] Authentication works
 
 ---

@@ -229,12 +229,13 @@ This is Stripe-specific. Generalizing to N vendors is post-v1 work.
 
 | Layer | Choice | Reason |
 |-------|--------|--------|
-| GitHub App server | Next.js API routes or plain Express | Octokit works everywhere; Next.js gives you easy deploys on Vercel |
+| Webhook server (apps/webhook) | Bun native server | Owns `/webhooks/*`, `/auth/*`, and the dashboard JSON API in one process on :3001 |
+| Dashboard (apps/fe) | React + Vite + TanStack Router | Client usage only; calls the webhook JSON API, no server-side logic |
 | Background workers | Inngest or BullMQ + Redis | Event-driven, handles webhook retries and scheduled probe runs |
 | Database | PostgreSQL | Call sites, snapshots, drift events, installations |
 | Proxy (sandbox probing) | Custom Node HTTP(S) proxy | Lightweight, single-purpose |
 | Queue for probe jobs | Same as workers | One queue, multiple consumers |
-| Hosting | Vercel (app) + Fly/Render (workers + proxy) | Separate the stateless app from the stateful worker |
+| Hosting | Vercel (dashboard) + Fly/Render (webhook server, workers, proxy) | Separate the stateless dashboard from the stateful server |
 
 ### Data retention
 
