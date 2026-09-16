@@ -44,6 +44,20 @@ DriftLock makes APIs self-maintaining. It scans your codebase for API call sites
 
 ---
 
+## Origin story
+
+I built DriftLock because I got bitten by an API break myself.
+
+I had a Next.js app running on Prisma 6. Then Prisma 7 shipped, and the app broke. I didn't catch it until right before my interviews, if I hadn't noticed in time, it would have blown up in production at the worst possible moment.
+
+That's when it clicked: dependency upgrades don't just bump a version number. They change the actual code you write. Changelogs are easy to miss. Migration guides are easy to skip. Semver doesn't save you when the API surface changes.
+
+What I needed wasn't another tool that tells me a dependency is out of date. I needed something that would automatically update the affected code in my codebase : something that makes my APIs self-maintaining.
+
+That's DriftLock.
+
+---
+
 ## How it works
 
 ```mermaid
@@ -56,14 +70,14 @@ flowchart LR
     F --> G[Review & Merge]
 ```
 
-| Step         | What happens                                             |
-| ------------ | -------------------------------------------------------- |
-| **Scan**     | Static analysis finds every API call in your codebase    |
-| **Classify** | Identifies which tests hit real sandbox vs. mocked       |
-| **Probe**    | Runs your tests, captures actual request/response shapes |
-| **Diff**     | Detects changed files and maps them to affected call sites |
+| Step         | What happens                                                   |
+| ------------ | -------------------------------------------------------------- |
+| **Scan**     | Static analysis finds every API call in your codebase          |
+| **Classify** | Identifies which tests hit real sandbox vs. mocked             |
+| **Probe**    | Runs your tests, captures actual request/response shapes       |
+| **Diff**     | Detects changed files and maps them to affected call sites     |
 | **Fix**      | Generates fix suggestions; PR creation available with `--repo` |
-| **Report**   | Shows which call sites are monitored, blind, or untested |
+| **Report**   | Shows which call sites are monitored, blind, or untested       |
 
 AI-powered fix generation is on the roadmap. The current implementation produces fix suggestions and supports PR creation.
 
@@ -94,13 +108,13 @@ driftlock fix ./repo --repo owner/repo
 
 ## What you're used to vs. what DriftLock does
 
-| Today                                  | With DriftLock                         |
-| -------------------------------------- | -------------------------------------- |
-| Avoid upgrades because they're tedious | Automated codebase scanning            |
-| Manually find affected call sites      | All affected calls found automatically |
+| Today                                  | With DriftLock                                   |
+| -------------------------------------- | ------------------------------------------------ |
+| Avoid upgrades because they're tedious | Automated codebase scanning                      |
+| Manually find affected call sites      | All affected calls found automatically           |
 | Copy-paste migration guide changes     | Fix suggestions generated, PR creation available |
-| Weeks to upgrade, so you put it off    | Minutes to review a PR                 |
-| Stuck on old versions                  | Stay current with minimal effort       |
+| Weeks to upgrade, so you put it off    | Minutes to review a PR                           |
+| Stuck on old versions                  | Stay current with minimal effort                 |
 
 ---
 
@@ -146,7 +160,7 @@ AI-powered fix generation is on the roadmap. The current implementation detects 
 
 If you discover a security vulnerability, please report it responsibly.
 
-**Email:** security@driftlock.dev
+**Email:** nalin@nerdev.in
 
 Do NOT open a public GitHub issue for security vulnerabilities.
 
