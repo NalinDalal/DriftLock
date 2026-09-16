@@ -16,8 +16,11 @@ cd DriftLock
 # Install dependencies
 bun install
 
-# Start local services (PostgreSQL + Redis)
-docker compose -f docker/docker-compose.yml up -d
+# Copy environment config (Bun auto-loads .env from the repo root)
+cp .env.example .env
+
+# Start local services (PostgreSQL)
+docker compose up -d postgres
 
 # Build all packages
 bun run build
