@@ -1,11 +1,15 @@
-import { Hono } from "hono";
 import { createHmac, timingSafeEqual } from "crypto";
 import { getDb, installations, repositories } from "@driftlock/db";
 import { eq } from "drizzle-orm";
 
-export const webhookHandler = new Hono();
-
 const WEBHOOK_SECRET = process.env.GITHUB_WEBHOOK_SECRET || "";
+
+function json(data: unknown, status = 200): Response {
+    return new Response(JSON.stringify(data, null, 2), {
+        status,
+        headers: { "content-type": "application/json" },
+    });
+}
 
 function verifySignature(payload: string, signature: string): boolean {
   if (!WEBHOOK_SECRET) {
@@ -19,16 +23,20 @@ function verifySignature(payload: string, signature: string): boolean {
   return timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
 }
 
-webhookHandler.post("/github", async (c) => {
-  const signature = c.req.header("x-hub-signature-256") || "";
-  const eventType = c.req.header("x-github-event") || "";
-  const deliveryId = c.req.header("x-github-delivery") || "";
+export async function webhookHandler(req: Request): Promise<Response> {
+  if (req.method !== "POST") {
+    return json({ error: "Method not allowed" }, 405);
+  }
 
-  const body = await c.req.text();
+  const signature = req.headers.get("x-hub-signature-256") || "";
+  const eventType = req.headers.get("x-github-event") || "";
+  const deliveryId = req.headers.get("x-github-delivery") || "";
+
+  const body = await req.text();
 
   if (!verifySignature(body, signature)) {
     console.error(`Invalid signature for delivery ${deliveryId}`);
-    return c.json({ error: "Invalid signature" }, 401);
+    return json({ error: "Invalid signature" }, 401);
   }
 
   console.log(`Received ${eventType} event (delivery: ${deliveryId})`);
@@ -53,12 +61,12 @@ webhookHandler.post("/github", async (c) => {
         console.log(`Unhandled event type: ${eventType}`);
     }
 
-    return c.json({ received: true });
+    return json({ received: true });
   } catch (error) {
     console.error(`Error processing ${eventType} event:`, error);
-    return c.json({ error: "Internal server error" }, 500);
+    return json({ error: "Internal server error" }, 500);
   }
-});
+}
 
 async function handleInstallation(payload: any) {
   const { action, installation, repositories: repos } = payload;

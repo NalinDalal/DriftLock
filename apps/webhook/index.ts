@@ -1,47 +1,71 @@
-import { Hono } from "hono";
 import { webhookHandler } from "./webhooks";
 import { getDb } from "@driftlock/db";
 
-const app = new Hono();
+const port = parseInt(process.env.PORT || "3001", 10);
 
-app.route("/webhooks", webhookHandler);
-
-app.get("/", (c) => {
-    return c.json({
-        name: "DriftLock",
-        version: "0.1.0",
-        description: "Self-maintaining APIs — GitHub App webhook handler",
-        endpoints: {
-            webhooks: "/webhooks/github",
-            health: "/health",
-        },
+export function json(data: unknown, status = 200): Response {
+    return new Response(JSON.stringify(data, null, 2), {
+        status,
+        headers: { "content-type": "application/json" },
     });
-});
-
-app.get("/health", async (c) => {
-    try {
-        const db = getDb();
-        // Simple query to verify database connection
-        await db.execute("SELECT 1");
-        return c.json({ status: "ok", database: "connected", timestamp: new Date().toISOString() });
-    } catch (error) {
-        return c.json({ status: "degraded", database: "disconnected", timestamp: new Date().toISOString() }, 503);
-    }
-});
-
-const port = parseInt(process.env.PORT || "3000", 10);
+}
 
 // Verify database connection on startup
 try {
-    const db = getDb();
+    getDb();
     console.log("Database connection established");
 } catch (error) {
-    console.warn("Database connection failed — webhooks will log but not persist:", error);
+    console.warn(
+        "Database connection failed — webhooks will log but not persist:",
+        error,
+    );
 }
 
 console.log(`DriftLock webhook server starting on port ${port}`);
 
-export default {
+Bun.serve({
     port,
-    fetch: app.fetch,
-};
+    async fetch(req) {
+        const url = new URL(req.url);
+
+        if (url.pathname === "/webhooks/github") {
+            return await webhookHandler(req);
+        }
+
+        if (url.pathname === "/health") {
+            try {
+                const db = getDb();
+                await db.execute("SELECT 1");
+                return json({
+                    status: "ok",
+                    database: "connected",
+                    timestamp: new Date().toISOString(),
+                });
+            } catch (error) {
+                return json(
+                    {
+                        status: "degraded",
+                        database: "disconnected",
+                        timestamp: new Date().toISOString(),
+                    },
+                    503,
+                );
+            }
+        }
+
+        if (url.pathname === "/") {
+            return json({
+                name: "DriftLock",
+                version: "0.1.0",
+                description:
+                    "Self-maintaining APIs — GitHub App webhook handler",
+                endpoints: {
+                    webhooks: "/webhooks/github",
+                    health: "/health",
+                },
+            });
+        }
+
+        return json({ error: "Not found" }, 404);
+    },
+});
