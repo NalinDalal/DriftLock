@@ -177,9 +177,9 @@ describe("CLI fix command", () => {
         const result = await runCli(["fix", "--help"]);
 
         expect(result.stdout).toContain("Scans for API call sites");
-        expect(result.stdout).toContain("Detects changes");
-        expect(result.stdout).toContain("Generates fix suggestions");
-        expect(result.stdout).toContain("Creates a PR");
+        expect(result.stdout).toContain("establishes a baseline snapshot");
+        expect(result.stdout).toContain("Generates deterministic fixes");
+        expect(result.stdout).toContain("creates a PR");
     });
 });
 

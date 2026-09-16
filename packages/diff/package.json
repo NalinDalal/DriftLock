@@ -1,0 +1,20 @@
+{
+    "name": "@driftlock/diff",
+    "version": "0.1.0",
+    "private": true,
+    "main": "./index.ts",
+    "types": "./index.ts",
+    "type": "module",
+    "scripts": {
+        "typecheck": "tsc --noEmit",
+        "lint": "eslint . --ext .ts",
+        "test": "bun test"
+    },
+    "dependencies": {
+        "@driftlock/core": "workspace:*"
+    },
+    "devDependencies": {
+        "@types/node": "^20.11.0",
+        "typescript": "^5.3.0"
+    }
+}

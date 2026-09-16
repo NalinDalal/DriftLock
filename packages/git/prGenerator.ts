@@ -17,8 +17,8 @@ export interface PRMetadata {
 export class PRGenerator {
     private octokit: Octokit;
 
-    constructor(githubToken: string) {
-        this.octokit = new Octokit({ auth: githubToken });
+    constructor(githubToken: string, octokit?: Octokit) {
+        this.octokit = octokit ?? new Octokit({ auth: githubToken });
     }
 
     async createFixPR(

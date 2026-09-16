@@ -8,7 +8,7 @@
 
 API providers announce changes. DriftLock applies them to your codebase.
 
-DriftLock scans your codebase, identifies API call sites affected by git changes, and can open a PR with a suggested fix. AI-powered fix generation is on the roadmap.
+DriftLock scans your codebase for API call sites, captures vendor traffic to build shape snapshots, detects breaking changes between snapshots, and opens a PR with a suggested fix. AI-powered fix generation is on the roadmap.
 
 [Website](https://driftlock.dev) · [Discord](https://discord.gg/driftlock) · [Issues](https://github.com/nerdev-co/DriftLock/issues)
 
@@ -40,7 +40,7 @@ API communication is broken. Breaking changes ship with little warning. Useful f
 
 The cost always lands on you (the consumer), not the vendor who made the change.
 
-DriftLock makes APIs self-maintaining. It scans your codebase for API call sites, detects drift from git changes, suggests fixes, and can open a PR. AI-powered fix generation is on the roadmap.
+DriftLock makes APIs self-maintaining. It scans your codebase for API call sites, captures traffic shapes, detects drift when vendor APIs change, suggests deterministic fixes, and can open a PR. AI-powered fix generation is on the roadmap.
 
 ---
 
@@ -75,7 +75,7 @@ flowchart LR
 | **Scan**     | Static analysis finds every API call in your codebase          |
 | **Classify** | Identifies which tests hit real sandbox vs. mocked             |
 | **Probe**    | Runs your tests, captures actual request/response shapes       |
-| **Diff**     | Detects changed files and maps them to affected call sites     |
+| **Diff**     | Compares captured shapes against the baseline snapshot          |
 | **Fix**      | Generates fix suggestions; PR creation available with `--repo` |
 | **Report**   | Shows which call sites are monitored, blind, or untested       |
 
@@ -152,7 +152,7 @@ Stripe has mature test mode, huge installed base, and plenty of teams stuck on o
 
 Twilio, Shopify, and others are on the roadmap.
 
-AI-powered fix generation is on the roadmap. The current implementation detects drift and suggests fixes; full automated PR generation with AI-generated patches is planned.
+AI-powered fix generation is on the roadmap. The current implementation captures traffic shapes, detects drift between snapshots, and applies deterministic fixes; full automated PR generation with AI-generated patches is planned.
 
 ---
 

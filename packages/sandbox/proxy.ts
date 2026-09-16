@@ -25,7 +25,10 @@ export class ProxyServer {
         const url = req.url || "";
         const method = req.method || "GET";
 
-        // Capture the request
+        // Capture the request body while forwarding
+        const requestChunks: Buffer[] = [];
+        req.on("data", (chunk: Buffer) => requestChunks.push(chunk));
+
         const capture: TrafficCapture = {
             timestamp: new Date(),
             method,
@@ -43,7 +46,7 @@ export class ProxyServer {
             port: targetUrl.port || (isHttps ? 443 : 80),
             path: targetUrl.pathname + targetUrl.search,
             method,
-            headers: req.headers,
+            headers: { ...req.headers, connection: "close" },
         };
 
         const proxyReq = client.request(options, (proxyRes) => {
@@ -54,6 +57,19 @@ export class ProxyServer {
             };
 
             this.captures.push(capture);
+
+            // Capture the response body while forwarding
+            const responseChunks: Buffer[] = [];
+            proxyRes.on("data", (chunk: Buffer) => responseChunks.push(chunk));
+            proxyRes.on("end", () => {
+                const raw = Buffer.concat(responseChunks).toString("utf8");
+                if (raw && capture.response) {
+                    capture.response.body = this.parsePayload(
+                        raw,
+                        proxyRes.headers["content-type"],
+                    );
+                }
+            });
 
             // Forward the response
             res.writeHead(proxyRes.statusCode || 500, proxyRes.headers);
@@ -66,13 +82,39 @@ export class ProxyServer {
             res.end("Bad Gateway");
         });
 
+        req.on("end", () => {
+            const raw = Buffer.concat(requestChunks).toString("utf8");
+            if (raw) {
+                capture.body = this.parsePayload(raw, req.headers["content-type"]);
+            }
+        });
+
         // Forward request body
         req.pipe(proxyReq);
+    }
+
+    private parsePayload(raw: string, contentType?: string | string[]): unknown {
+        const type = Array.isArray(contentType)
+            ? contentType.join(",")
+            : (contentType ?? "");
+        const trimmed = raw.trimStart();
+        if (/json/i.test(type) || trimmed.startsWith("{") || trimmed.startsWith("[")) {
+            try {
+                return JSON.parse(raw);
+            } catch {
+                // Not valid JSON, fall through
+            }
+        }
+        return raw.length > 1024 * 1024 ? raw.slice(0, 1024 * 1024) : raw;
     }
 
     start(): Promise<void> {
         return new Promise((resolve) => {
             this.server.listen(this.port, () => {
+                const address = this.server.address();
+                if (address && typeof address === "object") {
+                    this.port = address.port;
+                }
                 console.log(`Proxy server listening on port ${this.port}`);
                 resolve();
             });

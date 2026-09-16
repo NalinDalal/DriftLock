@@ -5,7 +5,15 @@ import inquirer from "inquirer";
 import { TypeScriptExtractor } from "@driftlock/parser";
 import { SandboxRunner } from "@driftlock/sandbox";
 import { GitTracker, PRGenerator } from "@driftlock/git";
-import { Agent } from "@driftlock/agent";
+import type { CallSite, Fix } from "@driftlock/core";
+import {
+    SnapshotStore,
+    buildDriftEvent,
+    buildDriftResult,
+    extractShapesFromCaptures,
+    applyDriftFix,
+    type DriftResult,
+} from "./drift";
 
 const program = new Command();
 
@@ -241,16 +249,18 @@ program
     .argument("<path>", "Repository path")
     .option("-b, --base <branch>", "Base branch to compare", "main")
     .option("-r, --repo <repo>", "GitHub repo (owner/repo) for PR creation")
+    .option("-c, --command <cmd>", "Test command to run for capture", "npm test")
     .option("--dry-run", "Show affected call sites without creating PRs")
     .addHelpText(
         "after",
         `
 The core DriftLock loop:
   1. Scans for API call sites in your codebase
-  2. Detects changes against the base branch
-  3. Identifies affected call sites
-  4. Generates fix suggestions
-  5. Creates a PR with the fix (if --repo is provided)
+  2. Runs your test suite in a sandbox through a traffic-capture proxy
+  3. First run establishes a baseline snapshot (.driftlock/snapshots)
+  4. Later runs compare captured shapes against the baseline to detect drift
+  5. Generates deterministic fixes (renames, null checks, coercions) and
+     creates a PR with the fix (if --repo is provided)
 
 Environment variables:
   GITHUB_TOKEN    Required for PR creation (not needed for --dry-run)
@@ -258,13 +268,18 @@ Environment variables:
 Examples:
   $ driftlock fix ./repo --dry-run
   $ driftlock fix ./repo --repo owner/repo
-  $ driftlock fix ./repo --base develop --repo owner/repo
+  $ driftlock fix ./repo --command "bun test"
 `,
     )
     .action(
         async (
             repoPath: string,
-            options: { base?: string; repo?: string; dryRun?: boolean },
+            options: {
+                base?: string;
+                repo?: string;
+                dryRun?: boolean;
+                command?: string;
+            },
         ) => {
             const spinner = ora("Starting drift detection...").start();
 
@@ -301,68 +316,136 @@ Examples:
                     return;
                 }
 
-                // Step 2: Detect changes
-                spinner.text = "Detecting changes...";
-                const tracker = new GitTracker(repoPath);
-                const changes = await tracker.detectChanges(options.base);
-                const totalChanges =
-                    changes.added.length +
-                    changes.modified.length +
-                    changes.deleted.length;
+                // Step 2: Capture traffic through the sandbox proxy
+                spinner.text = "Running sandbox test with traffic capture...";
+                const runner = new SandboxRunner();
+                const sandbox = await runner.runTestSuite(repoPath, {
+                    image: "node:20-slim",
+                    command: ["sh", "-c", options.command ?? "npm test"],
+                    env: {},
+                    timeout: 300000,
+                    memoryLimit: "512m",
+                    cpuLimit: 1.0,
+                    networkEnabled: true,
+                    allowedEndpoints: [],
+                });
 
-                if (totalChanges === 0) {
-                    spinner.succeed("No changes detected");
+                if (sandbox.exitCode !== 0 && sandbox.stderr) {
+                    spinner.warn(
+                        `Sandbox exited ${sandbox.exitCode}: ${sandbox.stderr.slice(0, 200)}`,
+                    );
+                }
+
+                const store = new SnapshotStore(repoPath);
+                const shapes = extractShapesFromCaptures(
+                    sandbox.trafficCaptured,
+                    allCallSites,
+                );
+                spinner.text = `Captured traffic for ${shapes.size}/${allCallSites.length} call sites`;
+
+                // Step 3: Compare against the stored baseline
+                const baselines: CallSite[] = [];
+                const drifts: DriftResult[] = [];
+                for (const callSite of allCallSites) {
+                    const current = shapes.get(callSite.id);
+                    if (!current) {
+                        continue;
+                    }
+                    const previous = store.load(callSite.id);
+                    if (!previous) {
+                        store.save(callSite.id, current);
+                        baselines.push(callSite);
+                        continue;
+                    }
+                    const drift = buildDriftResult(
+                        callSite,
+                        previous,
+                        current,
+                    );
+                    if (drift.works.length > 0) {
+                        drifts.push(drift);
+                    }
+                }
+
+                if (baselines.length > 0) {
+                    console.log(chalk.bold("\nBaseline snapshots captured:"));
+                    for (const cs of baselines) {
+                        console.log(
+                            `  ${chalk.cyan(cs.filePath)}:${chalk.yellow(cs.line)} — ${chalk.green(cs.method)}`,
+                        );
+                    }
+                    console.log(
+                        chalk.dim(
+                            "\nRe-run after the vendor API changes to detect drift.",
+                        ),
+                    );
+                }
+
+                if (drifts.length === 0) {
+                    if (baselines.length === 0) {
+                        spinner.succeed("No drift detected");
+                    } else {
+                        spinner.succeed(
+                            "Baseline captured, no comparison yet",
+                        );
+                    }
                     return;
                 }
 
-                spinner.text = `Found ${totalChanges} changed files`;
+                spinner.succeed(
+                    `Detected drift at ${drifts.length} call site(s)`,
+                );
 
-                // Step 3: Generate fixes (placeholder - would use Agent in production)
-                spinner.text = "Generating fixes...";
-                const fixes = allCallSites
-                    .filter((cs) =>
-                        changes.modified.some(
-                            (m) =>
-                                m.includes(cs.filePath) ||
-                                cs.filePath.includes(m),
+                // Step 4: Apply deterministic fixes
+                const fixes: Array<{
+                    callSite: CallSite;
+                    drift: DriftResult;
+                    fix: Fix;
+                }> = [];
+                for (const drift of drifts) {
+                    const file = pathModule.join(
+                        repoPath,
+                        drift.callSite.filePath,
+                    );
+                    let content: string;
+                    try {
+                        content = fs.readFileSync(file, "utf8");
+                    } catch {
+                        content = "";
+                    }
+                    const applied = applyDriftFix(drift, content);
+                    if (!applied) {
+                        console.log(
+                            chalk.yellow(
+                                `  ${drift.callSite.filePath}:${drift.callSite.line} — no static fix applicable`,
+                            ),
+                        );
+                        continue;
+                    }
+                    fixes.push({
+                        callSite: drift.callSite,
+                        drift,
+                        fix: applied.fix,
+                    });
+                    console.log(
+                        chalk.bold(
+                            `\n${chalk.cyan(drift.callSite.filePath)}:${chalk.yellow(drift.callSite.line)}`,
                         ),
-                    )
-                    .map((cs) => ({
-                        callSite: cs,
-                        fix: {
-                            id: `fix-${cs.id}`,
-                            driftEventId: `drift-${cs.id}`,
-                            type: "field_rename" as const,
-                            description: `Update ${cs.method} call in ${cs.filePath}`,
-                            diff: `@@ -1,1 +1,1 @@\n-${cs.method}(${JSON.stringify(cs.requestShape)})\n+${cs.method}(${JSON.stringify(cs.requestShape)})`,
-                            confidence: "medium" as const,
-                            files: [{ path: cs.filePath, changes: "" }],
-                            generatedAt: new Date(),
-                        },
-                    }));
+                    );
+                    console.log(
+                        `  ${chalk.green(drift.callSite.method)} → ${chalk.blue(drift.callSite.endpoint)}`,
+                    );
+                    console.log(
+                        `  ${chalk.yellow("Fix:")} ${applied.fix.description}`,
+                    );
+                    console.log(
+                        `  ${chalk.dim(applied.fix.diff)}`,
+                    );
+                }
 
                 if (fixes.length === 0) {
-                    spinner.succeed("No affected call sites found in changes");
+                    spinner.succeed("No statically applicable fixes");
                     return;
-                }
-
-                spinner.text = `Generated ${fixes.length} fix suggestions`;
-
-                // Step 4: Show results
-                spinner.succeed(`Found ${fixes.length} affected call sites`);
-
-                console.log(chalk.bold("\nAffected Call Sites:"));
-                for (const { callSite, fix } of fixes) {
-                    console.log(
-                        `  ${chalk.cyan(callSite.filePath)}:${chalk.yellow(callSite.line)}`,
-                    );
-                    console.log(
-                        `    ${chalk.green(callSite.method)} → ${chalk.blue(callSite.endpoint)}`,
-                    );
-                    console.log(
-                        `    ${chalk.yellow("Fix:")} ${fix.description}`,
-                    );
-                    console.log("");
                 }
 
                 // Step 5: Create PR (if not dry run and repo is provided)
@@ -405,36 +488,20 @@ Examples:
                 const prSpinner = ora("Creating PR...").start();
                 const prGenerator = new PRGenerator(githubToken);
 
-                for (const { callSite, fix } of fixes) {
-                    const prMetadata = {
-                        driftEvent: {
-                            id: `drift-${callSite.id}`,
-                            callSiteId: callSite.id,
-                            detectedAt: new Date(),
-                            oldSnapshotId: "",
-                            newSnapshotId: "",
-                            diffSummary: {
-                                addedFields: [],
-                                removedFields: [],
-                                typeChanges: [],
-                                optionalityChanges: [],
-                                breakingChanges: [fix.description],
-                                nonBreakingChanges: [],
-                            },
-                            suggestedFix: fix,
-                            confidence: fix.confidence,
-                            prNumber: null,
-                            status: "fix_generated" as const,
-                        },
-                        callSite,
-                        fix,
-                        files: fix.files,
-                    };
+                for (const { callSite, drift, fix } of fixes) {
+                    const driftEvent = buildDriftEvent(drift);
+                    driftEvent.suggestedFix = fix;
+                    driftEvent.status = "fix_generated";
 
                     const pr = await prGenerator.createFixPR(
                         owner,
                         repo,
-                        prMetadata,
+                        {
+                            driftEvent,
+                            callSite,
+                            fix,
+                            files: fix.files,
+                        },
                         options.base,
                     );
 

@@ -1,4 +1,5 @@
 import Docker from "dockerode";
+import { ProxyServer } from "./proxy";
 
 export interface SandboxConfig {
     image: string;
@@ -45,24 +46,42 @@ export class SandboxRunner {
     ): Promise<SandboxResult> {
         const startTime = Date.now();
         let container: Docker.Container | null = null;
+        let proxy: ProxyServer | null = null;
 
         try {
             // Build or pull the sandbox image
             await this.ensureImage(config.image);
+
+            // Start the traffic capture proxy when networking is enabled
+            if (config.networkEnabled) {
+                proxy = new ProxyServer(0);
+                await proxy.start();
+            }
+
+            const env = Object.entries(config.env).map(
+                ([key, value]) => `${key}=${value}`,
+            );
+            if (proxy) {
+                const proxyUrl = `http://host.docker.internal:${proxy.getPort()}`;
+                env.push(`HTTP_PROXY=${proxyUrl}`);
+                env.push(`HTTPS_PROXY=${proxyUrl}`);
+                env.push("NO_PROXY=localhost,127.0.0.1");
+            }
 
             // Create container
             container = await this.docker.createContainer({
                 Image: config.image,
                 Cmd: config.command,
                 WorkingDir: "/workspace",
-                Env: Object.entries(config.env).map(
-                    ([key, value]) => `${key}=${value}`,
-                ),
+                Env: env,
                 HostConfig: {
                     Binds: [`${repoPath}:/workspace:ro`],
                     Memory: this.parseMemoryLimit(config.memoryLimit),
                     NanoCpus: config.cpuLimit * 1e9,
                     NetworkMode: config.networkEnabled ? "bridge" : "none",
+                    ExtraHosts: config.networkEnabled
+                        ? ["host.docker.internal:host-gateway"]
+                        : undefined,
                 },
             });
 
@@ -82,7 +101,7 @@ export class SandboxRunner {
                 stdout: result.stdout,
                 stderr: result.stderr,
                 duration,
-                trafficCaptured: [], // Would be populated by proxy
+                trafficCaptured: proxy?.getCaptures() ?? [],
             };
         } catch (error) {
             const duration = Date.now() - startTime;
@@ -92,9 +111,16 @@ export class SandboxRunner {
                 stderr:
                     error instanceof Error ? error.message : "Unknown error",
                 duration,
-                trafficCaptured: [],
+                trafficCaptured: proxy?.getCaptures() ?? [],
             };
         } finally {
+            if (proxy) {
+                try {
+                    await proxy.stop();
+                } catch {
+                    // Ignore proxy cleanup errors
+                }
+            }
             if (container) {
                 try {
                     await container.remove({ force: true });
