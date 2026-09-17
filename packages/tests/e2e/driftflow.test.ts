@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { TypeScriptExtractor } from "@driftlock/parser";
+import { STRIPE_VENDOR } from "@driftlock/core";
 import { PRGenerator } from "@driftlock/git";
 import type { DiffSummary, DriftEvent, Fix } from "@driftlock/core";
 import {
@@ -118,7 +119,7 @@ function buildFix(
 
 describe("E2E: drift detection pipeline", () => {
     test("capture -> snapshot -> schema diff -> fix -> PR flags a real drift", async () => {
-        const extractor = new TypeScriptExtractor();
+        const extractor = new TypeScriptExtractor({ vendors: [STRIPE_VENDOR] });
         const { callSites } = await extractor.extractFromFile(
             "src/payments.ts",
             CALL_SITE_CODE,
@@ -260,7 +261,7 @@ describe("E2E: drift detection pipeline", () => {
     });
 
     test("identical vendor shapes produce no drift and no PR", async () => {
-        const extractor = new TypeScriptExtractor();
+        const extractor = new TypeScriptExtractor({ vendors: [STRIPE_VENDOR] });
         const { callSites } = await extractor.extractFromFile(
             "src/payments.ts",
             CALL_SITE_CODE,
@@ -289,7 +290,7 @@ describe("E2E: drift detection pipeline", () => {
     });
 
     test("first capture with no prior snapshot is skipped, not run", async () => {
-        const extractor = new TypeScriptExtractor();
+        const extractor = new TypeScriptExtractor({ vendors: [STRIPE_VENDOR] });
         const { callSites } = await extractor.extractFromFile(
             "src/payments.ts",
             CALL_SITE_CODE,
