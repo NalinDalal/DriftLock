@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { TypeScriptExtractor } from "@driftlock/parser";
+import { TypeScriptExtractor, STRIPE_VENDOR, TWILIO_VENDOR } from "@driftlock/parser";
 
 describe("Parser integration: extract from real code patterns", () => {
-    const extractor = new TypeScriptExtractor();
+    const extractor = new TypeScriptExtractor({
+        vendors: [STRIPE_VENDOR],
+    });
 
     test("extracts from async/await Stripe pattern", async () => {
         const code = `
@@ -103,7 +105,6 @@ await stripe.charges.create({
 `;
         const result = await extractor.extractFromFile("src/shapes.ts", code);
 
-        // Parser detects the call site and extracts request shape when tree matches
         expect(result.callSites[0]).toBeDefined();
         expect(result.callSites[0].method).toBe("stripe.charges.create");
         expect(typeof result.callSites[0].requestShape).toBe("object");
@@ -122,5 +123,130 @@ await stripe.charges.create({
 
         expect(result.callSites).toHaveLength(1);
         expect(result.callSites[0].method).toBe("stripe.charges.create");
+    });
+
+    // ── New integration tests ────────────────────────────────────────────
+
+    test("extracts payment intent lifecycle with custom actions", async () => {
+        const code = `
+async function paymentFlow() {
+    const intent = await stripe.paymentIntents.create({
+        amount: 5000,
+        currency: "usd",
+    });
+    const confirmed = await stripe.paymentIntents.confirm(intent.id);
+    const captured = await stripe.paymentIntents.capture(intent.id);
+}
+`;
+        const result = await extractor.extractFromFile(
+            "src/payment-intents.ts",
+            code,
+        );
+
+        expect(result.callSites).toHaveLength(3);
+        expect(result.callSites[0].endpoint).toBe("/v1/payment_intents");
+        expect(result.callSites[1].endpoint).toBe(
+            "/v1/payment_intents/:id/confirm",
+        );
+        expect(result.callSites[2].endpoint).toBe(
+            "/v1/payment_intents/:id/capture",
+        );
+    });
+
+    test("extracts from real-world code with variable resolution and destructuring", async () => {
+        const code = `
+import Stripe from "stripe";
+const stripe = new Stripe("sk_test_123");
+
+export async function processPayment(amount: number) {
+    const currency = "usd";
+    const metadata = { order_id: "12345" };
+
+    const { id, status } = await stripe.charges.create({
+        amount,
+        currency,
+        metadata,
+    });
+
+    if (status === "succeeded") {
+        const charge = await stripe.charges.retrieve(id);
+        return charge;
+    }
+}
+`;
+        const result = await extractor.extractFromFile(
+            "src/real-world.ts",
+            code,
+        );
+
+        expect(result.callSites).toHaveLength(2);
+
+        // First call: create
+        expect(result.callSites[0].method).toBe("stripe.charges.create");
+        expect(result.callSites[0].httpMethod).toBe("POST");
+        expect(result.callSites[0].requestShape).toHaveProperty("amount");
+        expect(result.callSites[0].requestShape).toHaveProperty("currency");
+        expect(result.callSites[0].requestShape).toHaveProperty("metadata");
+        expect(result.callSites[0].responseFields).toEqual(["id", "status"]);
+
+        // Second call: retrieve
+        expect(result.callSites[1].method).toBe("stripe.charges.retrieve");
+        expect(result.callSites[1].httpMethod).toBe("GET");
+        expect(result.callSites[1].endpoint).toBe("/v1/charges/:id");
+    });
+
+    test("extracts subscription with cancel action", async () => {
+        const code = `
+async function manageSubscription(subId: string) {
+    const sub = await stripe.subscriptions.retrieve(subId);
+    await stripe.subscriptions.cancel(subId);
+}
+`;
+        const result = await extractor.extractFromFile(
+            "src/subscriptions.ts",
+            code,
+        );
+
+        expect(result.callSites).toHaveLength(2);
+        expect(result.callSites[0].endpoint).toBe("/v1/subscriptions/:id");
+        expect(result.callSites[1].endpoint).toBe(
+            "/v1/subscriptions/:id/cancel",
+        );
+    });
+
+    test("handles multi-vendor codebase", async () => {
+        const multiExtractor = new TypeScriptExtractor({
+            vendors: [STRIPE_VENDOR, TWILIO_VENDOR],
+        });
+        const code = `
+import Stripe from "stripe";
+import Twilio from "twilio";
+
+const stripe = new Stripe("sk_test");
+const twilioClient = twilio(process.env.TWILIO_SID, process.env.TWILIO_TOKEN);
+
+async function notifyAndCharge(userId: string, amount: number) {
+    await stripe.charges.create({ amount, currency: "usd" });
+    await twilioClient.messages.create({
+        body: "Payment processed!",
+        to: "+1234567890",
+        from: "+0987654321",
+    });
+}
+`;
+        const result = await multiExtractor.extractFromFile(
+            "src/multi-vendor.ts",
+            code,
+        );
+
+        expect(result.callSites).toHaveLength(2);
+        expect(result.callSites[0].method).toBe("stripe.charges.create");
+        expect(result.callSites[0].endpoint).toBe("/v1/charges");
+        expect(result.callSites[1].method).toBe(
+            "twilioClient.messages.create",
+        );
+        expect(result.callSites[1].endpoint).toBe(
+            "/2010-04-01/messages",
+        );
     });
 });
