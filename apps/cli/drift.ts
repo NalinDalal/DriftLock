@@ -203,6 +203,9 @@ function matchesEndpoint(
     capture: TrafficCapture,
     callSite: CallSite,
 ): boolean {
+    if (callSite.endpoint === undefined) {
+        return false;
+    }
     if (capture.method !== callSite.httpMethod) {
         return false;
     }

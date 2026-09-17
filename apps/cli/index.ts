@@ -2,7 +2,7 @@ import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
 import inquirer from "inquirer";
-import { TypeScriptExtractor } from "@driftlock/parser";
+import { TypeScriptExtractor, detectLanguage } from "@driftlock/parser";
 import { SandboxRunner } from "@driftlock/sandbox";
 import { GitTracker, PRGenerator } from "@driftlock/git";
 import type { CallSite, Fix } from "@driftlock/core";
@@ -42,7 +42,9 @@ program
         "after",
         `
 Scans your codebase using AST analysis to find all API call sites.
-Currently supports Stripe SDK calls (stripe.charges.create, etc.).
+Detects any <client>.<resource>.<method> call on a configured SDK client
+(Stripe, Twilio, and any vendor shipped as a VendorConfig).
+Scans TypeScript (.ts/.tsx) and plain JavaScript (.js/.jsx/.mjs/.cjs).
 
 Output formats:
   json   Machine-readable JSON with call sites and errors
@@ -57,12 +59,13 @@ Output formats:
             const fs = await import("fs");
             const pathModule = await import("path");
 
-            // Read all TypeScript files
+            // Read all source files (TypeScript + plain JS)
             const files = fs
                 .readdirSync(path, { recursive: true })
                 .filter(
                     (file): file is string =>
-                        typeof file === "string" && file.endsWith(".ts"),
+                        typeof file === "string" &&
+                        /\.(ts|tsx|js|jsx|mjs|cjs)$/.test(file),
                 );
 
             const allCallSites = [];
@@ -74,6 +77,7 @@ Output formats:
                 const result = await extractor.extractFromFile(
                     filePath,
                     content,
+                    detectLanguage(filePath),
                 );
                 allCallSites.push(...result.callSites);
                 errors.push(...result.errors);
@@ -96,9 +100,11 @@ Output formats:
                         `  ${chalk.cyan(site.filePath)}:${chalk.yellow(site.line)}`,
                     );
                     console.log(
-                        `    ${chalk.green(site.method)} → ${chalk.blue(site.endpoint)}`,
+                        `    ${chalk.green(site.method)} → ${chalk.blue(
+                            site.endpoint ?? "pending-capture",
+                        )}`,
                     );
-                    console.log(`    HTTP: ${site.httpMethod}`);
+                    console.log(`    HTTP: ${site.httpMethod ?? "unknown"}`);
                     console.log("");
                 }
 
@@ -433,7 +439,9 @@ Examples:
                         ),
                     );
                     console.log(
-                        `  ${chalk.green(drift.callSite.method)} → ${chalk.blue(drift.callSite.endpoint)}`,
+                        `  ${chalk.green(drift.callSite.method)} → ${chalk.blue(
+                            drift.callSite.endpoint ?? "pending-capture",
+                        )}`,
                     );
                     console.log(
                         `  ${chalk.yellow("Fix:")} ${applied.fix.description}`,

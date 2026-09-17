@@ -102,8 +102,8 @@ ${fix.description}
 ### Affected call site
 - **File:** \`${callSite.filePath}:${callSite.line}\`
 - **Method:** \`${callSite.method}\`
-- **Endpoint:** \`${callSite.endpoint}\`
-- **HTTP Method:** ${callSite.httpMethod}
+- **Endpoint:** \`${callSite.endpoint ?? "pending-capture"}\`
+- **HTTP Method:** ${callSite.httpMethod ?? "unknown"}
 
 ### Confidence
 ${confidenceEmoji} ${driftEvent.confidence.toUpperCase()}
