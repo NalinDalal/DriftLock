@@ -1,6 +1,15 @@
 import simpleGit, { SimpleGit, StatusResult } from "simple-git";
 import { CallSite } from "@driftlock/core";
 
+export { PRGenerator } from "./prGenerator";
+export type { PRResult, PRMetadata } from "./prGenerator";
+export { PRWriter } from "./prWriter";
+export type {
+    WriteFile,
+    WriteFixPRInput,
+    WordlessPRResult,
+} from "./prWriter";
+
 export interface ChangeDetection {
     added: string[];
     modified: string[];
@@ -33,25 +42,42 @@ export class GitTracker {
 
     async detectChanges(baseBranch?: string): Promise<ChangeDetection> {
         if (baseBranch !== undefined) {
-            if (!baseBranch || baseBranch.startsWith("-") || baseBranch.includes("\0")) {
+            if (
+                !baseBranch ||
+                baseBranch.startsWith("-") ||
+                baseBranch.includes("\0")
+            ) {
                 throw new Error("Invalid base ref");
             }
-            const commit = (await this.git.raw([
-                "rev-parse", "--verify", "--end-of-options", `${baseBranch}^{commit}`,
-            ])).trim();
+            const commit = (
+                await this.git.raw([
+                    "rev-parse",
+                    "--verify",
+                    "--end-of-options",
+                    `${baseBranch}^{commit}`,
+                ])
+            ).trim();
             if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(commit)) {
                 throw new Error("Invalid base commit");
             }
 
             // Compare the tracked working tree (including staged changes) to the base.
             const diff = await this.git.raw([
-                "diff", "--name-status", "-z", "--find-renames", commit, "--",
+                "diff",
+                "--name-status",
+                "-z",
+                "--find-renames",
+                commit,
+                "--",
             ]);
             const changes: ChangeDetection = {
-                added: [], modified: [], deleted: [], renamed: [],
+                added: [],
+                modified: [],
+                deleted: [],
+                renamed: [],
             };
             const fields = diff.split("\0");
-            for (let i = 0; i < fields.length - 1;) {
+            for (let i = 0; i < fields.length - 1; ) {
                 const status = fields[i++];
                 const path = fields[i++];
                 switch (status[0]) {

@@ -18,6 +18,7 @@
     "dependencies": {
         "@driftlock/agent": "workspace:*",
         "@driftlock/core": "workspace:*",
+        "@driftlock/diff": "workspace:*",
         "@driftlock/git": "workspace:*",
         "@driftlock/parser": "workspace:*",
         "@driftlock/sandbox": "workspace:*"

@@ -1,0 +1,21 @@
+{
+  "name": "DriftLock",
+  "url": "https://driftlock.dev",
+  "hook_attributes": {
+    "url": "TODO: Set your webhook URL (e.g., https://your-domain.com/webhooks/github)"
+  },
+  "redirect_url": "TODO: Set your redirect URL (e.g., https://your-domain.com/auth/callback)",
+  "public": true,
+  "default_permissions": {
+    "contents": "write",
+    "issues": "write",
+    "metadata": "read",
+    "pull_requests": "write"
+  },
+  "default_events": [
+    "installation",
+    "installation_repositories",
+    "push",
+    "pull_request"
+  ]
+}

@@ -16,8 +16,11 @@ cd DriftLock
 # Install dependencies
 bun install
 
-# Start local services (PostgreSQL + Redis)
-docker compose -f docker/docker-compose.yml up -d
+# Copy environment config (Bun auto-loads .env from the repo root)
+cp .env.example .env
+
+# Start local services (PostgreSQL)
+docker compose up -d postgres
 
 # Build all packages
 bun run build
@@ -67,10 +70,30 @@ bun run --filter @driftlock/cli driftlock diff ./repo --base develop
 With `--base`, the comparison includes committed, staged, and unstaged changes
 to tracked files. Untracked files are included only in the no-base status report.
 
-### 4. Generate Fixes
+### 4. Detect Drift and Generate Fixes
 
-The `fix` command is not yet available. It exits with an error until the CLI
-implements snapshot comparison, drift analysis, and suggestion generation.
+Run `fix` twice. The first run captures API traffic in a sandbox and stores a
+baseline snapshot in `.driftlock/snapshots/`. After the vendor API changes,
+re-run to compare captured shapes against the baseline and generate fixes.
+
+```bash
+# First run captures a baseline snapshot
+bun run --filter @driftlock/cli driftlock fix ./repo
+
+# After the vendor API changes, re-run to detect drift
+bun run --filter @driftlock/cli driftlock fix ./repo --dry-run
+
+# Non-interactive test command
+bun run --filter @driftlock/cli driftlock fix ./repo --command "bun test"
+
+# Create a PR with the fix (requires GITHUB_TOKEN)
+bun run --filter @driftlock/cli driftlock fix ./repo --repo owner/repo
+```
+
+Drift triggers on a change in the captured request/response shapes, not on
+changes to your own git history. Deterministic fixes (field renames, null
+checks, type coercions) are applied statically; the base branch is used only
+for the PR's target.
 
 ## Development
 

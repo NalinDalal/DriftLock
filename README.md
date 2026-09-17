@@ -8,7 +8,7 @@
 
 API providers announce changes. DriftLock applies them to your codebase.
 
-When Stripe ships a breaking change or a new feature, DriftLock scans your codebase, identifies affected usages, and opens a PR with the fix.
+DriftLock scans your codebase for API call sites, captures vendor traffic to build shape snapshots, detects breaking changes between snapshots, and opens a PR with a suggested fix. AI-powered fix generation is on the roadmap.
 
 [Website](https://driftlock.dev) · [Discord](https://discord.gg/driftlock) · [Issues](https://github.com/nerdev-co/DriftLock/issues)
 
@@ -34,13 +34,72 @@ flowchart LR
 
 ---
 
-## Why DriftLock
+## The problem statement
 
-API communication is broken. Breaking changes ship with little warning. Useful features quietly launch and go unnoticed. Changelogs don't get read.
+The original pitch that started DriftLock, verbatim:
 
-The cost always lands on you (the consumer), not the vendor who made the change.
+> Over the past year, I've worked with over 50 API vendors, mostly early-stage
+> startups. One pattern is consistent: API communication is broken.
+>
+> Breaking changes ship with little warning. Useful features quietly launch and
+> go unnoticed. Changelogs don't get read. Heck, when I worked at AWS, over 30%
+> of our service downtime was due to external api/package changes going
+> unnoticed. This friction made sense before agentic coding tools existed.
+> However, now it doesn't.
+>
+> Agentic coding tools like Claude Code, Devin, Greptile, etc prove that
+> developers and enterprises are willing to give codebase access to external
+> tools, provided they're valuable. Two years ago, this was unthinkable. Now
+> it's standard practice.
+>
+> The infrastructure for automated code changes exists. What's missing is the
+> application layer connecting API providers to their customers' codebases. API
+> providers shouldn't just announce changes; they should apply them.
+>
+> When Stripe ships a breaking change or a new feature, an agent should scan
+> customer codebases, identify affected usages, and open a PR with the fix.
+>
+> This could work as per-provider agents. "Install Stripe's update agent", or
+> as a neutral third-party service tracking changes across vendors, like
+> Dependabot but for APIs. If you're working on this, consider applying to YC.
 
-DriftLock makes APIs self-maintaining. When a vendor changes something, your codebase updates automatically. You review the PR and merge. No manual scanning. No migration guides. No 2am pages.
+That last line is the entire product in four words: **"Dependabot, but for
+APIs"**. The sentence before it is the litmus test we use against every
+feature in this repo:
+
+> *An agent scans customer codebases, identifies affected usages, and opens a
+> PR with the fix.*
+
+If a proposed feature does not move DriftLock toward that, it's plumbing or
+scope creep. This section is the guard against drift.
+
+---
+
+## What DriftLock is
+
+DriftLock is the application layer connecting API providers to their customers'
+codebases. It's a neutral third-party service tracking changes across vendors.
+The codebase access is a solved problem (agentic tools proved it); the
+**application layer** is what's missing.
+
+The cost of a vendor change always lands on the consumer. DriftLock moves it
+back to automation: it scans your codebase for API call sites, watches for
+vendor changes, detects how they affect your usages, and opens a PR with the
+fix. AI-powered fix generation is on the roadmap.
+
+---
+
+## Personal story
+
+I built DriftLock because I got bitten by an API break myself.
+
+I had a Next.js app running on Prisma 6. Then Prisma 7 shipped, and the app broke. I didn't catch it until right before my interviews, if I hadn't noticed in time, it would have blown up in production at the worst possible moment.
+
+That's when it clicked: dependency upgrades don't just bump a version number. They change the actual code you write. Changelogs are easy to miss. Migration guides are easy to skip. Semver doesn't save you when the API surface changes.
+
+What I needed wasn't another tool that tells me a dependency is out of date. I needed something that would automatically update the affected code in my codebase — something that makes my APIs self-maintaining.
+
+That's DriftLock.
 
 ---
 
@@ -56,16 +115,16 @@ flowchart LR
     F --> G[Review & Merge]
 ```
 
-| Step         | What happens                                             |
-| ------------ | -------------------------------------------------------- |
-| **Discover** | Static analysis finds every API call in your codebase    |
-| **Classify** | Identifies which tests hit real sandbox vs. mocked       |
-| **Probe**    | Runs your tests, captures actual request/response shapes |
-| **Diff**     | Compares current shapes against target version           |
-| **Fix**      | Opens PRs with the diffs and suggested fixes             |
-| **Report**   | Shows which call sites are monitored, blind, or untested |
+| Step         | What happens                                                   |
+| ------------ | -------------------------------------------------------------- |
+| **Scan**     | Static analysis finds every API call in your codebase          |
+| **Classify** | Identifies which tests hit real sandbox vs. mocked             |
+| **Probe**    | Runs your tests, captures actual request/response shapes       |
+| **Diff**     | Compares captured shapes against the baseline snapshot         |
+| **Fix**      | Generates fix suggestions; PR creation available with `--repo` |
+| **Report**   | Shows which call sites are monitored, blind, or untested       |
 
-The goal: when Stripe ships a change, your codebase updates automatically. You just review and merge.
+AI-powered fix generation is on the roadmap. The current implementation produces fix suggestions and supports PR creation.
 
 ---
 
@@ -81,8 +140,11 @@ driftlock analyze ./src
 # Run in sandbox
 driftlock test ./repo
 
-# Generate fixes
-driftlock fix ./repo
+# Detect drift
+driftlock fix ./repo --dry-run
+
+# Create PR with suggested fix
+driftlock fix ./repo --repo owner/repo
 ```
 
 [Full documentation →](./docs/architecture.md)
@@ -91,13 +153,13 @@ driftlock fix ./repo
 
 ## What you're used to vs. what DriftLock does
 
-| Today                                  | With DriftLock                         |
-| -------------------------------------- | -------------------------------------- |
-| Avoid upgrades because they're tedious | Automated codebase scanning            |
-| Manually find affected call sites      | All affected calls found automatically |
-| Copy-paste migration guide changes     | Fix diffs generated and ready to merge |
-| Weeks to upgrade, so you put it off    | Minutes to review a PR                 |
-| Stuck on old versions                  | Stay current with minimal effort       |
+| Today                                  | With DriftLock                                   |
+| -------------------------------------- | ------------------------------------------------ |
+| Avoid upgrades because they're tedious | Automated codebase scanning                      |
+| Manually find affected call sites      | All affected calls found automatically           |
+| Copy-paste migration guide changes     | Fix suggestions generated, PR creation available |
+| Weeks to upgrade, so you put it off    | Minutes to review a PR                           |
+| Stuck on old versions                  | Stay current with minimal effort                 |
 
 ---
 
@@ -135,13 +197,15 @@ Stripe has mature test mode, huge installed base, and plenty of teams stuck on o
 
 Twilio, Shopify, and others are on the roadmap.
 
+AI-powered fix generation is on the roadmap. The current implementation captures traffic shapes, detects drift between snapshots, and applies deterministic fixes; full automated PR generation with AI-generated patches is planned.
+
 ---
 
 ## Security
 
 If you discover a security vulnerability, please report it responsibly.
 
-**Email:** security@driftlock.dev
+**Email:** nalin@nerdev.in
 
 Do NOT open a public GitHub issue for security vulnerabilities.
 

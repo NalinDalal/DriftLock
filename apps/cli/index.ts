@@ -4,20 +4,51 @@ import ora from "ora";
 import inquirer from "inquirer";
 import { TypeScriptExtractor } from "@driftlock/parser";
 import { SandboxRunner } from "@driftlock/sandbox";
-import { GitTracker } from "@driftlock/git";
+import { GitTracker, PRGenerator } from "@driftlock/git";
+import type { CallSite, Fix } from "@driftlock/core";
+import {
+    SnapshotStore,
+    buildDriftEvent,
+    buildDriftResult,
+    extractShapesFromCaptures,
+    applyDriftFix,
+    type DriftResult,
+} from "./drift";
 
 const program = new Command();
 
 program
     .name("driftlock")
-    .description("API drift detection and fix generation")
-    .version("0.1.0");
+    .description("Self-maintaining APIs. Detect drift, generate fix PRs")
+    .version("0.1.0")
+    .addHelpText(
+        "after",
+        `
+Examples:
+  $ driftlock analyze ./src
+  $ driftlock test ./repo --command "npm test"
+  $ driftlock diff ./repo --base main
+  $ driftlock fix ./repo --repo owner/repo --dry-run
+  $ driftlock init
+`,
+    );
 
 program
     .command("analyze")
-    .description("Analyze codebase for API call sites")
-    .argument("<path>", "Path to analyze")
+    .description("Scan codebase for API call sites (Stripe, Twilio, etc.)")
+    .argument("<path>", "Directory to scan for TypeScript/JavaScript files")
     .option("-o, --output <format>", "Output format (json, table)", "table")
+    .addHelpText(
+        "after",
+        `
+Scans your codebase using AST analysis to find all API call sites.
+Currently supports Stripe SDK calls (stripe.charges.create, etc.).
+
+Output formats:
+  json   Machine-readable JSON with call sites and errors
+  table  Human-readable table with file locations and endpoints
+`,
+    )
     .action(async (path: string, options: { output: string }) => {
         const spinner = ora("Analyzing codebase...").start();
 
@@ -89,10 +120,22 @@ program
 
 program
     .command("test")
-    .description("Run tests in sandbox environment")
-    .argument("<path>", "Path to test")
+    .description("Run tests in isolated Docker sandbox with traffic capture")
+    .argument("<path>", "Repository path to test")
     .option("-c, --command <cmd>", "Test command to run", "npm test")
     .option("-t, --timeout <ms>", "Timeout in milliseconds", "300000")
+    .addHelpText(
+        "after",
+        `
+Runs your test suite in an isolated Docker container with resource limits.
+Captures HTTP traffic to detect which tests hit real APIs vs mocks.
+
+The sandbox ensures:
+  - Network isolation (only allowed endpoints)
+  - Resource limits (CPU, memory)
+  - Reproducible environments
+`,
+    )
     .action(
         async (path: string, options: { command: string; timeout: string }) => {
             const spinner = ora("Running tests in sandbox...").start();
@@ -138,9 +181,18 @@ program
 
 program
     .command("diff")
-    .description("Compare API snapshots")
+    .description("Compare API snapshots between branches or over time")
     .argument("<path>", "Repository path")
-    .option("-b, --base <branch>", "Base branch to compare")
+    .option("-b, --base <branch>", "Base branch to compare against")
+    .addHelpText(
+        "after",
+        `
+Detects file changes in your repository and identifies which
+API call sites are affected by those changes.
+
+Use this to understand the impact of a branch before merging.
+`,
+    )
     .action(async (path: string, options: { base?: string }) => {
         const spinner = ora("Comparing snapshots...").start();
 
@@ -193,18 +245,291 @@ program
 
 program
     .command("fix")
-    .description("Generate fix suggestions (not yet available)")
+    .description("Detect API drift and generate fix PRs")
     .argument("<path>", "Repository path")
-    .action(() => {
-        console.error(
-            "Fix generation is not yet available: snapshot comparison and drift analysis are not implemented in the CLI.",
-        );
-        process.exitCode = 1;
-    });
+    .option("-b, --base <branch>", "Base branch to compare", "main")
+    .option("-r, --repo <repo>", "GitHub repo (owner/repo) for PR creation")
+    .option("-c, --command <cmd>", "Test command to run for capture", "npm test")
+    .option("--dry-run", "Show affected call sites without creating PRs")
+    .addHelpText(
+        "after",
+        `
+The core DriftLock loop:
+  1. Scans for API call sites in your codebase
+  2. Runs your test suite in a sandbox through a traffic-capture proxy
+  3. First run establishes a baseline snapshot (.driftlock/snapshots)
+  4. Later runs compare captured shapes against the baseline to detect drift
+  5. Generates deterministic fixes (renames, null checks, coercions) and
+     creates a PR with the fix (if --repo is provided)
+
+Environment variables:
+  GITHUB_TOKEN    Required for PR creation (not needed for --dry-run)
+
+Examples:
+  $ driftlock fix ./repo --dry-run
+  $ driftlock fix ./repo --repo owner/repo
+  $ driftlock fix ./repo --command "bun test"
+`,
+    )
+    .action(
+        async (
+            repoPath: string,
+            options: {
+                base?: string;
+                repo?: string;
+                dryRun?: boolean;
+                command?: string;
+            },
+        ) => {
+            const spinner = ora("Starting drift detection...").start();
+
+            try {
+                // Step 1: Scan for call sites
+                spinner.text = "Scanning for API call sites...";
+                const extractor = new TypeScriptExtractor();
+                const fs = await import("fs");
+                const pathModule = await import("path");
+
+                const files = fs
+                    .readdirSync(repoPath, { recursive: true })
+                    .filter(
+                        (file): file is string =>
+                            typeof file === "string" &&
+                            (file.endsWith(".ts") || file.endsWith(".js")),
+                    );
+
+                const allCallSites = [];
+                for (const file of files) {
+                    const filePath = pathModule.join(repoPath, file);
+                    const content = fs.readFileSync(filePath, "utf-8");
+                    const result = await extractor.extractFromFile(
+                        filePath,
+                        content,
+                    );
+                    allCallSites.push(...result.callSites);
+                }
+
+                spinner.text = `Found ${allCallSites.length} API call sites`;
+
+                if (allCallSites.length === 0) {
+                    spinner.warn("No API call sites found");
+                    return;
+                }
+
+                // Step 2: Capture traffic through the sandbox proxy
+                spinner.text = "Running sandbox test with traffic capture...";
+                const runner = new SandboxRunner();
+                const sandbox = await runner.runTestSuite(repoPath, {
+                    image: "node:20-slim",
+                    command: ["sh", "-c", options.command ?? "npm test"],
+                    env: {},
+                    timeout: 300000,
+                    memoryLimit: "512m",
+                    cpuLimit: 1.0,
+                    networkEnabled: true,
+                    allowedEndpoints: [],
+                });
+
+                if (sandbox.exitCode !== 0 && sandbox.stderr) {
+                    spinner.warn(
+                        `Sandbox exited ${sandbox.exitCode}: ${sandbox.stderr.slice(0, 200)}`,
+                    );
+                }
+
+                const store = new SnapshotStore(repoPath);
+                const shapes = extractShapesFromCaptures(
+                    sandbox.trafficCaptured,
+                    allCallSites,
+                );
+                spinner.text = `Captured traffic for ${shapes.size}/${allCallSites.length} call sites`;
+
+                // Step 3: Compare against the stored baseline
+                const baselines: CallSite[] = [];
+                const drifts: DriftResult[] = [];
+                for (const callSite of allCallSites) {
+                    const current = shapes.get(callSite.id);
+                    if (!current) {
+                        continue;
+                    }
+                    const previous = store.load(callSite.id);
+                    if (!previous) {
+                        store.save(callSite.id, current);
+                        baselines.push(callSite);
+                        continue;
+                    }
+                    const drift = buildDriftResult(
+                        callSite,
+                        previous,
+                        current,
+                    );
+                    if (drift.works.length > 0) {
+                        drifts.push(drift);
+                    }
+                }
+
+                if (baselines.length > 0) {
+                    console.log(chalk.bold("\nBaseline snapshots captured:"));
+                    for (const cs of baselines) {
+                        console.log(
+                            `  ${chalk.cyan(cs.filePath)}:${chalk.yellow(cs.line)} (${chalk.green(cs.method)})`,
+                        );
+                    }
+                    console.log(
+                        chalk.dim(
+                            "\nRe-run after the vendor API changes to detect drift.",
+                        ),
+                    );
+                }
+
+                if (drifts.length === 0) {
+                    if (baselines.length === 0) {
+                        spinner.succeed("No drift detected");
+                    } else {
+                        spinner.succeed(
+                            "Baseline captured, no comparison yet",
+                        );
+                    }
+                    return;
+                }
+
+                spinner.succeed(
+                    `Detected drift at ${drifts.length} call site(s)`,
+                );
+
+                // Step 4: Apply deterministic fixes
+                const fixes: Array<{
+                    callSite: CallSite;
+                    drift: DriftResult;
+                    fix: Fix;
+                }> = [];
+                for (const drift of drifts) {
+                    const file = pathModule.join(
+                        repoPath,
+                        drift.callSite.filePath,
+                    );
+                    let content: string;
+                    try {
+                        content = fs.readFileSync(file, "utf8");
+                    } catch {
+                        content = "";
+                    }
+                    const applied = applyDriftFix(drift, content);
+                    if (!applied) {
+                        console.log(
+                            chalk.yellow(
+                                `  ${drift.callSite.filePath}:${drift.callSite.line}: no static fix applicable`,
+                            ),
+                        );
+                        continue;
+                    }
+                    fixes.push({
+                        callSite: drift.callSite,
+                        drift,
+                        fix: applied.fix,
+                    });
+                    console.log(
+                        chalk.bold(
+                            `\n${chalk.cyan(drift.callSite.filePath)}:${chalk.yellow(drift.callSite.line)}`,
+                        ),
+                    );
+                    console.log(
+                        `  ${chalk.green(drift.callSite.method)} → ${chalk.blue(drift.callSite.endpoint)}`,
+                    );
+                    console.log(
+                        `  ${chalk.yellow("Fix:")} ${applied.fix.description}`,
+                    );
+                    console.log(
+                        `  ${chalk.dim(applied.fix.diff)}`,
+                    );
+                }
+
+                if (fixes.length === 0) {
+                    spinner.succeed("No statically applicable fixes");
+                    return;
+                }
+
+                // Step 5: Create PR (if not dry run and repo is provided)
+                if (options.dryRun) {
+                    console.log(
+                        chalk.yellow(
+                            "\nDry run, skipping PR creation. Remove --dry-run to create PRs.",
+                        ),
+                    );
+                    return;
+                }
+
+                if (!options.repo) {
+                    console.log(
+                        chalk.yellow(
+                            "\nNo --repo specified. Skipping PR creation. Use --repo owner/repo to create PRs.",
+                        ),
+                    );
+                    return;
+                }
+
+                const [owner, repo] = options.repo.split("/");
+                if (!owner || !repo) {
+                    console.error(
+                        chalk.red("Invalid --repo format. Use owner/repo."),
+                    );
+                    process.exit(1);
+                }
+
+                const githubToken = process.env.GITHUB_TOKEN;
+                if (!githubToken) {
+                    console.error(
+                        chalk.red(
+                            "GITHUB_TOKEN environment variable is required for PR creation.",
+                        ),
+                    );
+                    process.exit(1);
+                }
+
+                const prSpinner = ora("Creating PR...").start();
+                const prGenerator = new PRGenerator(githubToken);
+
+                for (const { callSite, drift, fix } of fixes) {
+                    const driftEvent = buildDriftEvent(drift);
+                    driftEvent.suggestedFix = fix;
+                    driftEvent.status = "fix_generated";
+
+                    const pr = await prGenerator.createFixPR(
+                        owner,
+                        repo,
+                        {
+                            driftEvent,
+                            callSite,
+                            fix,
+                            files: fix.files,
+                        },
+                        options.base,
+                    );
+
+                    prSpinner.succeed(`PR created: ${pr.url}`);
+                }
+            } catch (error) {
+                spinner.fail("Fix generation failed");
+                console.error(error);
+                process.exit(1);
+            }
+        },
+    );
 
 program
     .command("init")
-    .description("Initialize DriftLock configuration")
+    .description("Initialize DriftLock configuration in current directory")
+    .addHelpText(
+        "after",
+        `
+Creates a .driftlock.yml configuration file with:
+  - Test command (default: npm test)
+  - HTTPS proxy settings for traffic capture
+  - Sandbox configuration (Docker image, resource limits)
+
+Environment variables:
+  OPENAI_API_KEY   Required for AI-powered fix generation
+`,
+    )
     .action(async () => {
         const spinner = ora("Initializing DriftLock...").start();
 
