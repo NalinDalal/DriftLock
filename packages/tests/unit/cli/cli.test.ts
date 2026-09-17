@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { spawn } from "child_process";
 import * as fs from "fs";
+import { tmpdir } from "os";
 import * as path from "path";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "../../../..");
@@ -133,10 +134,15 @@ describe("CLI analyze command", () => {
     });
 
     test("analyze on directory with no TS files", async () => {
-        const result = await runCli(["analyze", "/tmp"]);
+        const directory = fs.mkdtempSync(path.join(tmpdir(), "driftlock-cli-"));
+        try {
+            const result = await runCli(["analyze", directory, "--output", "json"]);
 
-        // Should either succeed with 0 call sites or fail gracefully
-        expect(result.exitCode).toBe(0);
+            expect(result.exitCode).toBe(0);
+            expect(JSON.parse(result.stdout)).toEqual({ callSites: [], errors: [] });
+        } finally {
+            fs.rmSync(directory, { recursive: true, force: true });
+        }
     });
 });
 
