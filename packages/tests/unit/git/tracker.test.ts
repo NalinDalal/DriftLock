@@ -13,6 +13,7 @@ function createCallSite(overrides: Partial<CallSite> = {}): CallSite {
         filePath: "src/api.ts",
         line: 10,
         method: "stripe.charges.create",
+        packageName: "stripe",
         endpoint: "/v1/charges",
         httpMethod: "POST",
         requestShape: {},

@@ -4,8 +4,9 @@ export interface CallSite {
     filePath: string;
     line: number;
     method: string;
-    endpoint: string;
-    httpMethod: "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
+    packageName: string;
+    endpoint?: string;
+    httpMethod?: "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
     requestShape: Record<string, unknown>;
     responseFields: string[];
     testFiles: string[];
