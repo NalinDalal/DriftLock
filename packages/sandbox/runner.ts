@@ -1,5 +1,5 @@
 import Docker from "dockerode";
-import { ProxyServer } from "./proxy";
+import { ProxyServer, type ProxySafetyConfig } from "./proxy";
 
 export interface SandboxConfig {
     image: string;
@@ -10,6 +10,11 @@ export interface SandboxConfig {
     cpuLimit: number; // e.g., 1.0 for one CPU
     networkEnabled: boolean;
     allowedEndpoints: string[]; // e.g., ['api.stripe.com:443']
+    /**
+     * Forward guard. Non-idempotent methods are intercepted (captured, not
+     * forwarded) unless listed here.
+     */
+    safety?: ProxySafetyConfig;
 }
 
 export interface SandboxResult {
@@ -31,6 +36,8 @@ export interface TrafficCapture {
         headers: Record<string, string>;
         body?: unknown;
     };
+    /** True when the proxy blocked the request instead of forwarding it. */
+    intercepted?: boolean;
 }
 
 export class SandboxRunner {
@@ -54,7 +61,7 @@ export class SandboxRunner {
 
             // Start the traffic capture proxy when networking is enabled
             if (config.networkEnabled) {
-                proxy = new ProxyServer(0);
+                proxy = new ProxyServer(0, config.safety);
                 await proxy.start();
             }
 

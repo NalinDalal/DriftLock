@@ -61,7 +61,9 @@ describe("ProxyServer", () => {
 
     test("captures request and response bodies through the proxy", async () => {
         const upstream = await startTestUpstream();
-        const proxy = new ProxyServer(0);
+        const proxy = new ProxyServer(0, {
+            whitelist: ["POST /v1/charges"],
+        });
         await proxy.start();
 
         try {
@@ -74,6 +76,7 @@ describe("ProxyServer", () => {
                     currency: "usd",
                     source: "tok_visa",
                 }),
+                "POST",
             );
             expect(proxied.status).toBe(201);
 
@@ -81,6 +84,7 @@ describe("ProxyServer", () => {
             expect(captures).toHaveLength(1);
             const capture = captures[0];
             expect(capture.method).toBe("POST");
+            expect(capture.intercepted).toBeUndefined();
             expect(capture.body).toEqual({
                 amount: 2000,
                 currency: "usd",
@@ -96,15 +100,90 @@ describe("ProxyServer", () => {
             await upstream.close();
         }
     });
+
+    test("intercepts a non-idempotent POST by default and never reaches upstream", async () => {
+        const upstream = await startTestUpstream();
+        const proxy = new ProxyServer(0);
+        await proxy.start();
+
+        try {
+            const proxied = await proxyRequest(
+                proxy.getPort(),
+                upstream.port,
+                "/v1/charges",
+                JSON.stringify({ amount: 999 }),
+                "POST",
+            );
+            expect(proxied.status).toBe(200);
+            expect(upstream.hits()).toBe(0);
+
+            const captures = proxy.getCaptures();
+            expect(captures).toHaveLength(1);
+            const capture = captures[0];
+            expect(capture.intercepted).toBe(true);
+            expect(capture.body).toEqual({ amount: 999 });
+            expect(capture.response).toBeUndefined();
+        } finally {
+            await proxy.stop();
+            await upstream.close();
+        }
+    });
+
+    test("forwards safe reads (GET) without a whitelist entry", async () => {
+        const upstream = await startTestUpstream();
+        const proxy = new ProxyServer(0);
+        await proxy.start();
+
+        try {
+            const proxied = await proxyRequest(
+                proxy.getPort(),
+                upstream.port,
+                "/v1/charges",
+                "",
+                "GET",
+            );
+            expect(proxied.status).toBe(201);
+            expect(upstream.hits()).toBe(1);
+        } finally {
+            await proxy.stop();
+            await upstream.close();
+        }
+    });
+
+    test("whitelist allows a matching mutation to forward", async () => {
+        const upstream = await startTestUpstream();
+        const proxy = new ProxyServer(0, {
+            whitelist: ["POST /v1/payouts"],
+        });
+        await proxy.start();
+
+        try {
+            const proxied = await proxyRequest(
+                proxy.getPort(),
+                upstream.port,
+                "/v1/payouts",
+                JSON.stringify({ amount: 50 }),
+                "POST",
+            );
+            expect(proxied.status).toBe(201);
+            expect(upstream.hits()).toBe(1);
+        } finally {
+            await proxy.stop();
+            await upstream.close();
+        }
+    });
 });
 
 interface TestUpstream {
     port: number;
+    hits: () => number;
     close: () => Promise<void>;
 }
 
 function startTestUpstream(): Promise<TestUpstream> {
+    let hitCount = 0;
     const server = createServer((req, res) => {
+        hitCount += 1;
         req.resume();
         req.on("end", () => {
             res.writeHead(201, {
@@ -124,6 +203,7 @@ function startTestUpstream(): Promise<TestUpstream> {
             const { port } = server.address() as AddressInfo;
             resolve({
                 port,
+                hits: () => hitCount,
                 close: () =>
                     new Promise<void>((done) => server.close(() => done())),
             });
@@ -136,13 +216,14 @@ function proxyRequest(
     upstreamPort: number,
     path: string,
     body: string,
+    method = "POST",
 ): Promise<{ status: number }> {
     return new Promise((resolve, reject) => {
         const req = request(
             {
                 hostname: "127.0.0.1",
                 port: proxyPort,
-                method: "POST",
+                method,
                 path: `http://127.0.0.1:${upstreamPort}${path}`,
                 headers: { "content-type": "application/json" },
             },

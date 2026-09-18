@@ -263,6 +263,12 @@ program
     .option("-b, --base <branch>", "Base branch to compare", "main")
     .option("-r, --repo <repo>", "GitHub repo (owner/repo) for PR creation")
     .option("-c, --command <cmd>", "Test command to run for capture", "npm test")
+    .option(
+        "--forward <pattern>",
+        "Forward a normally-intercepted endpoint, e.g. POST /v3/mail/send (repeatable)",
+        (value: string, previous: string[]) => [...previous, value],
+        [],
+    )
     .option("--dry-run", "Show affected call sites without creating PRs")
     .addHelpText(
         "after",
@@ -292,6 +298,7 @@ Examples:
                 repo?: string;
                 dryRun?: boolean;
                 command?: string;
+                forward?: string[];
             },
         ) => {
             const spinner = ora("Starting drift detection...").start();
@@ -343,6 +350,7 @@ Examples:
                     cpuLimit: 1.0,
                     networkEnabled: true,
                     allowedEndpoints: [],
+                    safety: { whitelist: options.forward ?? [] },
                 });
 
                 if (sandbox.exitCode !== 0 && sandbox.stderr) {
