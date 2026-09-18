@@ -51,6 +51,9 @@ function makeOctokit(listResponse: () => PRStub[]) {
                 async updateRef(params: any) {
                     calls.push({ name: "git.updateRef", params });
                 },
+                async deleteRef(params: any) {
+                    calls.push({ name: "git.deleteRef", params });
+                },
             },
         },
     };
@@ -145,6 +148,11 @@ describe("FixPRRunner (idempotent scheduled fix)", () => {
         });
         expect(fake.byName("pulls.create")).toHaveLength(0);
         expect(fake.byName("git.getRef")).toHaveLength(0);
+        expect(fake.byName("git.deleteRef")[0]).toMatchObject({
+            owner: "acme",
+            repo: "app",
+            ref: "heads/driftlock/fix-abcd1234",
+        });
     });
 
     test("reopens a fresh PR when the last one was closed without merging", async () => {

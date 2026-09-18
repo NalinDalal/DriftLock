@@ -258,6 +258,7 @@ export class FixPRRunner {
             };
         }
         if (existing?.status === "merged") {
+            await this.deleteBranchIfExists(owner, repo, branch);
             return {
                 status: "merged",
                 url: existing.url,
@@ -277,6 +278,22 @@ export class FixPRRunner {
             number: created.number,
             branch: created.branch,
         };
+    }
+
+    private async deleteBranchIfExists(
+        owner: string,
+        repo: string,
+        branch: string,
+    ): Promise<void> {
+        try {
+            await this.octokit.rest.git.deleteRef({
+                owner,
+                repo,
+                ref: `heads/${branch}`,
+            });
+        } catch {
+            // Already gone (deleted on merge) or not deletable; best effort.
+        }
     }
 
     private async findOpenOrMerged(
