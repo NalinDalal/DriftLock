@@ -599,3 +599,5 @@ export function applyFixWork(work: FixWork, source: string): string | null {
 }
 export { diffSpecs, specFromCallSite, normalizeField, refreshConfidence } from "./spec";
 export type { EndpointSpec, FieldSpec, SpecSource, SpecChange, SpecChangeKind, SpecDiffSummary } from "./spec";
+export { matchesCapture, resolveCapturedEndpoints } from "./captureResolver";
+export type { CaptureLike, EndpointFill } from "./captureResolver";

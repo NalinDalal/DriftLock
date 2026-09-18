@@ -4,7 +4,13 @@ import ora from "ora";
 import inquirer from "inquirer";
 import { TypeScriptExtractor, detectLanguage } from "@driftlock/parser";
 import { SandboxRunner } from "@driftlock/sandbox";
-import { GitTracker, PRGenerator } from "@driftlock/git";
+import {
+    GitTracker,
+    FixPRRunner,
+    fixBranchName,
+    buildFixPRTitle,
+    buildFixPRBody,
+} from "@driftlock/git";
 import type { CallSite, Fix } from "@driftlock/core";
 import {
     SnapshotStore,
@@ -14,6 +20,7 @@ import {
     applyDriftFix,
     type DriftResult,
 } from "./drift";
+import { resolveCapturedEndpoints } from "@driftlock/diff";
 
 const program = new Command();
 
@@ -322,7 +329,9 @@ Examples:
                     return;
                 }
 
-                // Step 2: Capture traffic through the sandbox proxy
+                // Step 2: Capture traffic through the sandbox proxy.
+                // Unresolved vendors get their endpoint filled from the
+                // captured payloads, closing the loop for any SDK.
                 spinner.text = "Running sandbox test with traffic capture...";
                 const runner = new SandboxRunner();
                 const sandbox = await runner.runTestSuite(repoPath, {
@@ -342,12 +351,24 @@ Examples:
                     );
                 }
 
+                const fills = resolveCapturedEndpoints(
+                    allCallSites,
+                    sandbox.trafficCaptured,
+                );
+                for (const callSite of allCallSites) {
+                    const fill = fills.get(callSite.id);
+                    if (fill) {
+                        callSite.endpoint = fill.endpoint;
+                        callSite.httpMethod = fill.httpMethod;
+                    }
+                }
+
                 const store = new SnapshotStore(repoPath);
                 const shapes = extractShapesFromCaptures(
                     sandbox.trafficCaptured,
                     allCallSites,
                 );
-                spinner.text = `Captured traffic for ${shapes.size}/${allCallSites.length} call sites`;
+                spinner.text = `Captured traffic for ${shapes.size}/${allCallSites.length} call sites (${fills.size} endpoints inferred from traffic)`;
 
                 // Step 3: Compare against the stored baseline
                 const baselines: CallSite[] = [];
@@ -494,26 +515,46 @@ Examples:
                 }
 
                 const prSpinner = ora("Creating PR...").start();
-                const prGenerator = new PRGenerator(githubToken);
+                const prRunner = new FixPRRunner(githubToken);
 
                 for (const { callSite, drift, fix } of fixes) {
                     const driftEvent = buildDriftEvent(drift);
                     driftEvent.suggestedFix = fix;
                     driftEvent.status = "fix_generated";
 
-                    const pr = await prGenerator.createFixPR(
+                    const result = await prRunner.run({
                         owner,
                         repo,
-                        {
+                        base: options.base ?? "main",
+                        branch: fixBranchName(callSite.id),
+                        title: buildFixPRTitle({
                             driftEvent,
                             callSite,
                             fix,
-                            files: fix.files,
-                        },
-                        options.base,
-                    );
+                        }),
+                        body: buildFixPRBody({ driftEvent, callSite, fix }, fix.files),
+                        commitMessage: `driftlock: apply fix for ${callSite.method}`,
+                        files: fix.files.map((f) => ({
+                            path: f.path,
+                            content: f.changes,
+                        })),
+                    });
 
-                    prSpinner.succeed(`PR created: ${pr.url}`);
+                    if (result.status === "merged") {
+                        const current = shapes.get(callSite.id);
+                        if (current) {
+                            store.save(callSite.id, current);
+                        }
+                        prSpinner.succeed(
+                            `Fix already merged (${result.url}); baseline refreshed`,
+                        );
+                        continue;
+                    }
+                    if (result.status === "already_open") {
+                        prSpinner.succeed(`PR already open: ${result.url}`);
+                        continue;
+                    }
+                    prSpinner.succeed(`PR created: ${result.url}`);
                 }
             } catch (error) {
                 spinner.fail("Fix generation failed");

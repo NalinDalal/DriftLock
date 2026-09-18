@@ -7,6 +7,7 @@ import {
     diffShapes,
     fixWorksForDiff,
     inferShape,
+    matchesCapture,
     type FixWork,
     type Shape,
     type ShapeDiffResult,
@@ -58,7 +59,7 @@ export function extractShapesFromCaptures(
 
     for (const callSite of callSites) {
         for (const capture of captures) {
-            if (!matchesEndpoint(capture, callSite)) {
+            if (!matchesCapture(capture, callSite)) {
                 continue;
             }
             const entry = byId.get(callSite.id) ?? {};
@@ -197,33 +198,6 @@ export function buildDriftEvent(drift: DriftResult): DriftEvent {
         prNumber: null,
         status: "detected",
     };
-}
-
-function matchesEndpoint(
-    capture: TrafficCapture,
-    callSite: CallSite,
-): boolean {
-    if (callSite.endpoint === undefined) {
-        return false;
-    }
-    if (capture.method !== callSite.httpMethod) {
-        return false;
-    }
-    let pathname: string;
-    try {
-        pathname = new URL(capture.url).pathname;
-    } catch {
-        return false;
-    }
-    const expected = callSite.endpoint.split("/");
-    const actual = pathname.split("/");
-    if (expected.length !== actual.length) {
-        return false;
-    }
-    return expected.every(
-        (segment, index) =>
-            segment.startsWith(":") || segment === actual[index],
-    );
 }
 
 function shapeOf(value: unknown): Shape | null {

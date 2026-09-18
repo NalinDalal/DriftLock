@@ -3,11 +3,20 @@ import { CallSite } from "@driftlock/core";
 
 export { PRGenerator } from "./prGenerator";
 export type { PRResult, PRMetadata } from "./prGenerator";
-export { PRWriter } from "./prWriter";
+export {
+    PRWriter,
+    FixPRRunner,
+    buildFixPRTitle,
+    buildFixPRBody,
+    fixBranchName,
+} from "./prWriter";
 export type {
     WriteFile,
     WriteFixPRInput,
     WordlessPRResult,
+    FixPRMetadata,
+    FixPRStatus,
+    FixPRResult,
 } from "./prWriter";
 
 export interface ChangeDetection {
