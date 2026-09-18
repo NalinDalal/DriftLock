@@ -34,7 +34,7 @@ flowchart LR
 
 ---
 
-## The problem statement
+## [The problem statement](https://www.ycombinator.com/rfs)
 
 The original pitch that started DriftLock, verbatim:
 
