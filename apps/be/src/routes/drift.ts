@@ -1,16 +1,21 @@
-import { drifts, getRepo } from "../store";
+import { getStore } from "../store";
+import { driftEventDto } from "../dto";
 import { json, notFound } from "../utils";
 
-export function handleRepoDrifts(url: URL): Response {
-    const match = url.pathname.match(/^\/api\/repos\/([^/]+)\/([^/]+)\/drifts$/);
+export async function handleRepoDrifts(url: URL): Promise<Response> {
+    const match = url.pathname.match(
+        /^\/api\/repos\/([^/]+)\/([^/]+)\/drifts$/,
+    );
     if (!match) {
         return notFound();
     }
     const owner = decodeURIComponent(match[1]);
     const name = decodeURIComponent(match[2]);
-    const repo = getRepo(owner, name);
+    const store = getStore();
+    const repo = await store.getRepository(owner, name);
     if (!repo) {
         return notFound("Repo not found");
     }
-    return json({ drifts: drifts[`${owner}/${name}`] ?? [] });
+    const rows = await store.listDriftEventsByRepo(repo.id);
+    return json({ drifts: rows.map(driftEventDto) });
 }

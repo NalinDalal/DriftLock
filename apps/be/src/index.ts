@@ -15,8 +15,9 @@ import {
     handleRotateApiKey,
     handleUpdateSettings,
 } from "./routes/settings";
+import { handleRun } from "./routes/run";
 
-function dispatch(req: Request, url: URL): Response | Promise<Response> {
+async function dispatch(req: Request, url: URL): Promise<Response> {
     if (url.pathname === "/api/health") {
         return handleHealth();
     }
@@ -39,6 +40,9 @@ function dispatch(req: Request, url: URL): Response | Promise<Response> {
     if (url.pathname === "/api/settings/rotate") {
         return handleRotateApiKey(url);
     }
+    if (url.pathname === "/api/runs" && req.method === "POST") {
+        return handleRun(req);
+    }
     const repoPaths = /^\/api\/repos\/[^/]+\/[^/]+$/;
     if (repoPaths.test(url.pathname)) {
         return handleRepo(url);
@@ -60,7 +64,7 @@ function dispatch(req: Request, url: URL): Response | Promise<Response> {
 
 const server = Bun.serve({
     port: config.port,
-    fetch(req) {
+    async fetch(req) {
         if (isCorsPreflight(req)) {
             return corsResponse();
         }
@@ -70,7 +74,7 @@ const server = Bun.serve({
             return denied;
         }
         try {
-            return dispatch(req, url);
+            return await dispatch(req, url);
         } catch (error) {
             console.error(error);
             return badRequest("Internal error");
