@@ -21,6 +21,9 @@
       "version": "0.1.0",
       "dependencies": {
         "@driftlock/core": "workspace:*",
+        "@driftlock/db": "workspace:*",
+        "@driftlock/pipeline": "workspace:*",
+        "simple-git": "^3.23.0",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -39,6 +42,7 @@
         "@driftlock/diff": "workspace:*",
         "@driftlock/git": "workspace:*",
         "@driftlock/parser": "workspace:*",
+        "@driftlock/pipeline": "workspace:*",
         "@driftlock/sandbox": "workspace:*",
         "chalk": "^5.3.0",
         "commander": "^12.0.0",
@@ -113,6 +117,7 @@
         "postgres": "^3.4.0",
       },
       "devDependencies": {
+        "@types/bun": "latest",
         "@types/node": "^20.11.0",
         "drizzle-kit": "^0.31.10",
         "typescript": "^5.3.0",
@@ -152,6 +157,22 @@
         "tree-sitter-typescript": "0.21.2",
       },
       "devDependencies": {
+        "@types/node": "^20.11.0",
+        "typescript": "^5.3.0",
+      },
+    },
+    "packages/pipeline": {
+      "name": "@driftlock/pipeline",
+      "version": "0.1.0",
+      "dependencies": {
+        "@driftlock/core": "workspace:*",
+        "@driftlock/db": "workspace:*",
+        "@driftlock/diff": "workspace:*",
+        "@driftlock/parser": "workspace:*",
+        "@driftlock/sandbox": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
         "@types/node": "^20.11.0",
         "typescript": "^5.3.0",
       },
@@ -210,6 +231,8 @@
     "@driftlock/git": ["@driftlock/git@workspace:packages/git"],
 
     "@driftlock/parser": ["@driftlock/parser@workspace:packages/parser"],
+
+    "@driftlock/pipeline": ["@driftlock/pipeline@workspace:packages/pipeline"],
 
     "@driftlock/sandbox": ["@driftlock/sandbox@workspace:packages/sandbox"],
 
