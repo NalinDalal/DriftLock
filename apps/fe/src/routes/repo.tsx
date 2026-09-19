@@ -57,7 +57,15 @@ function asError(err: unknown): string {
     return err instanceof Error ? err.message : "Request failed";
 }
 
-function DriftCard({ event }: { event: DriftEvent }) {
+function DriftCard({
+    event,
+    owner,
+    name,
+}: {
+    event: DriftEvent;
+    owner: string;
+    name: string;
+}) {
     return (
         <Card className="p-5">
             <div className="flex flex-wrap items-center gap-2">
@@ -99,7 +107,7 @@ function DriftCard({ event }: { event: DriftEvent }) {
                 {event.confirmed ? "confirmed" : "unconfirmed"} ·{" "}
                 {event.prNumber ? (
                     <a
-                        href={`https://github.com/acme-corp/notify-svc/pull/${event.prNumber}`}
+                        href={`https://github.com/${owner}/${name}/pull/${event.prNumber}`}
                         target="_blank"
                         rel="noreferrer"
                         className="font-medium text-accent hover:underline"
@@ -313,7 +321,12 @@ export default function RepoPage({
                 ) : (
                     <div className="flex flex-col gap-3">
                         {drifts.data?.drifts.map((event) => (
-                            <DriftCard key={event.id} event={event} />
+                            <DriftCard
+                                key={event.id}
+                                event={event}
+                                owner={owner}
+                                name={name}
+                            />
                         ))}
                     </div>
                 ))}
