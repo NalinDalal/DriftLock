@@ -13,7 +13,7 @@ async function runHandlerTest(): Promise<{
     return new Promise((resolve) => {
         const proc = spawn("bun", ["run", TEST_SCRIPT], {
             env: { ...process.env },
-            cwd: REPO_ROOT,
+            cwd: path.dirname(TEST_SCRIPT),
             stdio: ["pipe", "pipe", "pipe"],
         });
 
@@ -32,8 +32,8 @@ async function runHandlerTest(): Promise<{
             resolve({ stdout, stderr, exitCode: code ?? 1 });
         });
 
-        proc.on("error", () => {
-            resolve({ stdout, stderr, exitCode: 1 });
+        proc.on("error", (err) => {
+            resolve({ stdout, stderr: stderr + String(err), exitCode: 1 });
         });
     });
 }
@@ -41,12 +41,16 @@ async function runHandlerTest(): Promise<{
 describe("POST /api/runs (isolated)", () => {
     test("handleRun validates, executes pipeline, and returns run summary", async () => {
         const result = await runHandlerTest();
+        if (result.exitCode !== 0) {
+            console.error("Handler stderr:", result.stderr);
+            console.error("Handler stdout:", result.stdout);
+        }
         expect(result.exitCode).toBe(0);
 
         const lines = result.stdout.trim().split("\n");
         const results: Record<string, string> = {};
         for (const line of lines) {
-            const match = line.match(/^(\w+): (.+)$/);
+            const match = line.match(/^([a-z-]+): (.+)$/);
             if (match) {
                 results[match[1]] = match[2];
             }
