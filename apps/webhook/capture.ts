@@ -16,6 +16,9 @@ const WEBHOOK_REPO_PATH = process.env.WEBHOOK_REPO_PATH || "";
 const WEBHOOK_OWNER = process.env.WEBHOOK_OWNER || "";
 const WEBHOOK_REPO = process.env.WEBHOOK_REPO || "";
 const WEBHOOK_BASE = process.env.WEBHOOK_BASE || "main";
+const AI_PROVIDER = process.env.AI_PROVIDER as "openai" | "anthropic" | undefined;
+const AI_API_KEY = process.env.AI_API_KEY || "";
+const AI_MODEL = process.env.AI_MODEL || "";
 
 detector.onDrift(async (alert: DriftAlert) => {
     console.log(
@@ -32,15 +35,22 @@ detector.onDrift(async (alert: DriftAlert) => {
         return;
     }
 
-    try {
-        const result = await createWebhookFixPR({
-            owner: WEBHOOK_OWNER,
-            repo: WEBHOOK_REPO,
-            base: WEBHOOK_BASE,
-            repoPath: WEBHOOK_REPO_PATH,
-            alert,
-            token: GITHUB_TOKEN,
-        });
+        try {
+            const result = await createWebhookFixPR({
+                owner: WEBHOOK_OWNER,
+                repo: WEBHOOK_REPO,
+                base: WEBHOOK_BASE,
+                repoPath: WEBHOOK_REPO_PATH,
+                alert,
+                token: GITHUB_TOKEN,
+                ai: AI_PROVIDER && AI_API_KEY
+                    ? {
+                          provider: AI_PROVIDER,
+                          apiKey: AI_API_KEY,
+                          model: AI_MODEL || undefined,
+                      }
+                    : undefined,
+            });
 
         if (result.status === "opened") {
             console.log(`  [PR] Created: ${result.url}`);

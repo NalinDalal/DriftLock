@@ -9,6 +9,7 @@
         "test": "bun test"
     },
     "dependencies": {
+        "@driftlock/ai-fix": "workspace:*",
         "@driftlock/core": "workspace:*",
         "@driftlock/db": "workspace:*",
         "@driftlock/diff": "workspace:*",

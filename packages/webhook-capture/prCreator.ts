@@ -11,6 +11,7 @@ import {
     type ShapeNode,
 } from "@driftlock/diff";
 import { PRWriter, type WriteFile } from "@driftlock/git";
+import { generateAIFix, type AIFixConfig, type AIFixResult } from "@driftlock/ai-fix";
 import type { DriftAlert } from "./driftDetector";
 import type { FlatSchema } from "./schemaFlattener";
 
@@ -21,6 +22,7 @@ export interface WebhookPRInput {
     repoPath: string;
     alert: DriftAlert;
     token: string;
+    ai?: AIFixConfig;
 }
 
 export interface WebhookPRResult {
@@ -130,7 +132,56 @@ export async function createWebhookFixPR(
     const files: WriteFile[] = [];
     for (const { filePath, fullPath } of affectedFiles) {
         const content = readFileSync(fullPath, "utf8");
-        const fixed = applyFixesToSource(content, works);
+
+        let fixed: string | null = null;
+
+        if (input.ai) {
+            try {
+                const diff: ShapeDiffResult = {
+                    addedFields: input.alert.diff.added,
+                    removedFields: input.alert.diff.removed,
+                    typeChanges: input.alert.diff.typeChanged.map((c) => ({
+                        field: c.field,
+                        oldType: c.from,
+                        newType: c.to,
+                    })),
+                    optionalityChanges: [],
+                    breakingChanges: [],
+                    nonBreakingChanges: [],
+                    confidence: "high",
+                    changes: [],
+                };
+
+                const aiResult: AIFixResult = await generateAIFix(
+                    {
+                        diff,
+                        works,
+                        sourceCode: content,
+                        filePath,
+                        eventType: input.alert.eventType,
+                    },
+                    input.ai,
+                );
+
+                if (aiResult.confidence >= 60) {
+                    fixed = aiResult.fixedCode;
+                    console.log(
+                        `  [AI] ${filePath}: confidence=${aiResult.confidence} - ${aiResult.explanation.slice(0, 100)}`,
+                    );
+                } else {
+                    console.log(
+                        `  [AI] ${filePath}: confidence=${aiResult.confidence} too low, falling back to deterministic`,
+                    );
+                }
+            } catch (err) {
+                console.error(`  [AI] ${filePath}: AI fix failed, falling back to deterministic:`, err);
+            }
+        }
+
+        if (!fixed) {
+            fixed = applyFixesToSource(content, works);
+        }
+
         if (fixed) {
             files.push({ path: filePath, content: fixed });
         }

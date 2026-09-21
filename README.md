@@ -200,6 +200,11 @@ WEBHOOK_REPO_PATH=/path/to/your/cloned/repo
 WEBHOOK_OWNER=your-github-org
 WEBHOOK_REPO=your-repo-name
 WEBHOOK_BASE=main
+
+# Optional: Enable AI-powered fixes (better context-aware fixes)
+AI_PROVIDER=openai  # or "anthropic"
+AI_API_KEY=sk-xxx
+AI_MODEL=gpt-4o     # optional, defaults to provider's best
 ```
 
 **3. Register a webhook endpoint**
@@ -235,6 +240,30 @@ The system automatically:
 1. Scans your repo for files referencing `source`
 2. Applies the rename (`source` → `payment_method`)
 3. Creates a PR via the GitHub API
+
+### AI-powered fixes
+
+When `AI_PROVIDER` and `AI_API_KEY` are set, DriftLock uses an LLM to generate context-aware fixes instead of simple regex replacements.
+
+**How it works:**
+1. DriftLock detects the schema change and identifies affected files
+2. Sends the schema diff + source code to the LLM
+3. LLM generates a fix that preserves existing functionality
+4. If confidence ≥ 60%, uses the AI fix; otherwise falls back to deterministic
+
+**Example:** For a Stripe `source` → `payment_method` change, the AI might add null checks, preserve error handling, and maintain type safety — not just find-and-replace.
+
+```bash
+# With AI fixes
+AI_PROVIDER=openai AI_API_KEY=sk-xxx bun run dev
+
+# Without AI (deterministic only)
+bun run dev
+```
+
+**Supported providers:**
+- OpenAI: `gpt-4o`, `gpt-4o-mini`
+- Anthropic: `claude-sonnet-4-20250514`, `claude-haiku-4-20250414`
 
 **4. Point your Stripe webhook to DriftLock**
 
