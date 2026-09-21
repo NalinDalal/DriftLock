@@ -1,7 +1,7 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { getDb, webhookSchemas, webhookDrifts, webhookEndpoints } from "@driftlock/db";
 import type { FlatSchema } from "./schemaFlattener";
-import type { SchemaStore } from "./schemaStore";
+import type { SchemaStore, SchemaSnapshot } from "./schemaStore";
 
 export class DbSchemaStore implements SchemaStore {
     async load(endpointId: string, eventType: string): Promise<FlatSchema | null> {
@@ -100,5 +100,31 @@ export class DbSchemaStore implements SchemaStore {
             .values({ name, url, repositoryId })
             .returning({ id: webhookEndpoints.id });
         return rows[0].id;
+    }
+
+    async getHistory(
+        endpointId: string,
+        eventType: string,
+        limit = 10,
+    ): Promise<SchemaSnapshot[]> {
+        const db = getDb();
+        const rows = await db
+            .select()
+            .from(webhookSchemas)
+            .where(
+                and(
+                    eq(webhookSchemas.endpointId, endpointId),
+                    eq(webhookSchemas.eventType, eventType),
+                ),
+            )
+            .orderBy(desc(webhookSchemas.capturedAt))
+            .limit(limit);
+
+        return rows.map((row) => ({
+            endpointId: row.endpointId,
+            eventType: row.eventType,
+            schema: row.flattenedSchema as FlatSchema,
+            capturedAt: row.capturedAt,
+        }));
     }
 }

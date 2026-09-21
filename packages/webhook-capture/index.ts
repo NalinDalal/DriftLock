@@ -13,6 +13,8 @@ export {
     DriftDetector,
     type DriftAlert,
     type DriftHandler,
+    type RollbackAlert,
+    type RollbackHandler,
 } from "./driftDetector";
 export {
     createCaptureMiddleware,

@@ -15,10 +15,16 @@ export interface SchemaStore {
         schema: FlatSchema,
     ): Promise<void>;
     listEventTypes(endpointId: string): Promise<string[]>;
+    getHistory(
+        endpointId: string,
+        eventType: string,
+        limit?: number,
+    ): Promise<SchemaSnapshot[]>;
 }
 
 export class InMemorySchemaStore implements SchemaStore {
     private store = new Map<string, FlatSchema>();
+    private history = new Map<string, SchemaSnapshot[]>();
 
     private key(endpointId: string, eventType: string): string {
         return `${endpointId}::${eventType}`;
@@ -37,6 +43,19 @@ export class InMemorySchemaStore implements SchemaStore {
         schema: FlatSchema,
     ): Promise<void> {
         this.store.set(this.key(endpointId, eventType), schema);
+
+        const historyKey = this.key(endpointId, eventType);
+        const existing = this.history.get(historyKey) ?? [];
+        existing.unshift({
+            endpointId,
+            eventType,
+            schema,
+            capturedAt: new Date(),
+        });
+        if (existing.length > 50) {
+            existing.pop();
+        }
+        this.history.set(historyKey, existing);
     }
 
     async listEventTypes(endpointId: string): Promise<string[]> {
@@ -48,5 +67,14 @@ export class InMemorySchemaStore implements SchemaStore {
             }
         }
         return types;
+    }
+
+    async getHistory(
+        endpointId: string,
+        eventType: string,
+        limit = 10,
+    ): Promise<SchemaSnapshot[]> {
+        const historyKey = this.key(endpointId, eventType);
+        return (this.history.get(historyKey) ?? []).slice(0, limit);
     }
 }

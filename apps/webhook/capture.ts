@@ -1,5 +1,5 @@
 import { InMemorySchemaStore, DriftDetector, createWebhookFixPR } from "@driftlock/webhook-capture";
-import type { DriftAlert } from "@driftlock/webhook-capture";
+import type { DriftAlert, RollbackAlert } from "@driftlock/webhook-capture";
 
 function json(data: unknown, status = 200): Response {
     return new Response(JSON.stringify(data, null, 2), {
@@ -108,6 +108,61 @@ detector.onDrift(async (alert: DriftAlert) => {
         }
     } catch (error) {
         console.error(`  [PR] Failed to create PR:`, error);
+    }
+});
+
+detector.onRollback(async (alert: RollbackAlert) => {
+    console.log(
+        `[ROLLBACK] endpoint=${alert.endpointId} event=${alert.eventType}`,
+    );
+    console.log(`  reverted from schema at ${alert.driftedAt.toISOString()}`);
+    console.log(`  current schema matches previous baseline`);
+
+    if (!GITHUB_TOKEN || !WEBHOOK_REPO_PATH || !WEBHOOK_OWNER || !WEBHOOK_REPO) {
+        console.log("  [SKIP] Missing config — rollback PR not created");
+        return;
+    }
+
+    try {
+        const result = await createWebhookFixPR({
+            owner: WEBHOOK_OWNER,
+            repo: WEBHOOK_REPO,
+            base: WEBHOOK_BASE,
+            repoPath: WEBHOOK_REPO_PATH,
+            alert: {
+                endpointId: alert.endpointId,
+                eventType: alert.eventType,
+                diff: {
+                    added: Object.keys(alert.revertedTo).filter(
+                        (k) => !(k in alert.revertedFrom),
+                    ),
+                    removed: Object.keys(alert.revertedFrom).filter(
+                        (k) => !(k in alert.revertedTo),
+                    ),
+                    typeChanged: [],
+                },
+                previous: alert.revertedFrom,
+                current: alert.revertedTo,
+                detectedAt: alert.detectedAt,
+                confidence: 100,
+            },
+            token: GITHUB_TOKEN,
+            ai: AI_PROVIDER && AI_API_KEY
+                ? {
+                      provider: AI_PROVIDER,
+                      apiKey: AI_API_KEY,
+                      model: AI_MODEL || undefined,
+                  }
+                : undefined,
+        });
+
+        if (result.status === "opened") {
+            console.log(`  [PR] Rollback PR created: ${result.url}`);
+        } else {
+            console.log(`  [PR] ${result.status}`);
+        }
+    } catch (error) {
+        console.error(`  [PR] Failed to create rollback PR:`, error);
     }
 });
 

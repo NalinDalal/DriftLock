@@ -1,5 +1,5 @@
 import type { SchemaStore } from "./schemaStore";
-import { DriftDetector, type DriftAlert } from "./driftDetector";
+import { DriftDetector, type DriftAlert, type RollbackAlert } from "./driftDetector";
 
 export interface CaptureConfig {
     /** Extract event type from request. Defaults to x-github-event header. */
@@ -8,6 +8,8 @@ export interface CaptureConfig {
     extractEndpointId?: (req: Request) => string;
     /** Called when drift is detected. */
     onDrift?: (alert: DriftAlert) => void | Promise<void>;
+    /** Called when rollback is detected. */
+    onRollback?: (alert: RollbackAlert) => void | Promise<void>;
 }
 
 const DEFAULT_EVENT_TYPE_HEADER = "x-github-event";
@@ -20,6 +22,10 @@ export function createCaptureMiddleware(
 
     if (config.onDrift) {
         detector.onDrift(config.onDrift);
+    }
+
+    if (config.onRollback) {
+        detector.onRollback(config.onRollback);
     }
 
     const extractEventType =
@@ -38,7 +44,7 @@ export function createCaptureMiddleware(
     async function capture(
         req: Request,
         body: Record<string, unknown>,
-    ): Promise<DriftAlert | null> {
+    ): Promise<DriftAlert | RollbackAlert | null> {
         const endpointId = extractEndpointId(req);
         const eventType = extractEventType(req);
         return detector.processPayload(endpointId, eventType, body);
