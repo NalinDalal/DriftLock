@@ -77,7 +77,7 @@ export class DbSchemaStore implements SchemaStore {
             eventType: params.eventType,
             diff: params.diff,
             previousSchema: params.previousSchema,
-            currentSchema: params.currentSchema,
+            newSchema: params.currentSchema,
         });
     }
 

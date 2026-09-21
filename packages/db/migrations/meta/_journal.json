@@ -15,6 +15,13 @@
       "when": 1789720797782,
       "tag": "0001_add_detected_at",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789996415252,
+      "tag": "0002_rainy_lyja",
+      "breakpoints": true
     }
   ]
 }

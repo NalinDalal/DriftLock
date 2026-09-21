@@ -5,8 +5,8 @@ export {
     type SchemaDiff,
 } from "./schemaDiff";
 export {
-    SchemaStore,
     InMemorySchemaStore,
+    type SchemaStore,
     type SchemaSnapshot,
 } from "./schemaStore";
 export {

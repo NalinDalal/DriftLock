@@ -193,7 +193,7 @@ export const webhookDrifts = pgTable("webhook_drifts", {
   eventType: varchar("event_type", { length: 255 }).notNull(),
   diff: jsonb("diff").notNull(),
   previousSchema: jsonb("previous_schema").notNull(),
-  currentSchema: jsonb("current_schema").notNull(),
+  newSchema: jsonb("new_schema").notNull(),
   detectedAt: timestamp("detected_at").notNull().defaultNow(),
   status: varchar("status", { length: 30 }).notNull().default("detected"),
 });
