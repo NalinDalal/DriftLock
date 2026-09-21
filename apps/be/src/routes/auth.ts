@@ -236,15 +236,23 @@ export function handleInstallUrl(req: Request): Response {
 
     const url = new URL(req.url);
     const repos = url.searchParams.get("repos"); // comma-separated repo IDs
+    const returnTo = url.searchParams.get("returnTo") || "/";
 
     let installUrl = `https://github.com/apps/${GITHUB_APP_SLUG}/installations/new`;
 
+    const params = new URLSearchParams();
     if (repos) {
-        // Pre-select repos if provided
-        installUrl += `?repositories=${repos}`;
+        params.set("repositories", repos);
+    }
+    // state carries where to redirect after install
+    params.set("state", encodeURIComponent(returnTo));
+
+    const queryString = params.toString();
+    if (queryString) {
+        installUrl += `?${queryString}`;
     }
 
-    return json({ installUrl });
+    return redirect(installUrl);
 }
 
 export async function handleLogout(): Promise<Response> {

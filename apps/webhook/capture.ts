@@ -41,11 +41,14 @@ async function loadConfig(): Promise<WebhookConfig> {
 
         if (rows.length > 0) {
             cachedConfig = rows[0].value as WebhookConfig;
+            console.log(`[CONFIG] Loaded from DB: githubToken=${cachedConfig.githubToken ? "set" : "missing"}, repoPath=${cachedConfig.repoPath || "missing"}, repoOwner=${cachedConfig.repoOwner || "missing"}, repoName=${cachedConfig.repoName || "missing"}`);
         } else {
             cachedConfig = {};
+            console.log("[CONFIG] No webhookConfig in DB");
         }
-    } catch {
+    } catch (e) {
         cachedConfig = {};
+        console.log("[CONFIG] DB error:", e);
     }
 
     configLastLoaded = now;
