@@ -4,7 +4,7 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "dev": "bun --hot run src/index.ts",
+        "dev": "bun --hot --env-file=../../.env run src/index.ts",
         "start": "bun run src/index.ts",
         "build": "bun build ./src/index.ts --outdir ./dist --target bun",
         "typecheck": "tsc --noEmit",

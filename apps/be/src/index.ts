@@ -59,7 +59,7 @@ async function dispatch(req: Request, url: URL): Promise<Response> {
         return handleInstallUrl(req);
     }
     if (url.pathname === "/api/me") {
-        return handleMe();
+        return handleMe(req);
     }
     if (url.pathname === "/api/accounts") {
         return handleAccounts();

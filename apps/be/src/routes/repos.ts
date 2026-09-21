@@ -55,9 +55,7 @@ export async function handleRepoCallSites(url: URL): Promise<Response> {
 }
 
 export async function handleRepoPulls(url: URL): Promise<Response> {
-    const match = url.pathname.match(
-        /^\/api\/repos\/([^/]+)\/([^/]+)\/pulls$/,
-    );
+    const match = url.pathname.match(/^\/api\/repos\/([^/]+)\/([^/]+)\/pulls$/);
     if (!match) {
         return notFound();
     }

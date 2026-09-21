@@ -2,14 +2,30 @@ import { getStore } from "../store";
 import { repoDto, type AccountDto, type RepoDto } from "../dto";
 import { json, notFound } from "../utils";
 
-export async function handleMe(): Promise<Response> {
-    return json({
-        user: {
-            name: "Nalin Dalal",
-            handle: "nalin",
-            avatarUrl: "https://avatars.githubusercontent.com/u/0?s=96&v=4",
-        },
-    });
+export async function handleMe(req: Request): Promise<Response> {
+    const authHeader = req.headers.get("authorization");
+    if (authHeader?.startsWith("Bearer ")) {
+        const token = authHeader.slice(7);
+        const db = getDb();
+        try {
+            const result = await db.execute(
+                `SELECT value FROM settings WHERE key = 'session:${token}'`
+            );
+            if (result.length > 0) {
+                const session = (result[0] as { value: any }).value;
+                return json({
+                    user: {
+                        name: session.name || session.login,
+                        handle: session.login,
+                        avatarUrl: session.avatarUrl,
+                    },
+                });
+            }
+        } catch {}
+    }
+
+    // Fallback: not logged in
+    return json({ user: null });
 }
 
 export async function handleAccounts(): Promise<Response> {
