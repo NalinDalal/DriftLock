@@ -203,6 +203,19 @@
         "typescript": "^5.3.0",
       },
     },
+    "packages/rules-engine": {
+      "name": "@driftlock/rules-engine",
+      "version": "0.1.0",
+      "dependencies": {
+        "@driftlock/diff": "workspace:*",
+        "@driftlock/migrations": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "@types/node": "^20.11.0",
+        "typescript": "^5.3.0",
+      },
+    },
     "packages/sandbox": {
       "name": "@driftlock/sandbox",
       "version": "0.1.0",
@@ -280,6 +293,8 @@
     "@driftlock/parser": ["@driftlock/parser@workspace:packages/parser"],
 
     "@driftlock/pipeline": ["@driftlock/pipeline@workspace:packages/pipeline"],
+
+    "@driftlock/rules-engine": ["@driftlock/rules-engine@workspace:packages/rules-engine"],
 
     "@driftlock/sandbox": ["@driftlock/sandbox@workspace:packages/sandbox"],
 
