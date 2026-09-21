@@ -210,6 +210,9 @@ AI_MODEL=gpt-4o     # optional, defaults to provider's best
 WEBHOOK_FORWARD_URL=http://localhost:3000/api/webhooks
 WEBHOOK_FORWARD_SECRET=whsec_your_secret  # optional, passed as x-webhook-secret
 WEBHOOK_FORWARD_TIMEOUT=5000  # optional, default 5000ms
+
+# Optional: Only create PRs above confidence threshold (0-100)
+CONFIDENCE_THRESHOLD=70  # default 0 (always create PR)
 ```
 
 **3. Register a webhook endpoint**
@@ -314,6 +317,42 @@ Stripe → DriftLock (capture + detect) → Your Handler (actual processing)
     "status": 200,
     "elapsed": 150
   }
+}
+```
+
+### Confidence filtering
+
+Not all schema changes are equally risky. Confidence filtering lets you skip PRs for low-confidence drifts.
+
+**How confidence is calculated:**
+
+| Factor | Impact |
+|--------|--------|
+| 1 change | +20 |
+| ≤3 changes | +10 |
+| Fields removed | +15 |
+| Fields added | +10 |
+| Type changes | +5 |
+| Unknown types | -20 |
+
+**Threshold behavior:**
+- `CONFIDENCE_THRESHOLD=0` (default): Always create PRs
+- `CONFIDENCE_THRESHOLD=50`: Skip very uncertain drifts
+- `CONFIDENCE_THRESHOLD=70`: Only create PRs for clear, confident changes
+- `CONFIDENCE_THRESHOLD=90`: Only near-certain changes
+
+**Example:**
+```bash
+# Only create PRs when confidence >= 70
+CONFIDENCE_THRESHOLD=70 bun run dev
+```
+
+The confidence score is also returned in the webhook response:
+```json
+{
+  "status": "drift_detected",
+  "confidence": 75,
+  "diff": { ... }
 }
 ```
 

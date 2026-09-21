@@ -9,7 +9,8 @@ function json(data: unknown, status = 200): Response {
 }
 
 const store = new InMemorySchemaStore();
-const detector = new DriftDetector(store);
+const CONFIDENCE_THRESHOLD = parseInt(process.env.CONFIDENCE_THRESHOLD || "0", 10);
+const detector = new DriftDetector(store, CONFIDENCE_THRESHOLD);
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || "";
 const WEBHOOK_REPO_PATH = process.env.WEBHOOK_REPO_PATH || "";
@@ -68,7 +69,7 @@ async function forwardPayload(
 
 detector.onDrift(async (alert: DriftAlert) => {
     console.log(
-        `[DRIFT] endpoint=${alert.endpointId} event=${alert.eventType}`,
+        `[DRIFT] endpoint=${alert.endpointId} event=${alert.eventType} confidence=${alert.confidence}`,
     );
     console.log(`  added:    ${alert.diff.added.join(", ") || "(none)"}`);
     console.log(`  removed:  ${alert.diff.removed.join(", ") || "(none)"}`);
