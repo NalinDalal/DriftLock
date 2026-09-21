@@ -15,7 +15,7 @@ function redirect(url: string): Response {
 const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID || "";
 const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET || "";
 const GITHUB_APP_SLUG = process.env.GITHUB_APP_SLUG || "";
-const SESSION_SECRET = process.env.SESSION_SECRET || "dev-secret-change-me";
+const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8787";
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 
 function generateSessionToken(): string {
@@ -24,29 +24,17 @@ function generateSessionToken(): string {
     return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-function hashToken(token: string): string {
-    // Simple hash for dev - use proper bcrypt in production
-    let hash = 0;
-    for (let i = 0; i < token.length; i++) {
-        const char = token.charCodeAt(i);
-        hash = ((hash << 5) - hash + char) | 0;
-    }
-    return hash.toString(36);
-}
-
 export async function handleGitHubLogin(): Promise<Response> {
     if (!GITHUB_CLIENT_ID) {
         return json({ error: "GitHub OAuth not configured. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET." }, 500);
     }
 
-    const state = generateSessionToken();
-    const redirectUri = `${new URL("http://localhost").origin}/api/auth/github/callback`;
+    const redirectUri = `${BACKEND_URL}/api/auth/github/callback`;
 
     const params = new URLSearchParams({
         client_id: GITHUB_CLIENT_ID,
         redirect_uri: redirectUri,
         scope: "read:user user:email read:org repo",
-        state,
     });
 
     return redirect(`https://github.com/login/oauth/authorize?${params.toString()}`);
