@@ -11,9 +11,24 @@ export default function AppShell() {
     const [toastMsg, setToastMsg] = useState<string | null>(null);
 
     useEffect(() => {
-        getMe()
-            .then(({ user: me }) => setUser(me))
-            .catch(() => setUser(null));
+        // Check for GitHub auth token
+        const token = localStorage.getItem("driftlock_token");
+        if (token) {
+            fetch(`${import.meta.env.VITE_API_URL ?? ""}/api/auth/session`, {
+                headers: { Authorization: `Bearer ${token}` },
+            })
+                .then((res) => res.json())
+                .then((data) => {
+                    if (data.user) {
+                        setUser({ name: data.user.name, handle: data.user.login });
+                    }
+                })
+                .catch(() => {});
+        } else {
+            getMe()
+                .then(({ user: me }) => setUser(me))
+                .catch(() => setUser(null));
+        }
     }, []);
 
     useEffect(() => {
@@ -29,6 +44,13 @@ export default function AppShell() {
         location.pathname.startsWith("/repos");
     const onSettings = location.pathname.startsWith("/settings");
     const onWebhooks = location.pathname.startsWith("/webhooks");
+    const onInstall = location.pathname.startsWith("/install");
+    const onLogin = location.pathname.startsWith("/login");
+
+    function handleLogout() {
+        localStorage.removeItem("driftlock_token");
+        window.location.href = "/";
+    }
 
     return (
         <div className="flex min-h-screen flex-col">
@@ -53,6 +75,16 @@ export default function AppShell() {
                                 Repos
                             </Link>
                             <Link
+                                to="/install"
+                                className={`rounded-md px-3 py-1.5 transition-colors duration-150 ${
+                                    onInstall
+                                        ? "bg-neutral-100 text-neutral-900"
+                                        : "text-neutral-500 hover:text-neutral-900"
+                                }`}
+                            >
+                                Install
+                            </Link>
+                            <Link
                                 to="/settings"
                                 className={`rounded-md px-3 py-1.5 transition-colors duration-150 ${
                                     onSettings
@@ -74,8 +106,8 @@ export default function AppShell() {
                             </Link>
                         </nav>
                     </div>
-                    {user && (
-                        <div className="flex items-center gap-2">
+                    {user ? (
+                        <div className="flex items-center gap-3">
                             <span className="text-xs text-neutral-500">
                                 {user.name}
                             </span>
@@ -86,7 +118,24 @@ export default function AppShell() {
                                     .slice(0, 2)
                                     .join("")}
                             </span>
+                            <button
+                                onClick={handleLogout}
+                                className="text-xs text-neutral-400 hover:text-neutral-600"
+                            >
+                                Sign out
+                            </button>
                         </div>
+                    ) : (
+                        <Link
+                            to="/login"
+                            className={`rounded-md px-3 py-1.5 text-sm transition-colors duration-150 ${
+                                onLogin
+                                    ? "bg-neutral-900 text-white"
+                                    : "bg-neutral-900 text-white hover:bg-neutral-800"
+                            }`}
+                        >
+                            Sign in
+                        </Link>
                     )}
                 </div>
             </header>

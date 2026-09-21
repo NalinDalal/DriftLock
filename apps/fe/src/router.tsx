@@ -5,6 +5,9 @@ import AccountPage from "./routes/account";
 import RepoPage from "./routes/repo";
 import SettingsPage from "./routes/settings";
 import WebhookDashboard from "./routes/webhooks";
+import LoginPage from "./routes/login";
+import AuthCallbackPage from "./routes/auth-callback";
+import InstallPage from "./routes/install";
 
 const rootRoute = createRootRoute({ component: AppShell });
 
@@ -44,12 +47,33 @@ const webhooksRoute = createRoute({
     component: WebhookDashboard,
 });
 
+const loginRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/login",
+    component: LoginPage,
+});
+
+const authCallbackRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/auth/callback",
+    component: AuthCallbackPage,
+});
+
+const installRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/install",
+    component: InstallPage,
+});
+
 const routeTree = rootRoute.addChildren([
     indexRoute,
     accountRoute,
     repoRoute,
     settingsRoute,
     webhooksRoute,
+    loginRoute,
+    authCallbackRoute,
+    installRoute,
 ]);
 
 export const router = createRouter({ routeTree });

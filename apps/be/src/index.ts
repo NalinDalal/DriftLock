@@ -21,10 +21,42 @@ import {
     handleWebhookSchemas,
     handleWebhookDrifts,
 } from "./routes/webhooks";
+import {
+    handleGitHubLogin,
+    handleGitHubCallback,
+    handleGetSession,
+    handleGitHubRepos,
+    handleInstallUrl,
+    handleLogout,
+} from "./routes/auth";
+
+// Auth routes don't require bearer token
+const AUTH_ROUTES = new Set([
+    "/api/auth/github",
+    "/api/auth/github/callback",
+]);
 
 async function dispatch(req: Request, url: URL): Promise<Response> {
     if (url.pathname === "/api/health") {
         return handleHealth();
+    }
+    if (url.pathname === "/api/auth/github" && req.method === "GET") {
+        return handleGitHubLogin();
+    }
+    if (url.pathname === "/api/auth/github/callback" && req.method === "GET") {
+        return handleGitHubCallback(req);
+    }
+    if (url.pathname === "/api/auth/session") {
+        return handleGetSession(req);
+    }
+    if (url.pathname === "/api/auth/logout" && req.method === "POST") {
+        return handleLogout();
+    }
+    if (url.pathname === "/api/auth/repos") {
+        return handleGitHubRepos(req);
+    }
+    if (url.pathname === "/api/auth/install") {
+        return handleInstallUrl(req);
     }
     if (url.pathname === "/api/me") {
         return handleMe();
@@ -83,10 +115,15 @@ const server = Bun.serve({
             return corsResponse();
         }
         const url = new URL(req.url);
-        const denied = requireBearer(req);
-        if (denied) {
-            return denied;
+
+        // Skip auth for public routes
+        if (!AUTH_ROUTES.has(url.pathname)) {
+            const denied = requireBearer(req);
+            if (denied) {
+                return denied;
+            }
         }
+
         try {
             return await dispatch(req, url);
         } catch (error) {
