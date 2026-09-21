@@ -63,17 +63,29 @@ function getConfigValue<T>(config: WebhookConfig, key: keyof WebhookConfig, envK
 
 const store = new InMemorySchemaStore();
 
-async function createDetector(): Promise<DriftDetector> {
+let detectorResolved = false;
+let resolveDetectorPromise: (det: DriftDetector) => void;
+const detectorReady = new Promise<DriftDetector>((resolve) => {
+    resolveDetectorPromise = resolve;
+});
+
+async function initDetector() {
     const config = await loadConfig();
     const threshold = getConfigValue(config, "confidenceThreshold", "CONFIDENCE_THRESHOLD", 0.7);
-    return new DriftDetector(store, threshold);
+    const det = new DriftDetector(store, threshold);
+    setupDetectorCallbacks(det);
+    resolveDetectorPromise(det);
+    detectorResolved = true;
 }
 
-let detectorPromise = createDetector();
-
-detectorPromise.then((det) => {
-    setupDetectorCallbacks(det);
-});
+// Init lazily on first request, not at module load
+let initPromise: Promise<void> | null = null;
+function ensureInit() {
+    if (!initPromise) {
+        initPromise = initDetector();
+    }
+    return initPromise;
+}
 
 function setupDetectorCallbacks(det: DriftDetector) {
     det.onDrift(async (alert: DriftAlert) => {
@@ -265,7 +277,8 @@ export function createCaptureHandler() {
         const config = await loadConfig();
         const forwardUrl = getConfigValue(config, "forwardUrl", "WEBHOOK_FORWARD_URL", "");
 
-        const det = await detectorPromise;
+        await ensureInit();
+        const det = await detectorReady;
         const alert = await det.processPayload(
             endpointId,
             eventType,
