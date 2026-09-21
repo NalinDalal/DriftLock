@@ -19,6 +19,52 @@ const WEBHOOK_BASE = process.env.WEBHOOK_BASE || "main";
 const AI_PROVIDER = process.env.AI_PROVIDER as "openai" | "anthropic" | undefined;
 const AI_API_KEY = process.env.AI_API_KEY || "";
 const AI_MODEL = process.env.AI_MODEL || "";
+const FORWARD_URL = process.env.WEBHOOK_FORWARD_URL || "";
+const FORWARD_SECRET = process.env.WEBHOOK_FORWARD_SECRET || "";
+const FORWARD_TIMEOUT = parseInt(process.env.WEBHOOK_FORWARD_TIMEOUT || "5000", 10);
+
+async function forwardPayload(
+    endpointId: string,
+    eventType: string,
+    body: Record<string, unknown>,
+    headers: Record<string, string>,
+): Promise<{ ok: boolean; status: number; elapsed: number }> {
+    if (!FORWARD_URL) {
+        return { ok: false, status: 0, elapsed: 0 };
+    }
+
+    const start = Date.now();
+    try {
+        const forwardHeaders: Record<string, string> = {
+            "content-type": "application/json",
+            "x-driftlock-endpoint": endpointId,
+            "x-driftlock-event": eventType,
+            "x-driftlock-forwarded": "true",
+        };
+
+        if (FORWARD_SECRET) {
+            forwardHeaders["x-webhook-secret"] = FORWARD_SECRET;
+        }
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), FORWARD_TIMEOUT);
+
+        const res = await fetch(FORWARD_URL, {
+            method: "POST",
+            headers: forwardHeaders,
+            body: JSON.stringify(body),
+            signal: controller.signal,
+        });
+
+        clearTimeout(timeout);
+        const elapsed = Date.now() - start;
+        return { ok: res.ok, status: res.status, elapsed };
+    } catch (err) {
+        const elapsed = Date.now() - start;
+        console.error(`  [FORWARD] Failed to ${FORWARD_URL}:`, err);
+        return { ok: false, status: 0, elapsed };
+    }
+}
 
 detector.onDrift(async (alert: DriftAlert) => {
     console.log(
@@ -97,6 +143,15 @@ export function createCaptureHandler() {
             body,
         );
 
+        let forwardResult = null;
+        if (FORWARD_URL) {
+            const headerObj: Record<string, string> = {};
+            req.headers.forEach((value, key) => {
+                headerObj[key] = value;
+            });
+            forwardResult = await forwardPayload(endpointId, eventType, body, headerObj);
+        }
+
         if (alert) {
             return json({
                 status: "drift_detected",
@@ -104,6 +159,7 @@ export function createCaptureHandler() {
                 eventType,
                 diff: alert.diff,
                 pr: "pending",
+                forward: forwardResult,
             });
         }
 
@@ -112,6 +168,7 @@ export function createCaptureHandler() {
             endpointId,
             eventType,
             message: "Schema baseline recorded or unchanged",
+            forward: forwardResult,
         });
     };
 }

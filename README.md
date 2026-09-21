@@ -205,6 +205,11 @@ WEBHOOK_BASE=main
 AI_PROVIDER=openai  # or "anthropic"
 AI_API_KEY=sk-xxx
 AI_MODEL=gpt-4o     # optional, defaults to provider's best
+
+# Optional: Forward webhooks to your actual handler
+WEBHOOK_FORWARD_URL=http://localhost:3000/api/webhooks
+WEBHOOK_FORWARD_SECRET=whsec_your_secret  # optional, passed as x-webhook-secret
+WEBHOOK_FORWARD_TIMEOUT=5000  # optional, default 5000ms
 ```
 
 **3. Register a webhook endpoint**
@@ -272,6 +277,45 @@ In the Stripe Dashboard → Webhooks → Add endpoint:
 - Events: select the events you handle
 
 DriftLock forwards the payload to your handler and records the schema.
+
+### Webhook forwarding
+
+By default, DriftLock captures and analyzes webhooks but doesn't forward them. To use DriftLock as a proxy that observes AND passes through:
+
+```bash
+# Set the URL where your actual webhook handler lives
+WEBHOOK_FORWARD_URL=http://localhost:3000/api/webhooks
+```
+
+**How it works:**
+
+```
+Stripe → DriftLock (capture + detect) → Your Handler (actual processing)
+```
+
+1. Stripe sends webhook to DriftLock
+2. DriftLock flattens the payload and checks for drift
+3. DriftLock forwards the original payload to your handler
+4. Your handler processes it normally
+5. If drift detected, DriftLock creates a PR
+
+**Forward headers:**
+- `x-driftlock-endpoint`: The endpoint ID (e.g., "stripe")
+- `x-driftlock-event`: The event type (e.g., "payment_intent.succeeded")
+- `x-driftlock-forwarded`: Always "true"
+- `x-webhook-secret`: Your secret (if `WEBHOOK_FORWARD_SECRET` is set)
+
+**Response includes forwarding status:**
+```json
+{
+  "status": "ok",
+  "forward": {
+    "ok": true,
+    "status": 200,
+    "elapsed": 150
+  }
+}
+```
 
 ---
 
