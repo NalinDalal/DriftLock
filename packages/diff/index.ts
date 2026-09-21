@@ -593,6 +593,26 @@ export function applyFixWork(work: FixWork, source: string): string | null {
                 `${coercer}($&)`,
             );
         }
+        case "custom": {
+            // For removed fields, add a comment warning about the removed field
+            if (!work.field) {
+                return null;
+            }
+            const fieldParts = work.field.split(".");
+            const leaf = fieldParts[fieldParts.length - 1];
+            const regex = new RegExp(
+                `(?<![\\w.])[\\w$]+(?:\\.[\\w$]+)*\\.${leaf.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w])`,
+                "g",
+            );
+            if (!regex.test(source)) {
+                return null;
+            }
+            // Add a TODO comment before the first occurrence
+            return source.replace(
+                regex,
+                `/* TODO: field '${leaf}' removed from API */ $&`,
+            );
+        }
         default:
             return null;
     }
