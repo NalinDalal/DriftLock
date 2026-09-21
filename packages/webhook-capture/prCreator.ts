@@ -95,6 +95,18 @@ function scanForAffectedFiles(
                     results.push({ filePath: file, fullPath });
                     seen.add(fullPath);
                 }
+            } else if (work.kind === "custom" && work.field) {
+                // For removed fields, search for the leaf field name
+                const fieldParts = work.field.split(".");
+                const leaf = fieldParts[fieldParts.length - 1];
+                const regex = new RegExp(
+                    `(?<![\\w.])[\\w$]+(?:\\.[\\w$]+)*\\.${leaf.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w])`,
+                    "g",
+                );
+                if (regex.test(content) && !seen.has(fullPath)) {
+                    results.push({ filePath: file, fullPath });
+                    seen.add(fullPath);
+                }
             }
         }
     }
