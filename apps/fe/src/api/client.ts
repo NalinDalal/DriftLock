@@ -9,6 +9,9 @@ import type {
     RepoDetail,
     Settings,
     User,
+    WebhookEndpoint,
+    WebhookSchema,
+    WebhookDrift,
 } from "./types";
 
 const BASE = import.meta.env.VITE_API_URL ?? "";
@@ -107,4 +110,23 @@ export function rotateApiKey(name: string): Promise<{ key: ApiKey }> {
     return request(`/api/settings/rotate?name=${encodeURIComponent(name)}`, {
         method: "POST",
     });
+}
+
+export function getWebhookEndpoints(): Promise<{ endpoints: WebhookEndpoint[] }> {
+    return request("/api/webhooks/endpoints");
+}
+
+export function getWebhookSchemas(
+    endpointId: string,
+): Promise<{ schemas: WebhookSchema[] }> {
+    return request(
+        `/api/webhooks/endpoints/${encodeURIComponent(endpointId)}/schemas`,
+    );
+}
+
+export function getWebhookDrifts(
+    endpointId?: string,
+): Promise<{ drifts: WebhookDrift[] }> {
+    const params = endpointId ? `?endpointId=${encodeURIComponent(endpointId)}` : "";
+    return request(`/api/webhooks/drifts${params}`);
 }

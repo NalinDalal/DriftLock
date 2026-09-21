@@ -28,6 +28,7 @@ export default function AppShell() {
         location.pathname.startsWith("/accounts") ||
         location.pathname.startsWith("/repos");
     const onSettings = location.pathname.startsWith("/settings");
+    const onWebhooks = location.pathname.startsWith("/webhooks");
 
     return (
         <div className="flex min-h-screen flex-col">
@@ -60,6 +61,16 @@ export default function AppShell() {
                                 }`}
                             >
                                 Settings
+                            </Link>
+                            <Link
+                                to="/webhooks"
+                                className={`rounded-md px-3 py-1.5 transition-colors duration-150 ${
+                                    onWebhooks
+                                        ? "bg-neutral-100 text-neutral-900"
+                                        : "text-neutral-500 hover:text-neutral-900"
+                                }`}
+                            >
+                                Webhooks
                             </Link>
                         </nav>
                     </div>

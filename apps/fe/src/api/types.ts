@@ -105,3 +105,36 @@ export interface RepoDetail {
     callsites: CallSiteSummary[];
     pulls: Pull[];
 }
+
+export interface WebhookEndpoint {
+    id: string;
+    name: string;
+    url: string;
+    repositoryId: string | null;
+    active: boolean;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface WebhookSchema {
+    id: string;
+    endpointId: string;
+    eventType: string;
+    flattenedSchema: Record<string, string>;
+    capturedAt: string;
+}
+
+export interface WebhookDrift {
+    id: string;
+    endpointId: string;
+    eventType: string;
+    diff: {
+        added: string[];
+        removed: string[];
+        typeChanged: Array<{ field: string; from: string; to: string }>;
+    };
+    previousSchema: Record<string, string>;
+    currentSchema: Record<string, string>;
+    detectedAt: string;
+    status: string;
+}

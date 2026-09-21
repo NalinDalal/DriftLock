@@ -16,6 +16,11 @@ import {
     handleUpdateSettings,
 } from "./routes/settings";
 import { handleRun } from "./routes/run";
+import {
+    handleWebhookEndpoints,
+    handleWebhookSchemas,
+    handleWebhookDrifts,
+} from "./routes/webhooks";
 
 async function dispatch(req: Request, url: URL): Promise<Response> {
     if (url.pathname === "/api/health") {
@@ -42,6 +47,15 @@ async function dispatch(req: Request, url: URL): Promise<Response> {
     }
     if (url.pathname === "/api/runs" && req.method === "POST") {
         return handleRun(req);
+    }
+    if (url.pathname === "/api/webhooks/endpoints") {
+        return handleWebhookEndpoints(url);
+    }
+    if (url.pathname.match(/^\/api\/webhooks\/endpoints\/[^/]+\/schemas$/)) {
+        return handleWebhookSchemas(url);
+    }
+    if (url.pathname === "/api/webhooks/drifts") {
+        return handleWebhookDrifts(url);
     }
     const repoPaths = /^\/api\/repos\/[^/]+\/[^/]+$/;
     if (repoPaths.test(url.pathname)) {

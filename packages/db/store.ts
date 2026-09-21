@@ -9,6 +9,9 @@ import {
   runs,
   settings,
   snapshots,
+  webhookEndpoints,
+  webhookSchemas,
+  webhookDrifts,
 } from "./schema";
 
 export interface RepoInput {
@@ -526,6 +529,53 @@ export function createStore(db: Database) {
     return rows[0] ?? null;
   }
 
+  async function listWebhookEndpoints() {
+    return db
+      .select()
+      .from(webhookEndpoints)
+      .orderBy(desc(webhookEndpoints.createdAt));
+  }
+
+  async function getWebhookEndpoint(id: string) {
+    const rows = await db
+      .select()
+      .from(webhookEndpoints)
+      .where(eq(webhookEndpoints.id, id))
+      .limit(1);
+    return rows[0] ?? null;
+  }
+
+  async function listWebhookSchemas(endpointId: string) {
+    return db
+      .select()
+      .from(webhookSchemas)
+      .where(eq(webhookSchemas.endpointId, endpointId))
+      .orderBy(desc(webhookSchemas.capturedAt));
+  }
+
+  async function listWebhookDrifts(endpointId?: string) {
+    if (endpointId) {
+      return db
+        .select()
+        .from(webhookDrifts)
+        .where(eq(webhookDrifts.endpointId, endpointId))
+        .orderBy(desc(webhookDrifts.detectedAt));
+    }
+    return db
+      .select()
+      .from(webhookDrifts)
+      .orderBy(desc(webhookDrifts.detectedAt));
+  }
+
+  async function getWebhookDrift(id: string) {
+    const rows = await db
+      .select()
+      .from(webhookDrifts)
+      .where(eq(webhookDrifts.id, id))
+      .limit(1);
+    return rows[0] ?? null;
+  }
+
   return {
     ensureRepository,
     listRepositories,
@@ -556,6 +606,11 @@ export function createStore(db: Database) {
     createApiKey,
     rotateApiKey,
     findApiKey,
+    listWebhookEndpoints,
+    getWebhookEndpoint,
+    listWebhookSchemas,
+    listWebhookDrifts,
+    getWebhookDrift,
   };
 }
 

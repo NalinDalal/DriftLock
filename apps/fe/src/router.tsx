@@ -4,6 +4,7 @@ import AccountsPage from "./routes/index";
 import AccountPage from "./routes/account";
 import RepoPage from "./routes/repo";
 import SettingsPage from "./routes/settings";
+import WebhookDashboard from "./routes/webhooks";
 
 const rootRoute = createRootRoute({ component: AppShell });
 
@@ -37,11 +38,18 @@ const settingsRoute = createRoute({
     component: SettingsPage,
 });
 
+const webhooksRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/webhooks",
+    component: WebhookDashboard,
+});
+
 const routeTree = rootRoute.addChildren([
     indexRoute,
     accountRoute,
     repoRoute,
     settingsRoute,
+    webhooksRoute,
 ]);
 
 export const router = createRouter({ routeTree });
