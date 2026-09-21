@@ -84,7 +84,9 @@ export function getSettings(): Promise<{ settings: Settings }> {
 }
 
 export function updateSettings(
-    patch: Partial<Pick<Settings, "autoProbe" | "forwardWhitelist">>,
+    patch: Partial<Pick<Settings, "autoProbe" | "forwardWhitelist">> & {
+        webhookConfig?: Partial<Settings["webhookConfig"]>;
+    },
 ): Promise<{ settings: Settings }> {
     return request("/api/settings", {
         method: "PUT",

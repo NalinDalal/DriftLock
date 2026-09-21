@@ -98,6 +98,16 @@ export interface Settings {
     forwardWhitelist: string[];
     apiKeys: ApiKey[];
     probeCredentials: Array<{ provider: string; kind: string; masked: string }>;
+    webhookConfig: {
+        githubToken?: string;
+        repoPath?: string;
+        repoOwner?: string;
+        repoName?: string;
+        aiProvider?: string;
+        aiApiKey?: string;
+        forwardUrl?: string;
+        confidenceThreshold?: number;
+    };
 }
 
 export interface RepoDetail {

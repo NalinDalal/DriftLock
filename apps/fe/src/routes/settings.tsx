@@ -77,6 +77,148 @@ function RepoPolicyRow({ repo }: { repo: Repo }) {
     );
 }
 
+function WebhookSettings({ webhookConfig, onSave }: {
+    webhookConfig: NonNullable<import("../api/types").Settings["webhookConfig"]>;
+    onSave: (patch: Partial<typeof webhookConfig>) => void;
+}) {
+    const [form, setForm] = useState({
+        githubToken: webhookConfig.githubToken ?? "",
+        repoPath: webhookConfig.repoPath ?? "",
+        repoOwner: webhookConfig.repoOwner ?? "",
+        repoName: webhookConfig.repoName ?? "",
+        aiProvider: webhookConfig.aiProvider ?? "",
+        aiApiKey: webhookConfig.aiApiKey ?? "",
+        forwardUrl: webhookConfig.forwardUrl ?? "",
+        confidenceThreshold: webhookConfig.confidenceThreshold?.toString() ?? "0.7",
+    });
+
+    function handleChange(field: string, value: string) {
+        setForm(prev => ({ ...prev, [field]: value }));
+    }
+
+    function handleSave() {
+        const patch: Partial<typeof webhookConfig> = {
+            githubToken: form.githubToken || undefined,
+            repoPath: form.repoPath || undefined,
+            repoOwner: form.repoOwner || undefined,
+            repoName: form.repoName || undefined,
+            aiProvider: form.aiProvider || undefined,
+            aiApiKey: form.aiApiKey || undefined,
+            forwardUrl: form.forwardUrl || undefined,
+            confidenceThreshold: parseFloat(form.confidenceThreshold) || 0.7,
+        };
+        onSave(patch);
+    }
+
+    return (
+        <Card className="p-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                    <label className="mb-1 block text-xs font-medium text-neutral-700">
+                        GitHub Token
+                    </label>
+                    <input
+                        type="password"
+                        value={form.githubToken}
+                        onChange={(e) => handleChange("githubToken", e.target.value)}
+                        placeholder="ghp_..."
+                        className="w-full rounded-md border border-neutral-300 bg-white px-2.5 py-1.5 font-mono text-xs text-neutral-800 focus:border-neutral-400 focus:outline-none"
+                    />
+                </div>
+                <div>
+                    <label className="mb-1 block text-xs font-medium text-neutral-700">
+                        Repository Owner
+                    </label>
+                    <input
+                        value={form.repoOwner}
+                        onChange={(e) => handleChange("repoOwner", e.target.value)}
+                        placeholder="your-org"
+                        className="w-full rounded-md border border-neutral-300 bg-white px-2.5 py-1.5 text-xs text-neutral-800 focus:border-neutral-400 focus:outline-none"
+                    />
+                </div>
+                <div>
+                    <label className="mb-1 block text-xs font-medium text-neutral-700">
+                        Repository Name
+                    </label>
+                    <input
+                        value={form.repoName}
+                        onChange={(e) => handleChange("repoName", e.target.value)}
+                        placeholder="your-repo"
+                        className="w-full rounded-md border border-neutral-300 bg-white px-2.5 py-1.5 text-xs text-neutral-800 focus:border-neutral-400 focus:outline-none"
+                    />
+                </div>
+                <div>
+                    <label className="mb-1 block text-xs font-medium text-neutral-700">
+                        Repository Path (server)
+                    </label>
+                    <input
+                        value={form.repoPath}
+                        onChange={(e) => handleChange("repoPath", e.target.value)}
+                        placeholder="/opt/repos/your-repo"
+                        className="w-full rounded-md border border-neutral-300 bg-white px-2.5 py-1.5 font-mono text-xs text-neutral-800 focus:border-neutral-400 focus:outline-none"
+                    />
+                </div>
+                <div>
+                    <label className="mb-1 block text-xs font-medium text-neutral-700">
+                        AI Provider
+                    </label>
+                    <select
+                        value={form.aiProvider}
+                        onChange={(e) => handleChange("aiProvider", e.target.value)}
+                        className="w-full rounded-md border border-neutral-300 bg-white px-2.5 py-1.5 text-xs text-neutral-800 focus:border-neutral-400 focus:outline-none"
+                    >
+                        <option value="">None</option>
+                        <option value="openai">OpenAI</option>
+                        <option value="anthropic">Anthropic</option>
+                    </select>
+                </div>
+                <div>
+                    <label className="mb-1 block text-xs font-medium text-neutral-700">
+                        AI API Key
+                    </label>
+                    <input
+                        type="password"
+                        value={form.aiApiKey}
+                        onChange={(e) => handleChange("aiApiKey", e.target.value)}
+                        placeholder="sk-..."
+                        className="w-full rounded-md border border-neutral-300 bg-white px-2.5 py-1.5 font-mono text-xs text-neutral-800 focus:border-neutral-400 focus:outline-none"
+                    />
+                </div>
+                <div>
+                    <label className="mb-1 block text-xs font-medium text-neutral-700">
+                        Forward URL
+                    </label>
+                    <input
+                        value={form.forwardUrl}
+                        onChange={(e) => handleChange("forwardUrl", e.target.value)}
+                        placeholder="https://your-app.com/webhooks/stripe"
+                        className="w-full rounded-md border border-neutral-300 bg-white px-2.5 py-1.5 font-mono text-xs text-neutral-800 focus:border-neutral-400 focus:outline-none"
+                    />
+                </div>
+                <div>
+                    <label className="mb-1 block text-xs font-medium text-neutral-700">
+                        Confidence Threshold
+                    </label>
+                    <input
+                        type="number"
+                        min="0"
+                        max="1"
+                        step="0.1"
+                        value={form.confidenceThreshold}
+                        onChange={(e) => handleChange("confidenceThreshold", e.target.value)}
+                        className="w-full rounded-md border border-neutral-300 bg-white px-2.5 py-1.5 font-mono text-xs text-neutral-800 focus:border-neutral-400 focus:outline-none"
+                    />
+                </div>
+            </div>
+            <div className="mt-4 flex justify-end">
+                <Button size="sm" onClick={handleSave}>
+                    Save Webhook Config
+                </Button>
+            </div>
+        </Card>
+    );
+}
+
 export default function SettingsPage() {
     const settings = useFetch(() => getSettings(), []);
     const accounts = useFetch(() => getAccounts(), []);
@@ -137,6 +279,16 @@ export default function SettingsPage() {
         }
     }
 
+    async function saveWebhookConfig(patch: Partial<NonNullable<import("../api/types").Settings["webhookConfig"]>>) {
+        try {
+            await updateSettings({ webhookConfig: patch });
+            settings.reload();
+            toast("Webhook config saved");
+        } catch (err) {
+            toast(err instanceof Error ? err.message : "Failed to save webhook config");
+        }
+    }
+
     const entry = settings.data?.settings;
     const whitelist = entry?.forwardWhitelist ?? [];
 
@@ -147,6 +299,17 @@ export default function SettingsPage() {
                 title="How DriftLock behaves"
                 description="Per-repo permissions, the traffic forward whitelist, and the credentials the probe uses."
             />
+
+            <section>
+                <SectionTitle
+                    title="Webhook Capture"
+                    hint="Configure how DriftLock captures and processes webhooks from Stripe, Twilio, and other vendors."
+                />
+                <WebhookSettings
+                    webhookConfig={entry?.webhookConfig ?? {}}
+                    onSave={saveWebhookConfig}
+                />
+            </section>
 
             <section>
                 <SectionTitle

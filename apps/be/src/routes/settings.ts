@@ -11,11 +11,22 @@ export interface AppSettings {
         kind: string;
         masked: string;
     }>;
+    webhookConfig: {
+        githubToken?: string;
+        repoPath?: string;
+        repoOwner?: string;
+        repoName?: string;
+        aiProvider?: string;
+        aiApiKey?: string;
+        forwardUrl?: string;
+        confidenceThreshold?: number;
+    };
 }
 
 const AUTO_PROBE = "autoProbe";
 const FORWARD_WHITELIST = "forwardWhitelist";
 const PROBE_CREDENTIALS = "probeCredentials";
+const WEBHOOK_CONFIG = "webhookConfig";
 
 export async function handleGetSettings(): Promise<Response> {
     const store = getStore();
@@ -29,6 +40,10 @@ export async function handleGetSettings(): Promise<Response> {
             (await store.getSetting<AppSettings["probeCredentials"]>(
                 PROBE_CREDENTIALS,
             )) ?? [],
+        webhookConfig:
+            (await store.getSetting<AppSettings["webhookConfig"]>(
+                WEBHOOK_CONFIG,
+            )) ?? {},
     };
     return json({ settings });
 }
@@ -55,6 +70,11 @@ export async function handleUpdateSettings(req: Request): Promise<Response> {
                 (entry): entry is string => typeof entry === "string",
             ),
         );
+    }
+    if (typeof patch.webhookConfig === "object" && patch.webhookConfig !== null) {
+        const existing = await store.getSetting<AppSettings["webhookConfig"]>(WEBHOOK_CONFIG) ?? {};
+        const updated = { ...existing, ...patch.webhookConfig };
+        await store.setSetting(WEBHOOK_CONFIG, updated);
     }
     return handleGetSettings();
 }
