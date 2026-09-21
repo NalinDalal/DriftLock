@@ -20,6 +20,11 @@ DriftLock scans your codebase for API call sites, captures vendor traffic to bui
 
 </div>
 
+<div align='center'>
+
+[https://x.com/kybldmstr/status/2098413659722535174?s=20](https://x.com/kybldmstr/status/2098413659722535174?s=20)
+</div>
+
 ---
 
 ```mermaid
@@ -105,6 +110,10 @@ That's DriftLock.
 
 ## How it works
 
+DriftLock has two detection modes: **outbound** (APIs you call) and **inbound** (webhooks you receive).
+
+### Outbound drift detection
+
 ```mermaid
 flowchart LR
     A[Install GitHub App] --> B[Discover Call Sites]
@@ -124,11 +133,33 @@ flowchart LR
 | **Fix**      | Generates fix suggestions; PR creation available with `--repo` |
 | **Report**   | Shows which call sites are monitored, blind, or untested       |
 
-AI-powered fix generation is on the roadmap. The current implementation produces fix suggestions and supports PR creation.
+### Inbound webhook drift detection
+
+```mermaid
+flowchart LR
+    A[Webhook received] --> B[Flatten payload]
+    B --> C[Diff against baseline]
+    C --> D{Drift?}
+    D -->|Yes| E[Scan code for affected files]
+    E --> F[Apply fix]
+    F --> G[Create PR]
+    D -->|No| H[OK]
+```
+
+| Step            | What happens                                                   |
+| --------------- | -------------------------------------------------------------- |
+| **Flatten**     | Converts nested JSON to dot-notation paths (`data.amount` → `"number"`) |
+| **Store**       | Saves schema per endpoint + event type as baseline             |
+| **Diff**        | Detects added fields, removed fields, and type changes         |
+| **Scan**        | Finds source files referencing changed fields                  |
+| **Fix**         | Applies deterministic renames, null checks, type coercions     |
+| **PR**          | Creates a GitHub PR with the fix via Git Database API          |
 
 ---
 
 ## Quick start
+
+### CLI (outbound drift)
 
 ```bash
 # Install
@@ -147,7 +178,71 @@ driftlock fix ./repo --dry-run
 driftlock fix ./repo --repo owner/repo
 ```
 
-[Full documentation →](./docs/architecture.md)
+### Webhook capture (inbound drift)
+
+**1. Start the webhook server**
+
+```bash
+cd apps/webhook
+bun run dev
+```
+
+**2. Set environment variables**
+
+```bash
+# Required for PR creation
+GITHUB_TOKEN=ghp_your_token
+
+# Required to scan your codebase for fixes
+WEBHOOK_REPO_PATH=/path/to/your/cloned/repo
+
+# Required for PR creation
+WEBHOOK_OWNER=your-github-org
+WEBHOOK_REPO=your-repo-name
+WEBHOOK_BASE=main
+```
+
+**3. Register a webhook endpoint**
+
+```bash
+curl -X POST http://localhost:3001/webhooks/capture/stripe \
+  -H "Content-Type: application/json" \
+  -d '{"type":"payment_intent.succeeded","data":{"object":{"id":"pi_123","amount":2000,"source":"tok_visa"}}}'
+```
+
+This records the baseline schema. On the next request with a changed payload:
+
+```bash
+curl -X POST http://localhost:3001/webhooks/capture/stripe \
+  -H "Content-Type: application/json" \
+  -d '{"type":"payment_intent.succeeded","data":{"object":{"id":"pi_123","amount":2000,"payment_method":"pm_123"}}}'
+```
+
+Response:
+```json
+{
+  "status": "drift_detected",
+  "diff": {
+    "added": ["payment_method"],
+    "removed": ["source"],
+    "typeChanged": []
+  },
+  "pr": "pending"
+}
+```
+
+The system automatically:
+1. Scans your repo for files referencing `source`
+2. Applies the rename (`source` → `payment_method`)
+3. Creates a PR via the GitHub API
+
+**4. Point your Stripe webhook to DriftLock**
+
+In the Stripe Dashboard → Webhooks → Add endpoint:
+- URL: `http://your-server:3001/webhooks/capture/stripe`
+- Events: select the events you handle
+
+DriftLock forwards the payload to your handler and records the schema.
 
 ---
 

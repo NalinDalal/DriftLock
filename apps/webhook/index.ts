@@ -1,4 +1,5 @@
 import { webhookHandler } from "./webhooks";
+import { createCaptureHandler } from "./capture";
 import { getDb } from "@driftlock/db";
 
 const port = parseInt(process.env.PORT || "3001", 10);
@@ -9,6 +10,8 @@ export function json(data: unknown, status = 200): Response {
         headers: { "content-type": "application/json" },
     });
 }
+
+const captureHandler = createCaptureHandler();
 
 // Verify database connection on startup
 try {
@@ -30,6 +33,10 @@ Bun.serve({
 
         if (url.pathname === "/webhooks/github") {
             return await webhookHandler(req);
+        }
+
+        if (url.pathname.startsWith("/webhooks/capture/")) {
+            return await captureHandler(req);
         }
 
         if (url.pathname === "/health") {
@@ -61,6 +68,7 @@ Bun.serve({
                     "Self-maintaining APIs. GitHub App webhook handler",
                 endpoints: {
                     webhooks: "/webhooks/github",
+                    capture: "/webhooks/capture/:endpointId",
                     health: "/health",
                 },
             });

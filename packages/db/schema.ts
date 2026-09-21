@@ -162,3 +162,38 @@ export const apiKeys = pgTable("api_keys", {
   masked: varchar("masked", { length: 64 }).notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+export const webhookEndpoints = pgTable("webhook_endpoints", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: varchar("name", { length: 255 }).notNull(),
+  url: text("url").notNull(),
+  repositoryId: uuid("repository_id").references(() => repositories.id, { onDelete: "set null" }),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const webhookSchemas = pgTable("webhook_schemas", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  endpointId: varchar("endpoint_id", { length: 64 })
+    .notNull()
+    .references(() => webhookEndpoints.id, { onDelete: "cascade" }),
+  eventType: varchar("event_type", { length: 255 }).notNull(),
+  flattenedSchema: jsonb("flattened_schema").notNull(),
+  capturedAt: timestamp("captured_at").notNull().defaultNow(),
+}, (t) => ({
+  endpointEvent: { columns: [t.endpointId, t.eventType], unique: true },
+}));
+
+export const webhookDrifts = pgTable("webhook_drifts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  endpointId: varchar("endpoint_id", { length: 64 })
+    .notNull()
+    .references(() => webhookEndpoints.id, { onDelete: "cascade" }),
+  eventType: varchar("event_type", { length: 255 }).notNull(),
+  diff: jsonb("diff").notNull(),
+  previousSchema: jsonb("previous_schema").notNull(),
+  currentSchema: jsonb("current_schema").notNull(),
+  detectedAt: timestamp("detected_at").notNull().defaultNow(),
+  status: varchar("status", { length: 30 }).notNull().default("detected"),
+});
