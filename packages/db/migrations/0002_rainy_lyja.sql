@@ -4,7 +4,7 @@ CREATE TABLE "webhook_drifts" (
 	"event_type" varchar(255) NOT NULL,
 	"diff" jsonb NOT NULL,
 	"previous_schema" jsonb NOT NULL,
-	"current_schema" jsonb NOT NULL,
+	"new_schema" jsonb NOT NULL,
 	"detected_at" timestamp DEFAULT now() NOT NULL,
 	"status" varchar(30) DEFAULT 'detected' NOT NULL
 );
