@@ -34,17 +34,19 @@ async function loadConfig(): Promise<WebhookConfig> {
     try {
         const db = getDb();
         const rows = await db
-            .select({ value: settings.value })
+            .select()
             .from(settings)
-            .where({ key: "webhookConfig" })
-            .limit(1);
+            .limit(5);
 
-        if (rows.length > 0) {
-            cachedConfig = rows[0].value as WebhookConfig;
-            console.log(`[CONFIG] Loaded from DB: githubToken=${cachedConfig.githubToken ? "set" : "missing"}, repoPath=${cachedConfig.repoPath || "missing"}, repoOwner=${cachedConfig.repoOwner || "missing"}, repoName=${cachedConfig.repoName || "missing"}`);
+        console.log(`[CONFIG] All settings keys: ${rows.map(r => r.key).join(", ")}`);
+
+        const webhookRow = rows.find(r => r.key === "webhookConfig");
+        if (webhookRow) {
+            cachedConfig = webhookRow.value as WebhookConfig;
+            console.log(`[CONFIG] Loaded: githubToken=${cachedConfig.githubToken ? "set" : "missing"}, repoPath=${cachedConfig.repoPath || "missing"}, repoOwner=${cachedConfig.repoOwner || "missing"}, repoName=${cachedConfig.repoName || "missing"}`);
         } else {
             cachedConfig = {};
-            console.log("[CONFIG] No webhookConfig in DB");
+            console.log("[CONFIG] No webhookConfig found");
         }
     } catch (e) {
         cachedConfig = {};
