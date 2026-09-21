@@ -1,0 +1,38 @@
+FROM oven/bun:1.3.11-slim AS base
+
+WORKDIR /app
+
+COPY package.json bun.lock* ./
+COPY packages/db/package.json ./packages/db/
+COPY packages/core/package.json ./packages/core/
+COPY packages/diff/package.json ./packages/diff/
+COPY packages/git/package.json ./packages/git/
+COPY packages/pipeline/package.json ./packages/pipeline/
+COPY packages/ai-fix/package.json ./packages/ai-fix/
+COPY packages/webhook-capture/package.json ./packages/webhook-capture/
+COPY packages/migrations/package.json ./packages/migrations/
+COPY packages/rules-engine/package.json ./packages/rules-engine/
+COPY apps/be/package.json ./apps/be/
+COPY apps/webhook/package.json ./apps/webhook/
+
+RUN bun install --frozen-lockfile
+
+COPY packages/db ./packages/db
+COPY packages/core ./packages/core
+COPY packages/diff ./packages/diff
+COPY packages/git ./packages/git
+COPY packages/pipeline ./packages/pipeline
+COPY packages/ai-fix ./packages/ai-fix
+COPY packages/webhook-capture ./packages/webhook-capture
+COPY packages/migrations ./packages/migrations
+COPY packages/rules-engine ./packages/rules-engine
+COPY apps/be ./apps/be
+COPY apps/webhook ./apps/webhook
+
+WORKDIR /app/apps/be
+
+ENV NODE_ENV=production
+
+EXPOSE 3000
+
+CMD ["bun", "run", "start"]
