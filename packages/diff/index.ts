@@ -594,24 +594,29 @@ export function applyFixWork(work: FixWork, source: string): string | null {
             );
         }
         case "custom": {
-            // For removed fields, add a comment warning about the removed field
+            // For removed fields, comment out lines that access the removed field
             if (!work.field) {
                 return null;
             }
             const fieldParts = work.field.split(".");
             const leaf = fieldParts[fieldParts.length - 1];
-            const regex = new RegExp(
-                `(?<![\\w.])[\\w$]+(?:\\.[\\w$]+)*\\.${leaf.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w])`,
+            const fieldRegex = new RegExp(
+                `[\\w$]+(?:\\.[\\w$]+)*\\.${leaf.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
                 "g",
             );
-            if (!regex.test(source)) {
+            if (!fieldRegex.test(source)) {
                 return null;
             }
-            // Add a TODO comment before the first occurrence
-            return source.replace(
-                regex,
-                `/* TODO: field '${leaf}' removed from API */ $&`,
-            );
+            // Comment out lines containing the removed field
+            const lines = source.split("\n");
+            const result = lines.map((line) => {
+                if (fieldRegex.test(line) && !line.trimStart().startsWith("//")) {
+                    fieldRegex.lastIndex = 0; // reset regex
+                    return `// ${line}`;
+                }
+                return line;
+            });
+            return result.join("\n");
         }
         default:
             return null;

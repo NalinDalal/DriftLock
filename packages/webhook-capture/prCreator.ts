@@ -100,7 +100,7 @@ function scanForAffectedFiles(
                 const fieldParts = work.field.split(".");
                 const leaf = fieldParts[fieldParts.length - 1];
                 const regex = new RegExp(
-                    `(?<![\\w.])[\\w$]+(?:\\.[\\w$]+)*\\.${leaf.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w])`,
+                    `[\\w$]+(?:\\.[\\w$]+)*\\.${leaf.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
                     "g",
                 );
                 if (regex.test(content) && !seen.has(fullPath)) {
