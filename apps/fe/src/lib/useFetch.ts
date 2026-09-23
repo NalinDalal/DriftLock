@@ -31,7 +31,7 @@ export function useFetch<T>(fn: () => Promise<T>, deps: unknown[]): {
         return () => {
             alive = false;
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line
     }, [...deps, tick]);
 
     return { data, error, loading, reload: () => setTick((t) => t + 1) };

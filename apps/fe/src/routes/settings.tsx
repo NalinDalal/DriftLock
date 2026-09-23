@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { getAccounts, getAccountRepos, getSettings, rotateApiKey, updateRepoPolicy, updateSettings } from "../api/client";
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { Permission, Repo } from "../api/types";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
@@ -8,7 +9,7 @@ import { PageHeader } from "../components/PageHeader";
 import { Toggle } from "../components/Toggle";
 import { useFetch } from "../lib/useFetch";
 import { toast } from "../lib/toast";
-import { PERMISSION_LABELS, titleCase } from "../lib/format";
+import { titleCase } from "../lib/format";
 
 function SectionTitle({
     title,

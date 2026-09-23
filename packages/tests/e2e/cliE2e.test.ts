@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { spawn } from "child_process";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "../../..");
@@ -116,9 +117,7 @@ describe("CLI E2E: analyze fixture project", () => {
     });
 
     test("analyze returns empty for directory with no TS files", async () => {
-        const emptyDir = fs.mkdtempSync(
-            path.join(require("os").tmpdir(), "driftlock-e2e-"),
-        );
+        const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), "driftlock-e2e-"));
         try {
             const result = await runCli([
                 "analyze",

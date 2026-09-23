@@ -65,7 +65,8 @@ function getConfigValue<T>(config: WebhookConfig, key: keyof WebhookConfig, envK
 
 const store = new InMemorySchemaStore();
 
-let detectorResolved = false;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+let _detectorResolved = false;
 let resolveDetectorPromise: (det: DriftDetector) => void;
 const detectorReady = new Promise<DriftDetector>((resolve) => {
     resolveDetectorPromise = resolve;
@@ -77,7 +78,7 @@ async function initDetector() {
     const det = new DriftDetector(store, threshold);
     setupDetectorCallbacks(det);
     resolveDetectorPromise(det);
-    detectorResolved = true;
+    _detectorResolved = true;
 }
 
 // Init lazily on first request, not at module load
@@ -210,7 +211,7 @@ async function forwardPayload(
     endpointId: string,
     eventType: string,
     body: Record<string, unknown>,
-    headers: Record<string, string>,
+    _headers: Record<string, string>,
 ): Promise<{ ok: boolean; status: number; elapsed: number }> {
     if (!forwardUrl) {
         return { ok: false, status: 0, elapsed: 0 };
@@ -297,11 +298,12 @@ export function createCaptureHandler() {
         }
 
         if (alert) {
+            const diff = "diff" in alert ? alert.diff : { added: [], removed: [], typeChanged: [] };
             return json({
                 status: "drift_detected",
                 endpointId,
                 eventType,
-                diff: alert.diff,
+                diff,
                 pr: "pending",
                 forward: forwardResult,
             });

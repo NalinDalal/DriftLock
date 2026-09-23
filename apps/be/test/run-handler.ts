@@ -66,7 +66,9 @@ const mockAnalyzeResult = {
     trafficCaptured: 3,
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 let analyzeCallCount = 0;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 let lastAnalyzeInput: Record<string, unknown> | null = null;
 
 mock.module("@driftlock/pipeline", () => ({

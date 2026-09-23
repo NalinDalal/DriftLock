@@ -1,5 +1,4 @@
-import { getDb, installations, repositories } from "@driftlock/db";
-import { eq } from "drizzle-orm";
+import { getDb, settings } from "@driftlock/db";
 
 function json(data: unknown, status = 200): Response {
     return new Response(JSON.stringify(data, null, 2), {
@@ -43,7 +42,7 @@ export async function handleGitHubLogin(): Promise<Response> {
 export async function handleGitHubCallback(req: Request): Promise<Response> {
     const url = new URL(req.url);
     const code = url.searchParams.get("code");
-    const state = url.searchParams.get("state");
+    const _state = url.searchParams.get("state");
 
     if (!code) {
         return json({ error: "Missing code parameter" }, 400);
@@ -100,7 +99,7 @@ export async function handleGitHubCallback(req: Request): Promise<Response> {
 
     // Store user data in settings for now
     await db.execute(`DELETE FROM settings WHERE key = 'session:${sessionToken}'`);
-    await db.insert(require("@driftlock/db").settings).values({
+    await db.insert(settings).values({
         key: `session:${sessionToken}`,
         value: {
             userId: user.id,
@@ -134,6 +133,7 @@ export async function handleGetSession(req: Request): Promise<Response> {
             return json({ user: null });
         }
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const session = (result[0] as { value: any }).value;
         return json({
             user: {
@@ -142,7 +142,7 @@ export async function handleGetSession(req: Request): Promise<Response> {
                 avatarUrl: session.avatarUrl,
             },
         });
-    } catch {
+    } catch (_e) {
         return json({ user: null });
     }
 }
@@ -165,6 +165,7 @@ export async function handleGitHubRepos(req: Request): Promise<Response> {
             return json({ error: "Invalid session" }, 401);
         }
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const session = (result[0] as { value: any }).value;
         const accessToken = session.accessToken;
 
@@ -224,7 +225,7 @@ export async function handleGitHubRepos(req: Request): Promise<Response> {
                 avatarUrl: session.avatarUrl,
             },
         });
-    } catch (error) {
+    } catch (_error) {
         return json({ error: "Failed to fetch repos" }, 500);
     }
 }

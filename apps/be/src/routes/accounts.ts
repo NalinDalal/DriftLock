@@ -1,3 +1,4 @@
+import { getDb } from "@driftlock/db";
 import { getStore } from "../store";
 import { repoDto, type AccountDto, type RepoDto } from "../dto";
 import { json, notFound } from "../utils";
@@ -12,6 +13,7 @@ export async function handleMe(req: Request): Promise<Response> {
                 `SELECT value FROM settings WHERE key = 'session:${token}'`
             );
             if (result.length > 0) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const session = (result[0] as { value: any }).value;
                 return json({
                     user: {
@@ -21,7 +23,9 @@ export async function handleMe(req: Request): Promise<Response> {
                     },
                 });
             }
-        } catch {}
+        } catch (_e) {
+            // ignore — fallback to unauthenticated
+        }
     }
 
     // Fallback: not logged in
