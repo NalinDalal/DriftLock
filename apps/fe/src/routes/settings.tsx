@@ -5,6 +5,7 @@ import type { Permission, Repo } from "../api/types";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
+import { PageHeader } from "../components/PageHeader";
 import { Toggle } from "../components/Toggle";
 import { useFetch } from "../lib/useFetch";
 import { toast } from "../lib/toast";

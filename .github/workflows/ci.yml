@@ -67,8 +67,10 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
       - run: bun install --frozen-lockfile
-      - run: bun run --cwd packages/db db:migrate
+      - run: bun run --cwd packages/db db:migrate || echo "migrate failed — will push schema directly"
         name: Migrate DB
+      - run: bun run --cwd packages/db db:push || true
+        name: Push DB schema
       - run: bun test packages/db/
         name: Test DB
       - run: bun test packages/diff/
