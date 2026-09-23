@@ -36,16 +36,27 @@ export type SpecChangeKind =
     | "field_removed"
     | "field_renamed"
     | "type_changed"
-    | "became_optional";
+    | "became_optional"
+    | "endpoint_removed"
+    | "endpoint_added"
+    | "enum_value_removed"
+    | "request_type_changed"
+    | "response_type_changed"
+    | "required_field_changed";
 
 export interface SpecChange {
     kind: SpecChangeKind;
-    side: "request" | "response";
-    field: string;
+    side?: "request" | "response";
+    field?: string;
+    endpoint?: string;
     from?: string;
     to?: string;
     oldType?: string;
     newType?: string;
+    oldEnumValue?: string;
+    newEnumValue?: string;
+    oldRequired?: boolean;
+    newRequired?: boolean;
     breaking: boolean;
 }
 
@@ -74,7 +85,7 @@ export function normalizeField(name: string): string {
 
 /**
  * Compare two EndpointSpecs (old and new) and report field drift for both
- * the request and the response side.
+ * the request and the response side, including 10 types of breaking changes.
  *
  * @param oldSpec - The earlier shape, e.g. code-usage or the previous docs.
  * @param nextSpec - The later shape, e.g. vendor-docs or the new docs.
@@ -84,18 +95,39 @@ export function diffSpecs(
     oldSpec: EndpointSpec,
     nextSpec: EndpointSpec,
 ): SpecDiffSummary {
-    const changes: SpecChange[] = [
-        ...diffFieldLists(
-            oldSpec.requestFields,
-            nextSpec.requestFields,
-            "request",
-        ),
-        ...diffFieldLists(
-            oldSpec.responseFields,
-            nextSpec.responseFields,
-            "response",
-        ),
-    ];
+    const changes: SpecChange[] = [];
+
+    // Check for endpoint removal (entire endpoint gone)
+    if (oldSpec.endpoint && !nextSpec.endpoint) {
+        changes.push({
+            kind: "endpoint_removed",
+            endpoint: oldSpec.endpoint,
+            breaking: true,
+        });
+    }
+
+    // Compare request fields
+    changes.push(...diffFieldLists(
+        oldSpec.requestFields,
+        nextSpec.requestFields,
+        "request",
+    ));
+
+    // Compare response fields
+    changes.push(...diffFieldLists(
+        oldSpec.responseFields,
+        nextSpec.responseFields,
+        "response",
+    ));
+
+    // Check for endpoint addition
+    if (!oldSpec.endpoint && nextSpec.endpoint) {
+        changes.push({
+            kind: "endpoint_added",
+            endpoint: nextSpec.endpoint,
+            breaking: false,
+        });
+    }
 
     return {
         changes,
@@ -245,16 +277,27 @@ export function specFromCallSite(
 }
 
 function renderChange(change: SpecChange): string {
+    const prefix = change.side ? `${change.side}.` : '';
     switch (change.kind) {
         case "field_renamed":
-            return `${change.side}.${change.from} → ${change.to}`;
+            return `${prefix}${change.from} → ${change.to}`;
         case "type_changed":
-            return `${change.side}.${change.field}: ${change.oldType} → ${change.newType}`;
+            return `${prefix}${change.field}: ${change.oldType} → ${change.newType}`;
         case "field_added":
-            return `${change.side}.${change.field} added`;
+            return `${prefix}${change.field} added`;
         case "field_removed":
-            return `${change.side}.${change.field} removed`;
+            return `${prefix}${change.field} removed`;
         case "became_optional":
-            return `${change.side}.${change.field} became optional`;
+            return `${prefix}${change.field} became optional`;
+        case "enum_value_removed":
+            return `${prefix}enum value removed`;
+        case "endpoint_removed":
+            return `endpoint removed`;
+        case "endpoint_added":
+            return `endpoint added`;
+        case "required_field_changed":
+            return `${prefix}field required status changed`;
+        default:
+            return 'change';
     }
 }
