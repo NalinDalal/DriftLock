@@ -19,3 +19,18 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+## Attribution — inspirations (no code copied)
+
+This project re-implements ideas from other MIT-licensed tools from scratch, per-file commits below:
+
+- **Optic (opticdev/optic, MIT)** — OpenAPI diffing taxonomy. Inspired `packages/diff/spec.ts:34` 10 `SpecChangeKind` values and `diffSpecs()` endpoint/field logic. Commit `69de0b3`.
+- **CodeRifts (coderifts.com, blog 2026-02-28)** — GitHub App (30s, zero secrets, PR comment), YAML policy-as-code `.coderifts.yml`, risk 0–100 across 4 dims, Ed25519-style signed receipt, zero-dep agent guard. Inspired:
+  - Risk scoring `packages/diff/spec.ts:70` + `receipts.ts:1` — commit `4bd5dcc` / `f3196cc` (sha256 placeholder for Ed25519, demo `sha256:70699341…cfec` / `sha256:f3de7721…a334`, key `2026-07-k1`)
+  - Policy engine `packages/rules-engine/policy-types.ts:1` + `policy-loader.ts:1` — commit `1ba6278`
+  - GitHub App `packages/github-app/index.ts:1` — commit `e760b74`
+  - Agent guard `packages/agent-guard/index.ts:1` + `driftlock_guard.py:1` (vendored, not PyPI) — commit `fb5555a`
+
+All implementations are original; no source copied.

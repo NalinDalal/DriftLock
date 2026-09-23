@@ -1,0 +1,1 @@
+ALTER TABLE "drift_events" ADD COLUMN "detected_at" timestamp DEFAULT now() NOT NULL;

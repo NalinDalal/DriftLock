@@ -593,7 +593,36 @@ export function applyFixWork(work: FixWork, source: string): string | null {
                 `${coercer}($&)`,
             );
         }
+        case "custom": {
+            // For removed fields, comment out lines that access the removed field
+            if (!work.field) {
+                return null;
+            }
+            const fieldParts = work.field.split(".");
+            const leaf = fieldParts[fieldParts.length - 1];
+            const fieldRegex = new RegExp(
+                `[\\w$]+(?:\\.[\\w$]+)*\\.${leaf.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
+                "g",
+            );
+            if (!fieldRegex.test(source)) {
+                return null;
+            }
+            // Comment out lines containing the removed field
+            const lines = source.split("\n");
+            const result = lines.map((line) => {
+                if (fieldRegex.test(line) && !line.trimStart().startsWith("//")) {
+                    fieldRegex.lastIndex = 0; // reset regex
+                    return `// ${line}`;
+                }
+                return line;
+            });
+            return result.join("\n");
+        }
         default:
             return null;
     }
 }
+export { diffSpecs, specFromCallSite, normalizeField, refreshConfidence } from "./spec";
+export type { EndpointSpec, FieldSpec, SpecSource, SpecChange, SpecChangeKind, SpecDiffSummary } from "./spec";
+export { matchesCapture, resolveCapturedEndpoints } from "./captureResolver";
+export type { CaptureLike, EndpointFill } from "./captureResolver";

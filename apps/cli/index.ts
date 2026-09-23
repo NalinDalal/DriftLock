@@ -1,19 +1,22 @@
+import { readdirSync, readFileSync, writeFileSync } from "fs";
+import { join } from "path";
 import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
 import inquirer from "inquirer";
-import { TypeScriptExtractor } from "@driftlock/parser";
+import { TypeScriptExtractor, detectLanguage } from "@driftlock/parser";
 import { SandboxRunner } from "@driftlock/sandbox";
-import { GitTracker, PRGenerator } from "@driftlock/git";
-import type { CallSite, Fix } from "@driftlock/core";
 import {
-    SnapshotStore,
-    buildDriftEvent,
-    buildDriftResult,
-    extractShapesFromCaptures,
-    applyDriftFix,
-    type DriftResult,
-} from "./drift";
+    GitTracker,
+    FixPRRunner,
+    fixBranchName,
+    buildFixPRTitle,
+    buildFixPRBody,
+} from "@driftlock/git";
+import { analyzeAndCompare, applyDriftFix, buildDriftEvent } from "@driftlock/pipeline";
+import type { CallSite, Fix } from "@driftlock/core";
+import type { DriftResult } from "@driftlock/pipeline";
+import { SnapshotStore } from "./drift";
 
 const program = new Command();
 
@@ -42,7 +45,9 @@ program
         "after",
         `
 Scans your codebase using AST analysis to find all API call sites.
-Currently supports Stripe SDK calls (stripe.charges.create, etc.).
+Detects any <client>.<resource>.<method> call on a configured SDK client
+(Stripe, Twilio, and any vendor shipped as a VendorConfig).
+Scans TypeScript (.ts/.tsx) and plain JavaScript (.js/.jsx/.mjs/.cjs).
 
 Output formats:
   json   Machine-readable JSON with call sites and errors
@@ -52,28 +57,27 @@ Output formats:
     .action(async (path: string, options: { output: string }) => {
         const spinner = ora("Analyzing codebase...").start();
 
-        try {
-            const extractor = new TypeScriptExtractor();
-            const fs = await import("fs");
-            const pathModule = await import("path");
+try {
+                const extractor = new TypeScriptExtractor();
 
-            // Read all TypeScript files
-            const files = fs
-                .readdirSync(path, { recursive: true })
-                .filter(
-                    (file): file is string =>
-                        typeof file === "string" && file.endsWith(".ts"),
-                );
+                // Read all source files (TypeScript + plain JS)
+                const files = readdirSync(path, { recursive: true })
+                    .filter(
+                        (file): file is string =>
+                            typeof file === "string" &&
+                            /\.(ts|tsx|js|jsx|mjs|cjs)$/.test(file),
+                    );
 
-            const allCallSites = [];
-            const errors = [];
+                const allCallSites = [];
+                const errors = [];
 
-            for (const file of files) {
-                const filePath = pathModule.join(path, file);
-                const content = fs.readFileSync(filePath, "utf-8");
+                for (const file of files) {
+                    const filePath = join(path, file);
+                    const content = readFileSync(filePath, "utf-8");
                 const result = await extractor.extractFromFile(
                     filePath,
                     content,
+                    detectLanguage(filePath),
                 );
                 allCallSites.push(...result.callSites);
                 errors.push(...result.errors);
@@ -96,9 +100,11 @@ Output formats:
                         `  ${chalk.cyan(site.filePath)}:${chalk.yellow(site.line)}`,
                     );
                     console.log(
-                        `    ${chalk.green(site.method)} → ${chalk.blue(site.endpoint)}`,
+                        `    ${chalk.green(site.method)} → ${chalk.blue(
+                            site.endpoint ?? "pending-capture",
+                        )}`,
                     );
-                    console.log(`    HTTP: ${site.httpMethod}`);
+                    console.log(`    HTTP: ${site.httpMethod ?? "unknown"}`);
                     console.log("");
                 }
 
@@ -250,6 +256,12 @@ program
     .option("-b, --base <branch>", "Base branch to compare", "main")
     .option("-r, --repo <repo>", "GitHub repo (owner/repo) for PR creation")
     .option("-c, --command <cmd>", "Test command to run for capture", "npm test")
+    .option(
+        "--forward <pattern>",
+        "Forward a normally-intercepted endpoint, e.g. POST /v3/mail/send (repeatable)",
+        (value: string, previous: string[]) => [...previous, value],
+        [],
+    )
     .option("--dry-run", "Show affected call sites without creating PRs")
     .addHelpText(
         "after",
@@ -279,93 +291,36 @@ Examples:
                 repo?: string;
                 dryRun?: boolean;
                 command?: string;
+                forward?: string[];
             },
         ) => {
             const spinner = ora("Starting drift detection...").start();
 
             try {
-                // Step 1: Scan for call sites
+                // Step 1-3: analyze, capture, compare against baseline
+                const store = new SnapshotStore(repoPath);
                 spinner.text = "Scanning for API call sites...";
-                const extractor = new TypeScriptExtractor();
-                const fs = await import("fs");
-                const pathModule = await import("path");
+                const result = await analyzeAndCompare({
+                    repoPath,
+                    command: options.command ?? "npm test",
+                    forward: options.forward ?? [],
+                    timeoutMs: 300000,
+                    snapshotStore: store,
+                });
 
-                const files = fs
-                    .readdirSync(repoPath, { recursive: true })
-                    .filter(
-                        (file): file is string =>
-                            typeof file === "string" &&
-                            (file.endsWith(".ts") || file.endsWith(".js")),
-                    );
-
-                const allCallSites = [];
-                for (const file of files) {
-                    const filePath = pathModule.join(repoPath, file);
-                    const content = fs.readFileSync(filePath, "utf-8");
-                    const result = await extractor.extractFromFile(
-                        filePath,
-                        content,
-                    );
-                    allCallSites.push(...result.callSites);
-                }
-
-                spinner.text = `Found ${allCallSites.length} API call sites`;
+                const allCallSites = result.callSites;
+                const shapes = result.shapes;
 
                 if (allCallSites.length === 0) {
                     spinner.warn("No API call sites found");
                     return;
                 }
 
-                // Step 2: Capture traffic through the sandbox proxy
-                spinner.text = "Running sandbox test with traffic capture...";
-                const runner = new SandboxRunner();
-                const sandbox = await runner.runTestSuite(repoPath, {
-                    image: "node:20-slim",
-                    command: ["sh", "-c", options.command ?? "npm test"],
-                    env: {},
-                    timeout: 300000,
-                    memoryLimit: "512m",
-                    cpuLimit: 1.0,
-                    networkEnabled: true,
-                    allowedEndpoints: [],
-                });
+                spinner.text = `Captured traffic for ${shapes.size}/${allCallSites.length} call sites (${result.fills.size} endpoints inferred from traffic)`;
 
-                if (sandbox.exitCode !== 0 && sandbox.stderr) {
-                    spinner.warn(
-                        `Sandbox exited ${sandbox.exitCode}: ${sandbox.stderr.slice(0, 200)}`,
-                    );
-                }
-
-                const store = new SnapshotStore(repoPath);
-                const shapes = extractShapesFromCaptures(
-                    sandbox.trafficCaptured,
-                    allCallSites,
-                );
-                spinner.text = `Captured traffic for ${shapes.size}/${allCallSites.length} call sites`;
-
-                // Step 3: Compare against the stored baseline
-                const baselines: CallSite[] = [];
-                const drifts: DriftResult[] = [];
-                for (const callSite of allCallSites) {
-                    const current = shapes.get(callSite.id);
-                    if (!current) {
-                        continue;
-                    }
-                    const previous = store.load(callSite.id);
-                    if (!previous) {
-                        store.save(callSite.id, current);
-                        baselines.push(callSite);
-                        continue;
-                    }
-                    const drift = buildDriftResult(
-                        callSite,
-                        previous,
-                        current,
-                    );
-                    if (drift.works.length > 0) {
-                        drifts.push(drift);
-                    }
-                }
+                const drifts = result.drifts;
+                const baselines = result.baselines;
+                spinner.text = `Comparing ${result.trafficCaptured} captured requests against baseline`;
 
                 if (baselines.length > 0) {
                     console.log(chalk.bold("\nBaseline snapshots captured:"));
@@ -403,13 +358,13 @@ Examples:
                     fix: Fix;
                 }> = [];
                 for (const drift of drifts) {
-                    const file = pathModule.join(
+                    const file = join(
                         repoPath,
                         drift.callSite.filePath,
                     );
                     let content: string;
                     try {
-                        content = fs.readFileSync(file, "utf8");
+                        content = readFileSync(file, "utf8");
                     } catch {
                         content = "";
                     }
@@ -433,7 +388,9 @@ Examples:
                         ),
                     );
                     console.log(
-                        `  ${chalk.green(drift.callSite.method)} → ${chalk.blue(drift.callSite.endpoint)}`,
+                        `  ${chalk.green(drift.callSite.method)} → ${chalk.blue(
+                            drift.callSite.endpoint ?? "pending-capture",
+                        )}`,
                     );
                     console.log(
                         `  ${chalk.yellow("Fix:")} ${applied.fix.description}`,
@@ -486,26 +443,46 @@ Examples:
                 }
 
                 const prSpinner = ora("Creating PR...").start();
-                const prGenerator = new PRGenerator(githubToken);
+                const prRunner = new FixPRRunner(githubToken);
 
                 for (const { callSite, drift, fix } of fixes) {
                     const driftEvent = buildDriftEvent(drift);
                     driftEvent.suggestedFix = fix;
                     driftEvent.status = "fix_generated";
 
-                    const pr = await prGenerator.createFixPR(
+                    const result = await prRunner.run({
                         owner,
                         repo,
-                        {
+                        base: options.base ?? "main",
+                        branch: fixBranchName(callSite.id),
+                        title: buildFixPRTitle({
                             driftEvent,
                             callSite,
                             fix,
-                            files: fix.files,
-                        },
-                        options.base,
-                    );
+                        }),
+                        body: buildFixPRBody({ driftEvent, callSite, fix }, fix.files),
+                        commitMessage: `driftlock: apply fix for ${callSite.method}`,
+                        files: fix.files.map((f) => ({
+                            path: f.path,
+                            content: f.changes,
+                        })),
+                    });
 
-                    prSpinner.succeed(`PR created: ${pr.url}`);
+                    if (result.status === "merged") {
+                        const current = shapes.get(callSite.id);
+                        if (current) {
+                            await store.save(callSite.id, current);
+                        }
+                        prSpinner.succeed(
+                            `Fix already merged (${result.url}); baseline refreshed`,
+                        );
+                        continue;
+                    }
+                    if (result.status === "already_open") {
+                        prSpinner.succeed(`PR already open: ${result.url}`);
+                        continue;
+                    }
+                    prSpinner.succeed(`PR created: ${result.url}`);
                 }
             } catch (error) {
                 spinner.fail("Fix generation failed");
@@ -561,8 +538,7 @@ sandbox:
   timeout: 300000
 `.trimStart();
 
-            const fs = await import("fs");
-            fs.writeFileSync(".driftlock.yml", config);
+            writeFileSync(".driftlock.yml", config);
 
             spinner.succeed("DriftLock initialized");
             console.log(chalk.green("Created .driftlock.yml"));

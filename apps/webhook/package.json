@@ -16,6 +16,7 @@
     "@driftlock/db": "workspace:*",
     "@driftlock/git": "workspace:*",
     "@driftlock/parser": "workspace:*",
+    "@driftlock/webhookCapture": "workspace:*",
     "drizzle-orm": "^0.45.2",
     "octokit": "^4.1.0"
   },

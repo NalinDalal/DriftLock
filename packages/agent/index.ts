@@ -1,5 +1,68 @@
 import OpenAI from "openai";
-import { DiffSummary, Fix, DriftEvent } from "@driftlock/core";
+import { DiffSummary, Fix, DriftEvent, VendorConfig } from "@driftlock/core";
+import { validateVendorConfig } from "./docsToConfig";
+
+export * from "./docsToConfig";
+
+export interface VendorConfigHints {
+    /** Canonical vendor name, e.g. "stripe". */
+    name?: string;
+    /** npm package that provides the SDK. */
+    sdk?: string;
+    /** Variable names that resolve to the client in user code. */
+    clientNames?: string[];
+}
+
+/**
+ * Where resolved VendorConfigs live at runtime. The parser itself holds no
+ * vendor knowledge; the pipeline consults one of these stores, seeded from
+ * docs (this agent) or sandbox traffic, so ANY vendor works with no code
+ * changes and no hardcoded table.
+ */
+export interface VendorConfigStore {
+    /** Look a package up by npm name. Returns null when unknown. */
+    get(packageName: string): VendorConfig | null;
+    /** Persist a validated config. */
+    set(config: VendorConfig): void;
+}
+
+/**
+ * In-memory endpoint-knowledge cache, keyed by npm package name.
+ * Seeded by the docs agent or the sandbox; read by the parser pipeline.
+ */
+export class InMemoryVendorStore implements VendorConfigStore {
+    private configs = new Map<string, VendorConfig>();
+
+    /**
+     * @param packageName - npm package, e.g. "stripe" or "@acme/posts-sdk".
+     * @returns The config for that package, or null when unknown.
+     */
+    get(packageName: string): VendorConfig | null {
+        return this.configs.get(packageName) ?? null;
+    }
+
+    /**
+     * Store a config under both its sdk and its name.
+     * @param config - Validated VendorConfig.
+     */
+    set(config: VendorConfig): void {
+        for (const key of [config.sdk, config.name]) {
+            if (key) this.configs.set(key, config);
+        }
+    }
+
+    /** Every distinct config held, in insertion order. */
+    get all(): VendorConfig[] {
+        return [...new Set(this.configs.values())];
+    }
+
+    /** Drop every held config (test teardown). */
+    clear(): void {
+        this.configs.clear();
+    }
+}
+
+const defaultStore = new InMemoryVendorStore();
 
 export interface ChangeAnalysis {
     summary: string;
@@ -94,6 +157,123 @@ Output format:
 
         const content = response.choices[0]?.message?.content || "";
         return this.parseFixResponse(content, driftEvent.id);
+    }
+
+    /**
+     * Turn raw vendor documentation (prose and/or an embedded OpenAPI spec)
+     * into a validated VendorConfig the parser can consume. Uses JSON mode and
+     * runtime validation, so a malformed model response fails loudly rather
+     * than poisoning downstream extraction.
+     */
+    async inferVendorConfig(
+        docsText: string,
+        hints: VendorConfigHints = {},
+    ): Promise<VendorConfig> {
+        const response = await this.openai.chat.completions.create({
+            model: "gpt-4",
+            response_format: { type: "json_object" },
+            temperature: 0,
+            messages: [
+                {
+                    role: "system",
+                    content: `You extract an SDK description from vendor API documentation into JSON.
+
+Return a single JSON object with exactly these fields:
+{
+  "name": string,            // canonical vendor name, lowercase, e.g. "stripe"
+  "sdk": string,             // npm package that provides the SDK, e.g. "stripe"
+  "clientNames": string[],   // variable names users assign the client to, e.g. ["stripe"]
+  "basePath": string,        // URL prefix shared by all endpoints, e.g. "/v1"
+  "resources": {             // OPTIONAL; only exceptions to standard CRUD inference
+    "<resource>": {
+      "overrides": { "<method>": "/path/:id/action" },
+      "httpMethods": { "<method>": "DELETE" }
+    }
+  },
+  "docs": { "url": string, "specUrl": string }  // OPTIONAL
+}
+
+Rules:
+- Use camelCase resource segments; nested resources are dot-separated ("checkout.sessions").
+- Standard CRUD methods (create/list/retrieve/update/delete) need NO entry; only emit
+  overrides for custom actions or endpoints that differ from the default inference
+  (collection for create/list, /:id for retrieve/update/delete, /:id/<action> otherwise).
+- httpMethods is only needed when a method's verb differs from its default
+  (create/update → POST, retrieve/list → GET, delete → DELETE, actions → POST).
+- Return only the JSON object, no prose.`,
+                },
+                {
+                    role: "user",
+                    content: this.buildVendorConfigPrompt(docsText, hints),
+                },
+            ],
+        });
+
+        const content = response.choices[0]?.message?.content ?? "";
+
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(content);
+        } catch {
+            throw new Error(
+                "inferVendorConfig: model did not return valid JSON",
+            );
+        }
+
+        return validateVendorConfig(parsed);
+    }
+
+    /**
+     * On-demand endpoint knowledge for ANY vendor, keyed by npm package.
+     * Returns the cached config when present (no LLM call), derives one from
+     * docs text when available, and returns null when neither exists. The
+     * call site is still captured generically, just without a resolved
+     * endpoint; the sandbox fills that from traffic.
+     *
+     * @param packageName - npm package to resolve, e.g. "@sendgrid/mail".
+     * @param docsText - Raw vendor docs, or null to skip inference.
+     * @param options - Cache store and identity hints for the model.
+     * @returns A validated VendorConfig, or null when unresolvable.
+     */
+    async ensureVendorConfig(
+        packageName: string,
+        docsText: string | null,
+        options: {
+            store?: VendorConfigStore;
+            hints?: VendorConfigHints;
+        } = {},
+    ): Promise<VendorConfig | null> {
+        const store = options.store ?? defaultStore;
+        const cached = store.get(packageName);
+        if (cached) return cached;
+
+        if (!docsText) return null;
+
+        const config = await this.inferVendorConfig(docsText, {
+            sdk: packageName,
+            ...options.hints,
+        });
+        store.set(config);
+        return config;
+    }
+
+    private buildVendorConfigPrompt(
+        docsText: string,
+        hints: VendorConfigHints,
+    ): string {
+        const hintLines: string[] = [];
+        if (hints.name) hintLines.push(`name: ${hints.name}`);
+        if (hints.sdk) hintLines.push(`sdk: ${hints.sdk}`);
+        if (hints.clientNames?.length) {
+            hintLines.push(`clientNames: ${hints.clientNames.join(", ")}`);
+        }
+
+        return `${
+            hintLines.length > 0
+                ? `Known fields (trust these over your inference):\n${hintLines.join("\n")}\n\n`
+                : ""
+        }## Vendor Documentation
+${docsText}`;
     }
 
     private buildAnalysisPrompt(

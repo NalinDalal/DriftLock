@@ -87,24 +87,31 @@ async function handleInstallation(payload: any) {
         events: installation.events,
       });
 
-      // Save repositories
+      // Save repositories - installation event only has id and name
+      // owner comes from installation.account.login
       if (repos?.length) {
-        await db.insert(repositories).values(
-          repos.map((repo: any) => ({
-            owner: repo.owner.login,
+        for (const repo of repos) {
+          await db.insert(repositories).values({
+            owner: installation.account.login,
             name: repo.name,
-            fullName: repo.full_name,
+            fullName: `${installation.account.login}/${repo.name}`,
             installationId: installation.id,
-            defaultBranch: repo.default_branch || "main",
-          }))
-        );
+            defaultBranch: "main",
+          }).onConflictDoUpdate({
+            target: repositories.fullName,
+            set: { installationId: installation.id },
+          });
+        }
       }
 
       console.log(`  Saved installation with ${repos?.length || 0} repositories`);
       break;
 
     case "deleted":
-      // Remove installation and cascade delete repositories
+      // Delete repos first, then installation
+      await db
+        .delete(repositories)
+        .where(eq(repositories.installationId, installation.id));
       await db
         .delete(installations)
         .where(eq(installations.installationId, installation.id));
@@ -122,16 +129,19 @@ async function handleInstallationRepositories(payload: any) {
   switch (action) {
     case "added":
       if (repositories_added?.length) {
-        await db.insert(repositories).values(
-          repositories_added.map((repo: any) => ({
-            owner: repo.owner.login,
+        for (const repo of repositories_added) {
+          await db.insert(repositories).values({
+            owner: installation.account.login,
             name: repo.name,
-            fullName: repo.full_name,
+            fullName: `${installation.account.login}/${repo.name}`,
             installationId: installation.id,
-            defaultBranch: repo.default_branch || "main",
-          }))
-        );
-        console.log(`  Added: ${repositories_added.map((r: any) => r.full_name).join(", ")}`);
+            defaultBranch: "main",
+          }).onConflictDoUpdate({
+            target: repositories.fullName,
+            set: { installationId: installation.id },
+          });
+        }
+        console.log(`  Added: ${repositories_added.map((r: any) => `${installation.account.login}/${r.name}`).join(", ")}`);
       }
       break;
 
@@ -140,9 +150,9 @@ async function handleInstallationRepositories(payload: any) {
         for (const repo of repositories_removed) {
           await db
             .delete(repositories)
-            .where(eq(repositories.fullName, repo.full_name));
+            .where(eq(repositories.fullName, `${installation.account.login}/${repo.name}`));
         }
-        console.log(`  Removed: ${repositories_removed.map((r: any) => r.full_name).join(", ")}`);
+        console.log(`  Removed: ${repositories_removed.map((r: any) => `${installation.account.login}/${r.name}`).join(", ")}`);
       }
       break;
   }

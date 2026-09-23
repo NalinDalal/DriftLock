@@ -26,3 +26,5 @@ export function createDb(connectionString: string): Database {
 }
 
 export * from "./schema";
+export { createStore } from "./store";
+export type { Store, RepoInput, CallSiteSummary, DriftEventRow } from "./store";
