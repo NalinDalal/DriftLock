@@ -67,7 +67,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
       - run: bun install --frozen-lockfile
-      - run: bun run --filter @driftlock/db db:migrate
+      - run: bun --filter @driftlock/db run db:migrate
         name: Migrate DB
       - run: bun test packages/db/
         name: Test DB
