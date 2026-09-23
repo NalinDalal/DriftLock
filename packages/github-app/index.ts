@@ -12,7 +12,7 @@ import { diffSpecs, type EndpointSpec } from "@driftlock/diff/spec";
 import { createVerdictReceipt } from "@driftlock/diff/receipts";
 import { loadDriftlockPolicies, policyRuleToRule } from "@driftlock/rules-engine/policy-loader";
 import { RulesEngine } from "@driftlock/rules-engine";
-import { buildPrComment, decideVerdict, type GovernanceReport } from "./report.ts";
+import { buildPrComment, decideVerdict, type GovernanceReport } from "./report";
 
 export interface AppHandlePrOptions {
   oldSpec: EndpointSpec;

@@ -101,6 +101,10 @@
         "typescript": "^5.3.0",
       },
     },
+    "packages/agent-guard": {
+      "name": "@driftlock/agent-guard",
+      "version": "0.1.0",
+    },
     "packages/ai-fix": {
       "name": "@driftlock/ai-fix",
       "version": "0.1.0",
@@ -160,6 +164,17 @@
         "typescript": "^5.3.0",
       },
     },
+    "packages/github-app": {
+      "name": "@driftlock/github-app",
+      "version": "0.1.0",
+      "dependencies": {
+        "@driftlock/diff": "workspace:*",
+        "@driftlock/rules-engine": "workspace:*",
+      },
+      "devDependencies": {
+        "typescript": "^5.3.0",
+      },
+    },
     "packages/migrations": {
       "name": "@driftlock/migrations",
       "version": "0.1.0",
@@ -209,9 +224,11 @@
       "dependencies": {
         "@driftlock/diff": "workspace:*",
         "@driftlock/migrations": "workspace:*",
+        "js-yaml": "^4.3.2",
       },
       "devDependencies": {
         "@types/bun": "latest",
+        "@types/js-yaml": "^4.0.9",
         "@types/node": "^20.11.0",
         "typescript": "^5.3.0",
       },
@@ -272,6 +289,8 @@
 
     "@driftlock/agent": ["@driftlock/agent@workspace:packages/agent"],
 
+    "@driftlock/agent-guard": ["@driftlock/agent-guard@workspace:packages/agent-guard"],
+
     "@driftlock/ai-fix": ["@driftlock/ai-fix@workspace:packages/ai-fix"],
 
     "@driftlock/be": ["@driftlock/be@workspace:apps/be"],
@@ -287,6 +306,8 @@
     "@driftlock/fe": ["@driftlock/fe@workspace:apps/fe"],
 
     "@driftlock/git": ["@driftlock/git@workspace:packages/git"],
+
+    "@driftlock/github-app": ["@driftlock/github-app@workspace:packages/github-app"],
 
     "@driftlock/migrations": ["@driftlock/migrations@workspace:packages/migrations"],
 
@@ -567,6 +588,8 @@
     "@types/inquirer": ["@types/inquirer@9.0.10", "", { "dependencies": { "@types/through": "*", "rxjs": "^7.2.0" } }, "sha512-vFW2WbXwO9eZpRT5GJGFJ/shgyMNnYozmnjakt9jCQSS1lvqX8pZEQMjJ9RdDPct/YxwciQ8+V8OYn9euIrZDA=="],
 
     "@types/istanbul-lib-coverage": ["@types/istanbul-lib-coverage@2.0.6", "", {}, "sha512-2QF/t/auWm0lsy8XtKVPG19v3sSOQlJe/YHZgfjb/KBBHOGSV+J2q/S671rcq9uTBrLAXmZpqJiaQbMT+zNU1w=="],
+
+    "@types/js-yaml": ["@types/js-yaml@4.0.9", "", {}, "sha512-k4MGaQl5TGo/iipqb2UDG2UwjXziSWkh0uysQelTlJpX1qGlpUZYm8PnO4DxG1qBomtJUdYJ6qR6xdIah10JLg=="],
 
     "@types/node": ["@types/node@20.19.43", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-6oYBAi5ikg4Pl+kGsoYtawUMBT2zZMCvPNF7pVLnHZfd1zf38DRiWn/gT01RYCdUqkv7Fhr+C9ot4/tb+2sVvA=="],
 

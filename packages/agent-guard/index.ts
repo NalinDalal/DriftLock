@@ -53,12 +53,12 @@ export function driftlockGuard(oldSpec: EndpointSpec, newSpec: EndpointSpec) {
 export function driftlockGuardNode(oldSpec: EndpointSpec, newSpec: EndpointSpec) {
   return async (state: any) => {
     const guard = driftlockGuard(oldSpec, newSpec);
-    const noop = guard(async () => state);
+    const noop = guard(async (s: any) => s);
     try {
-      await noop(state);
+      await (noop as any)(state);
       return { proceed: true };
     } catch (e) {
-      if (e instanceof DriftlockBlocked) return { proceed: false, blockReceipt: e.receipt };
+      if (e instanceof DriftlockBlocked) return { proceed: false, blockReceipt: (e as DriftlockBlocked).receipt };
       throw e;
     }
   };
