@@ -4,7 +4,7 @@
  * Optic never did this: stops a bad API change *inside* the agent loop, not just flagging for humans.
  *
  * TS usage:
- *   import { driftlockGuard, DriftlockBlocked } from "@driftlock/agent-guard";
+ *   import { driftlockGuard, DriftlockBlocked } from "@driftlock/agentGuard";
  *   const guarded = driftlockGuard(oldSpec, newSpec)(async (payload) => callDownstream(payload));
  *
  * Python mirror available as `agent-guard/driftlock_guard.py` for vendoring.
@@ -12,7 +12,7 @@
 
 import { diffSpecs, type EndpointSpec } from "@driftlock/diff/spec";
 import { createVerdictReceipt } from "@driftlock/diff/receipts";
-import { decideVerdict } from "@driftlock/github-app/report";
+import { decideVerdict } from "@driftlock/githubApp/report";
 
 export class DriftlockBlocked extends Error {
   receipt: any;

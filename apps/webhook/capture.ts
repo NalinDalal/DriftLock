@@ -1,5 +1,5 @@
-import { InMemorySchemaStore, DriftDetector, createWebhookFixPR } from "@driftlock/webhook-capture";
-import type { DriftAlert, RollbackAlert } from "@driftlock/webhook-capture";
+import { InMemorySchemaStore, DriftDetector, createWebhookFixPR } from "@driftlock/webhookCapture";
+import type { DriftAlert, RollbackAlert } from "@driftlock/webhookCapture";
 import { getDb } from "@driftlock/db";
 import { settings } from "@driftlock/db/schema";
 

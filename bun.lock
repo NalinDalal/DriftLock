@@ -80,7 +80,7 @@
         "@driftlock/db": "workspace:*",
         "@driftlock/git": "workspace:*",
         "@driftlock/parser": "workspace:*",
-        "@driftlock/webhook-capture": "workspace:*",
+        "@driftlock/webhookCapture": "workspace:*",
         "drizzle-orm": "^0.45.2",
         "octokit": "^4.1.0",
       },
@@ -101,12 +101,12 @@
         "typescript": "^5.3.0",
       },
     },
-    "packages/agent-guard": {
-      "name": "@driftlock/agent-guard",
+    "packages/agentGuard": {
+      "name": "@driftlock/agentGuard",
       "version": "0.1.0",
     },
-    "packages/ai-fix": {
-      "name": "@driftlock/ai-fix",
+    "packages/aiFix": {
+      "name": "@driftlock/aiFix",
       "version": "0.1.0",
       "dependencies": {
         "@driftlock/diff": "workspace:*",
@@ -164,12 +164,12 @@
         "typescript": "^5.3.0",
       },
     },
-    "packages/github-app": {
-      "name": "@driftlock/github-app",
+    "packages/githubApp": {
+      "name": "@driftlock/githubApp",
       "version": "0.1.0",
       "dependencies": {
         "@driftlock/diff": "workspace:*",
-        "@driftlock/rules-engine": "workspace:*",
+        "@driftlock/rulesEngine": "workspace:*",
       },
       "devDependencies": {
         "typescript": "^5.3.0",
@@ -179,7 +179,7 @@
       "name": "@driftlock/migrations",
       "version": "0.1.0",
       "dependencies": {
-        "@driftlock/ai-fix": "workspace:*",
+        "@driftlock/aiFix": "workspace:*",
         "@driftlock/diff": "workspace:*",
       },
       "devDependencies": {
@@ -218,8 +218,8 @@
         "typescript": "^5.3.0",
       },
     },
-    "packages/rules-engine": {
-      "name": "@driftlock/rules-engine",
+    "packages/rulesEngine": {
+      "name": "@driftlock/rulesEngine",
       "version": "0.1.0",
       "dependencies": {
         "@driftlock/diff": "workspace:*",
@@ -264,11 +264,11 @@
         "typescript": "^5.3.0",
       },
     },
-    "packages/webhook-capture": {
-      "name": "@driftlock/webhook-capture",
+    "packages/webhookCapture": {
+      "name": "@driftlock/webhookCapture",
       "version": "0.1.0",
       "dependencies": {
-        "@driftlock/ai-fix": "workspace:*",
+        "@driftlock/aiFix": "workspace:*",
         "@driftlock/core": "workspace:*",
         "@driftlock/db": "workspace:*",
         "@driftlock/diff": "workspace:*",
@@ -289,9 +289,9 @@
 
     "@driftlock/agent": ["@driftlock/agent@workspace:packages/agent"],
 
-    "@driftlock/agent-guard": ["@driftlock/agent-guard@workspace:packages/agent-guard"],
+    "@driftlock/agentGuard": ["@driftlock/agentGuard@workspace:packages/agentGuard"],
 
-    "@driftlock/ai-fix": ["@driftlock/ai-fix@workspace:packages/ai-fix"],
+    "@driftlock/aiFix": ["@driftlock/aiFix@workspace:packages/aiFix"],
 
     "@driftlock/be": ["@driftlock/be@workspace:apps/be"],
 
@@ -307,7 +307,7 @@
 
     "@driftlock/git": ["@driftlock/git@workspace:packages/git"],
 
-    "@driftlock/github-app": ["@driftlock/github-app@workspace:packages/github-app"],
+    "@driftlock/githubApp": ["@driftlock/githubApp@workspace:packages/githubApp"],
 
     "@driftlock/migrations": ["@driftlock/migrations@workspace:packages/migrations"],
 
@@ -315,7 +315,7 @@
 
     "@driftlock/pipeline": ["@driftlock/pipeline@workspace:packages/pipeline"],
 
-    "@driftlock/rules-engine": ["@driftlock/rules-engine@workspace:packages/rules-engine"],
+    "@driftlock/rulesEngine": ["@driftlock/rulesEngine@workspace:packages/rulesEngine"],
 
     "@driftlock/sandbox": ["@driftlock/sandbox@workspace:packages/sandbox"],
 
@@ -323,7 +323,7 @@
 
     "@driftlock/webhook": ["@driftlock/webhook@workspace:apps/webhook"],
 
-    "@driftlock/webhook-capture": ["@driftlock/webhook-capture@workspace:packages/webhook-capture"],
+    "@driftlock/webhookCapture": ["@driftlock/webhookCapture@workspace:packages/webhookCapture"],
 
     "@drizzle-team/brocli": ["@drizzle-team/brocli@0.10.2", "", {}, "sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w=="],
 
