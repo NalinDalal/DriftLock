@@ -13,8 +13,8 @@ import { createVerdictReceipt } from "@driftlock/diff/receipts";
 import {
     loadDriftlockPolicies,
     policyRuleToRule,
-} from "@driftlock/rulesEngine/policy-loader";
-import { RulesEngine } from "@driftlock/rulesEngine";
+    RulesEngine,
+} from "@driftlock/rulesEngine";
 import { buildPrComment, decideVerdict, type GovernanceReport } from "./report";
 
 export interface AppHandlePrOptions {

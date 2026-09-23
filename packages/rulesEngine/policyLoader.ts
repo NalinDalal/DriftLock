@@ -20,7 +20,7 @@
  */
 
 import yaml from "js-yaml";
-import type { DriftlockPolicy, PolicyRule } from "./policy-types";
+import type { DriftlockPolicy, PolicyRule } from "./policyTypes";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 

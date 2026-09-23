@@ -238,3 +238,7 @@ export function createRulesEngine(customRules?: Rule[]): RulesEngine {
     }
     return engine;
 }
+
+// Barrel for policy config — keeps imports clean: from "@driftlock/rulesEngine"
+export type { PolicyRule, DriftlockPolicy } from "./policyTypes";
+export { loadDriftlockPolicies, policyRuleToRule, integratePoliciesWithEngine } from "./policyLoader";
