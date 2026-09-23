@@ -1,4 +1,3 @@
-import { PageHeader } from "../components/PageHeader";
 import { Button } from "../components/Button";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";

@@ -1,13 +1,7 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { getRepo, getRepoDrifts, updateRepoPolicy } from "../api/client";
-import type {
-    CallSiteSummary,
-    DriftEvent,
-    Permission,
-    Pull,
-    Repo,
-} from "../api/types";
+import type { CallSiteSummary, DriftEvent, Permission, Pull } from "../api/types";
 import { Badge, type BadgeTone } from "../components/Badge";
 import { Card } from "../components/Card";
 import { PageHeader } from "../components/PageHeader";
