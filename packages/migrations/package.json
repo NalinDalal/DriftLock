@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@driftlock/diff": "workspace:*",
-    "@driftlock/ai-fix": "workspace:*"
+    "@driftlock/aiFix": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "latest",

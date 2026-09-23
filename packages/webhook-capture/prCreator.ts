@@ -11,7 +11,7 @@ import {
     type ShapeNode,
 } from "@driftlock/diff";
 import { PRWriter, type WriteFile } from "@driftlock/git";
-import { generateAIFix, type AIFixConfig, type AIFixResult } from "@driftlock/ai-fix";
+import { generateAIFix, type AIFixConfig, type AIFixResult } from "@driftlock/aiFix";
 import type { DriftAlert } from "./driftDetector";
 import type { FlatSchema } from "./schemaFlattener";
 
