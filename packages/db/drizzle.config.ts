@@ -8,7 +8,7 @@ if (!url) {
     const env = readFileSync(resolve(__dirname, "../../.env"), "utf8");
     const match = env.match(/DATABASE_URL=['"]?([^'"\n]+)['"]?/);
     if (match) url = match[1];
-  } catch {}
+  } catch (_e) {}
 }
 
 export default defineConfig({

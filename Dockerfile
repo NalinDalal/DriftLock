@@ -8,10 +8,10 @@ COPY packages/core/package.json ./packages/core/
 COPY packages/diff/package.json ./packages/diff/
 COPY packages/git/package.json ./packages/git/
 COPY packages/pipeline/package.json ./packages/pipeline/
-COPY packages/ai-fix/package.json ./packages/ai-fix/
-COPY packages/webhook-capture/package.json ./packages/webhook-capture/
+COPY packages/aiFix/package.json ./packages/aiFix/
+COPY packages/webhookCapture/package.json ./packages/webhookCapture/
 COPY packages/migrations/package.json ./packages/migrations/
-COPY packages/rules-engine/package.json ./packages/rules-engine/
+COPY packages/rulesEngine/package.json ./packages/rulesEngine/
 COPY apps/be/package.json ./apps/be/
 COPY apps/webhook/package.json ./apps/webhook/
 
@@ -22,10 +22,10 @@ COPY packages/core ./packages/core
 COPY packages/diff ./packages/diff
 COPY packages/git ./packages/git
 COPY packages/pipeline ./packages/pipeline
-COPY packages/ai-fix ./packages/ai-fix
-COPY packages/webhook-capture ./packages/webhook-capture
+COPY packages/aiFix ./packages/aiFix
+COPY packages/webhookCapture ./packages/webhookCapture
 COPY packages/migrations ./packages/migrations
-COPY packages/rules-engine ./packages/rules-engine
+COPY packages/rulesEngine ./packages/rulesEngine
 COPY apps/be ./apps/be
 COPY apps/webhook ./apps/webhook
 

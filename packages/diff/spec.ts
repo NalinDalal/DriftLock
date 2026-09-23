@@ -144,7 +144,6 @@ export function diffSpecs(
         });
     }
 
-    const breakingChangesList = changes.filter((c) => c.breaking);
     const riskScore = calculateRiskScore(changes, changes);
 
     return {
@@ -333,7 +332,7 @@ function calculateRiskScore(
     let blastRadiusScore = 0;
     let appCompatScore = 0;
     let securityScore = 0;
-    let changeCount = Math.max(breakingChanges.length, 1);
+    const changeCount = Math.max(breakingChanges.length, 1);
 
     // Weight each breaking change type across dimensions
     const weights: Array<{

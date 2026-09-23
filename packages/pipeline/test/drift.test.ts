@@ -106,7 +106,7 @@ describe("FileSnapshotStore", () => {
         const dir = mkdtempSync(join(tmpdir(), "driftlock-pipeline-"));
         const store = new FileSnapshotStore(dir);
         expect(await store.load("cs-1")).toBeNull();
-        await store.save(
+        await (store as any).save(
             "cs-1",
             {
                 request: { amount: { kind: "number" } },

@@ -1,4 +1,4 @@
-import { FileSnapshotStore } from "@driftlock/pipeline";
+// FileSnapshotStore re-exported below — import not needed
 
 export {
     applyDriftFix,

@@ -73,13 +73,13 @@ jobs:
         name: Test Diff
       - run: bun test packages/pipeline/
         name: Test Pipeline
-      - run: bun test packages/webhook-capture/
+      - run: bun test packages/webhookCapture/
         name: Test Webhook Capture
-      - run: bun test packages/ai-fix/
+      - run: bun test packages/aiFix/
         name: Test AI Fix
       - run: bun test packages/migrations/
         name: Test Migrations
-      - run: bun test packages/rules-engine/
+      - run: bun test packages/rulesEngine/
         name: Test Rules Engine
 
   build:
