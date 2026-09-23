@@ -1,0 +1,14 @@
+{
+  "name": "@driftlock/github-app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.ts",
+  "dependencies": {
+    "@driftlock/diff": "workspace:*",
+    "@driftlock/rules-engine": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0"
+  }
+}
