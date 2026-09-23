@@ -23,6 +23,7 @@ DriftLock scans your codebase for API call sites, captures vendor traffic to bui
 <div align='center'>
 
 [https://x.com/kybldmstr/status/2098413659722535174?s=20](https://x.com/kybldmstr/status/2098413659722535174?s=20)
+
 </div>
 
 ---
@@ -72,8 +73,8 @@ That last line is the entire product in four words: **"Dependabot, but for
 APIs"**. The sentence before it is the litmus test we use against every
 feature in this repo:
 
-> *An agent scans customer codebases, identifies affected usages, and opens a
-> PR with the fix.*
+> _An agent scans customer codebases, identifies affected usages, and opens a
+> PR with the fix._
 
 If a proposed feature does not move DriftLock toward that, it's plumbing or
 scope creep. This section is the guard against drift.
@@ -146,14 +147,14 @@ flowchart LR
     D -->|No| H[OK]
 ```
 
-| Step            | What happens                                                   |
-| --------------- | -------------------------------------------------------------- |
-| **Flatten**     | Converts nested JSON to dot-notation paths (`data.amount` → `"number"`) |
-| **Store**       | Saves schema per endpoint + event type as baseline             |
-| **Diff**        | Detects added fields, removed fields, and type changes         |
-| **Scan**        | Finds source files referencing changed fields                  |
-| **Fix**         | Applies deterministic renames, null checks, type coercions     |
-| **PR**          | Creates a GitHub PR with the fix via Git Database API          |
+| Step        | What happens                                                            |
+| ----------- | ----------------------------------------------------------------------- |
+| **Flatten** | Converts nested JSON to dot-notation paths (`data.amount` → `"number"`) |
+| **Store**   | Saves schema per endpoint + event type as baseline                      |
+| **Diff**    | Detects added fields, removed fields, and type changes                  |
+| **Scan**    | Finds source files referencing changed fields                           |
+| **Fix**     | Applies deterministic renames, null checks, type coercions              |
+| **PR**      | Creates a GitHub PR with the fix via Git Database API                   |
 
 ---
 
@@ -232,6 +233,7 @@ curl -X POST http://localhost:3001/webhooks/capture/stripe \
 ```
 
 Response:
+
 ```json
 {
   "status": "drift_detected",
@@ -245,6 +247,7 @@ Response:
 ```
 
 The system automatically:
+
 1. Scans your repo for files referencing `source`
 2. Applies the rename (`source` → `payment_method`)
 3. Creates a PR via the GitHub API
@@ -254,6 +257,7 @@ The system automatically:
 When `AI_PROVIDER` and `AI_API_KEY` are set, DriftLock uses an LLM to generate context-aware fixes instead of simple regex replacements.
 
 **How it works:**
+
 1. DriftLock detects the schema change and identifies affected files
 2. Sends the schema diff + source code to the LLM
 3. LLM generates a fix that preserves existing functionality
@@ -270,12 +274,14 @@ bun run dev
 ```
 
 **Supported providers:**
+
 - OpenAI: `gpt-4o`, `gpt-4o-mini`
 - Anthropic: `claude-sonnet-4-20250514`, `claude-haiku-4-20250414`
 
 **4. Point your Stripe webhook to DriftLock**
 
 In the Stripe Dashboard → Webhooks → Add endpoint:
+
 - URL: `http://your-server:3001/webhooks/capture/stripe`
 - Events: select the events you handle
 
@@ -303,12 +309,14 @@ Stripe → DriftLock (capture + detect) → Your Handler (actual processing)
 5. If drift detected, DriftLock creates a PR
 
 **Forward headers:**
+
 - `x-driftlock-endpoint`: The endpoint ID (e.g., "stripe")
 - `x-driftlock-event`: The event type (e.g., "payment_intent.succeeded")
 - `x-driftlock-forwarded`: Always "true"
 - `x-webhook-secret`: Your secret (if `WEBHOOK_FORWARD_SECRET` is set)
 
 **Response includes forwarding status:**
+
 ```json
 {
   "status": "ok",
@@ -326,28 +334,31 @@ Not all schema changes are equally risky. Confidence filtering lets you skip PRs
 
 **How confidence is calculated:**
 
-| Factor | Impact |
-|--------|--------|
-| 1 change | +20 |
-| ≤3 changes | +10 |
-| Fields removed | +15 |
-| Fields added | +10 |
-| Type changes | +5 |
-| Unknown types | -20 |
+| Factor         | Impact |
+| -------------- | ------ |
+| 1 change       | +20    |
+| ≤3 changes     | +10    |
+| Fields removed | +15    |
+| Fields added   | +10    |
+| Type changes   | +5     |
+| Unknown types  | -20    |
 
 **Threshold behavior:**
+
 - `CONFIDENCE_THRESHOLD=0` (default): Always create PRs
 - `CONFIDENCE_THRESHOLD=50`: Skip very uncertain drifts
 - `CONFIDENCE_THRESHOLD=70`: Only create PRs for clear, confident changes
 - `CONFIDENCE_THRESHOLD=90`: Only near-certain changes
 
 **Example:**
+
 ```bash
 # Only create PRs when confidence >= 70
 CONFIDENCE_THRESHOLD=70 bun run dev
 ```
 
 The confidence score is also returned in the webhook response:
+
 ```json
 {
   "status": "drift_detected",
