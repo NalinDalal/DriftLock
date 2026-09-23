@@ -4,5 +4,6 @@
     "outDir": "dist",
     "rootDir": "."
   },
-  "include": ["**/*.ts"]
+  "include": ["**/*.ts"],
+  "exclude": ["fixtures/**", "e2e/web/**", "node_modules"]
 }
