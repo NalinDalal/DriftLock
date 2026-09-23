@@ -67,6 +67,21 @@ export interface SpecDiffSummary {
     hasDrift: boolean;
     /** high = sandbox-observed; medium = docs-derived; low = pure code guess. */
     confidence: "high" | "medium" | "low";
+    /** 0-100 risk score across 4 dimensions.
+     *  Inspired by CodeRifts' risk scoring model - adapted for vendor API context. */
+    riskScore: RiskScore;
+}
+
+export interface RiskScore {
+    overall: number;          // 0-100
+    dimensions: {
+        revenue: number;      // 0-100
+        blast_radius: number; // 0-100
+        app_compatibility: number; // 0-100
+        security: number;     // 0-100
+    };
+    recommendation: "PATCH" | "MINOR" | "MAJOR";
+    reasoning: string;
 }
 
 /**
@@ -129,16 +144,16 @@ export function diffSpecs(
         });
     }
 
+    const breakingChangesList = changes.filter((c) => c.breaking);
+    const riskScore = calculateRiskScore(changes, changes);
+
     return {
         changes,
-        breakingChanges: changes
-            .filter((c) => c.breaking)
-            .map(renderChange),
-        nonBreakingChanges: changes
-            .filter((c) => !c.breaking)
-            .map(renderChange),
+        breakingChanges: changes.filter((c) => c.breaking).map(renderChange),
+        nonBreakingChanges: changes.filter((c) => !c.breaking).map(renderChange),
         hasDrift: changes.length > 0,
         confidence: refreshConfidence(oldSpec, nextSpec),
+        riskScore,
     };
 }
 
@@ -300,4 +315,101 @@ function renderChange(change: SpecChange): string {
         default:
             return 'change';
     }
+}
+
+/**
+ * Calculate risk score 0-100 across 4 dimensions for detected breaking changes.
+ * Inspired by CodeRifts' risk scoring model - adapted for vendor API context.
+ *
+ * @param allChanges - All changes detected in the diff
+ * @param breakingChanges - Breaking changes subset (filtered by `c.breaking`)
+ * @returns Risk score with per-dimension breakdown and upgrade recommendation
+ */
+function calculateRiskScore(
+    allChanges: SpecChange[],
+    breakingChanges: SpecChange[],
+): RiskScore {
+    let revenueScore = 0;
+    let blastRadiusScore = 0;
+    let appCompatScore = 0;
+    let securityScore = 0;
+    let changeCount = Math.max(breakingChanges.length, 1);
+
+    // Weight each breaking change type across dimensions
+    const weights: Array<{
+        kind: SpecChangeKind;
+        revenue: number;
+        blast_radius: number;
+        app_compatibility: number;
+        security: number;
+    }> = [
+        { kind: "endpoint_removed", revenue: 80, blast_radius: 90, app_compatibility: 90, security: 80 },
+        { kind: "field_removed", revenue: 60, blast_radius: 70, app_compatibility: 70, security: 50 },
+        { kind: "type_changed", revenue: 50, blast_radius: 60, app_compatibility: 60, security: 40 },
+        { kind: "enum_value_removed", revenue: 40, blast_radius: 50, app_compatibility: 50, security: 30 },
+        { kind: "field_renamed", revenue: 30, blast_radius: 40, app_compatibility: 40, security: 20 },
+        { kind: "became_optional", revenue: 20, blast_radius: 30, app_compatibility: 30, security: 10 },
+        { kind: "field_added", revenue: 0, blast_radius: 10, app_compatibility: 10, security: 0 },
+        { kind: "endpoint_added", revenue: 10, blast_radius: 20, app_compatibility: 20, security: 5 },
+        { kind: "required_field_changed", revenue: 50, blast_radius: 60, app_compatibility: 60, security: 40 },
+        { kind: "request_type_changed", revenue: 60, blast_radius: 70, app_compatibility: 70, security: 50 },
+        { kind: "response_type_changed", revenue: 50, blast_radius: 60, app_compatibility: 60, security: 40 },
+    ];
+
+    for (const change of allChanges) {
+        const weightDef = weights.find(w => w.kind === change.kind);
+        if (weightDef) {
+            revenueScore += weightDef.revenue;
+            blastRadiusScore += weightDef.blast_radius;
+            appCompatScore += weightDef.app_compatibility;
+            securityScore += weightDef.security;
+        }
+    }
+
+    // Normalize by number of changes
+    revenueScore = Math.min(100, Math.round((revenueScore / changeCount) * 1.5));
+    blastRadiusScore = Math.min(100, Math.round((blastRadiusScore / changeCount) * 1.5));
+    appCompatScore = Math.min(100, Math.round((appCompatScore / changeCount) * 1.5));
+    securityScore = Math.min(100, Math.round((securityScore / changeCount) * 1.5));
+
+    // Overall is the max of the four dimensions
+    const overall = Math.max(revenueScore, blastRadiusScore, appCompatScore, securityScore);
+
+    // Recommendation based on overall score
+    let recommendation: "PATCH" | "MINOR" | "MAJOR";
+    if (overall >= 70) {
+        recommendation = "MAJOR";
+    } else if (overall >= 40) {
+        recommendation = "MINOR";
+    } else {
+        recommendation = "PATCH";
+    }
+
+    // Build reasoning
+    const changeTypes: string[] = [];
+    for (const change of allChanges) {
+        const weightDef = weights.find(w => w.kind === change.kind);
+        if (weightDef && change.breaking) {
+            changeTypes.push(weightDef.kind);
+        }
+    }
+
+    const uniqueTypes = [...new Set(changeTypes)];
+    const reasoning = `Detected ${breakingChanges.length} breaking change${breakingChanges.length !== 1 ? 's' : '' } ` +
+        `(types: ${uniqueTypes.join(', ')}). ` +
+        `Risk across dimensions: revenue=${revenueScore}, blast radius=${blastRadiusScore}, ` +
+        `app compatibility=${appCompatScore}, security=${securityScore}. ` +
+        `Recommendation: ${recommendation}.`;
+
+    return {
+        overall,
+        dimensions: {
+            revenue: revenueScore,
+            blast_radius: blastRadiusScore,
+            app_compatibility: appCompatScore,
+            security: securityScore,
+        },
+        recommendation,
+        reasoning,
+    };
 }
