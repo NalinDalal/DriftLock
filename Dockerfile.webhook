@@ -3,29 +3,10 @@ FROM oven/bun:1.3.11-slim AS base
 WORKDIR /app
 
 COPY package.json bun.lock* ./
-COPY packages/db/package.json ./packages/db/
-COPY packages/core/package.json ./packages/core/
-COPY packages/diff/package.json ./packages/diff/
-COPY packages/git/package.json ./packages/git/
-COPY packages/pipeline/package.json ./packages/pipeline/
-COPY packages/aiFix/package.json ./packages/aiFix/
-COPY packages/webhookCapture/package.json ./packages/webhookCapture/
-COPY packages/migrations/package.json ./packages/migrations/
-COPY packages/rulesEngine/package.json ./packages/rulesEngine/
-COPY apps/webhook/package.json ./apps/webhook/
+COPY packages ./packages
+COPY apps ./apps
 
 RUN bun install --frozen-lockfile
-
-COPY packages/db ./packages/db
-COPY packages/core ./packages/core
-COPY packages/diff ./packages/diff
-COPY packages/git ./packages/git
-COPY packages/pipeline ./packages/pipeline
-COPY packages/aiFix ./packages/aiFix
-COPY packages/webhookCapture ./packages/webhookCapture
-COPY packages/migrations ./packages/migrations
-COPY packages/rulesEngine ./packages/rulesEngine
-COPY apps/webhook ./apps/webhook
 
 WORKDIR /app/apps/webhook
 
