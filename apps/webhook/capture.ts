@@ -298,11 +298,12 @@ export function createCaptureHandler() {
         }
 
         if (alert) {
+            const diff = "diff" in alert ? alert.diff : { added: [], removed: [], typeChanged: [] };
             return json({
                 status: "drift_detected",
                 endpointId,
                 eventType,
-                diff: alert.diff,
+                diff,
                 pr: "pending",
                 forward: forwardResult,
             });

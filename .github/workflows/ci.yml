@@ -73,7 +73,7 @@ jobs:
         name: Push DB schema
       - run: bun test packages/db/
         name: Test DB
-      - run: bun test packages/diff/
+      - run: bun test packages/tests/unit/diff/
         name: Test Diff
       - run: bun test packages/pipeline/
         name: Test Pipeline
