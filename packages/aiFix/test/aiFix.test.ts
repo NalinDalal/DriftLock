@@ -293,19 +293,26 @@ async function createPayment(amount, currency) {
 Changed source to payment_method.
 Confidence: 85`;
 
-    test("rejects leftover source or camelCase paymentMethod", () => {
+    test("rejects added-comment case via validator", () => {
         const result = generateAIFixSync(makeContext(), badOutput);
-        expect(result.fixedCode).toContain("paymentMethod");
-        expect(result.fixedCode).toContain("// Added new field");
-        // prCreator validation would reject: missing exact payment_method and contains camelCase
-        const hasExact = /\bpayment_method\b/.test(result.fixedCode);
+        // Direct validation (mirrors webhookCapture/isValidAIFix): must not contain // Added and must use exact snake_case
+        const hasComment = /\/\/\s*Added new field/i.test(result.fixedCode);
         const hasCamel = /\bpaymentMethod\b/.test(result.fixedCode);
-        const hasComment = /\/\/\s*Added new field/.test(result.fixedCode);
-        expect(hasExact).toBe(true); // it does have payment_method but also has bad camelCase key
-        expect(hasCamel).toBe(true);
         expect(hasComment).toBe(true);
-        // Validation should fail because of camelCase and comment
-        expect(hasCamel || hasComment).toBe(true);
+        expect(hasCamel).toBe(true);
+        const isValid = !hasComment && !hasCamel && /\bpayment_method\b/.test(result.fixedCode);
+        expect(isValid).toBe(false);
+    });
+
+    test("accepts valid mockAIResponse via validator", () => {
+        const result = generateAIFixSync(makeContext(), mockAIResponse);
+        const hasComment = /\/\/\s*Added new field/i.test(result.fixedCode);
+        const hasCamel = /\bpaymentMethod\b/.test(result.fixedCode);
+        const hasExact = /\bpayment_method\b/.test(result.fixedCode);
+        expect(hasComment).toBe(false);
+        expect(hasCamel).toBe(false);
+        expect(hasExact).toBe(true);
+        expect(!hasComment && !hasCamel && hasExact).toBe(true);
     });
 
     test("deterministic fallback produces correct snake_case", () => {
