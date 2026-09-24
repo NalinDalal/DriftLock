@@ -184,6 +184,7 @@ export async function handleGitHubRepos(req: Request): Promise<Response> {
             owner: { login: string };
             private: boolean;
             default_branch: string;
+            description: string | null;
         }>;
 
         // Fetch repos from user's orgs
@@ -209,6 +210,7 @@ export async function handleGitHubRepos(req: Request): Promise<Response> {
                     owner: r.owner.login,
                     private: r.private,
                     defaultBranch: r.default_branch,
+                    description: r.description,
                 })),
                 ...orgRepos.map((r) => ({
                     id: r.id,
@@ -217,6 +219,7 @@ export async function handleGitHubRepos(req: Request): Promise<Response> {
                     owner: r.owner.login,
                     private: r.private,
                     defaultBranch: r.default_branch,
+                    description: r.description,
                 })),
             ],
             user: {
