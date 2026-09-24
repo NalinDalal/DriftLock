@@ -116,13 +116,42 @@ function WebhookSettings({
                 <Field label="Repository Owner"><input value={form.repoOwner} onChange={(e) => handleChange("repoOwner", e.target.value)} placeholder="your-org" className={inputBase} /></Field>
                 <Field label="Repository Name"><input value={form.repoName} onChange={(e) => handleChange("repoName", e.target.value)} placeholder="your-repo" className={inputBase} /></Field>
                 <Field label="AI Provider">
-                    <select value={form.aiProvider} onChange={(e) => handleChange("aiProvider", e.target.value)} className={selectBase}>
-                        <option value="">NONE — DETERMINISTIC ONLY</option>
-                        <option value="openai">OPENAI</option>
-                        <option value="anthropic">ANTHROPIC</option>
-                        <option value="gemini">GEMINI</option>
-                        <option value="cloudflare">CLOUDFLARE</option>
-                    </select>
+                    <div className="relative">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const el = document.getElementById("ai-provider-list");
+                                if (el) el.classList.toggle("hidden");
+                            }}
+                            className="flex w-full items-center justify-between border border-[#0F172A] bg-white px-3 py-2 font-mono text-xs tracking-wide text-[#0F172A] hover:bg-[#FFFBF5]"
+                            aria-haspopup="listbox"
+                            aria-expanded="false"
+                        >
+                            <span>{form.aiProvider ? form.aiProvider.toUpperCase() : "NONE — DETERMINISTIC ONLY"}</span>
+                            <span className="ml-2 text-[#94A3B8]">▾</span>
+                        </button>
+                        <div id="ai-provider-list" className="hidden absolute z-10 mt-1 w-full border border-[#0F172A] bg-white shadow-[3px_3px_0_#0F172A]">
+                            {[
+                                { v: "", l: "NONE — DETERMINISTIC ONLY" },
+                                { v: "openai", l: "OPENAI" },
+                                { v: "anthropic", l: "ANTHROPIC" },
+                                { v: "gemini", l: "GEMINI" },
+                                { v: "cloudflare", l: "CLOUDFLARE" },
+                            ].map((o) => (
+                                <button
+                                    key={o.v}
+                                    type="button"
+                                    onClick={() => {
+                                        handleChange("aiProvider", o.v);
+                                        document.getElementById("ai-provider-list")?.classList.add("hidden");
+                                    }}
+                                    className={`flex w-full px-3 py-2 text-left font-mono text-xs tracking-wide hover:bg-[#FFFBF5] ${form.aiProvider === o.v ? "bg-[#0F172A] text-white" : "text-[#0F172A]"}`}
+                                >
+                                    {o.l}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
                 </Field>
                 <Field label="AI API Key"><input type="password" value={form.aiApiKey} onChange={(e) => handleChange("aiApiKey", e.target.value)} placeholder={form.aiProvider === "cloudflare" ? "cfat_..." : form.aiProvider === "gemini" ? "Gemini API key" : "sk-..."} className={inputBase} /></Field>
                 <Field label="AI Model"><input value={form.aiModel} onChange={(e) => handleChange("aiModel", e.target.value)} placeholder={form.aiProvider === "cloudflare" ? "@cf/google/gemma-4-26b-a4b-it" : form.aiProvider === "gemini" ? "gemini-2.5-flash" : "Provider default"} className={inputBase} /></Field>
