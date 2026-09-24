@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { readFileSync } from "fs";
 import { join, relative } from "path";
 import {
@@ -18,8 +19,6 @@ interface RunBody {
     base?: unknown;
     forward?: unknown;
 }
-
-const toDbId = (id: string) => (id.length > 64 ? id.slice(-64) : id);
 
 export async function handleRun(req: Request): Promise<Response> {
     let body: RunBody;
@@ -56,6 +55,14 @@ export async function handleRun(req: Request): Promise<Response> {
     });
 
     const clone = await cloneRepo(owner, name, base);
+    const toDbId = (id: string) => {
+        if (id.length <= 64) return id;
+        // Keep temporary checkout paths out of persistent identities.
+        const stableId = id.startsWith(`${clone.path}/`)
+            ? `${repository.id}:${id.slice(clone.path.length + 1)}`
+            : id;
+        return createHash("sha256").update(stableId, "utf8").digest("hex");
+    };
     try {
         const snapshotStore = new DbSnapshotStore(store);
         const result = await analyzeAndCompare({
@@ -110,8 +117,12 @@ export async function handleRun(req: Request): Promise<Response> {
             });
             const source = readSource(clone.path, drift.callSite.filePath);
             const applied = source ? applyDriftFix(drift, source) : null;
+            const driftId = `drift-${dbCallSiteId}`.slice(0, 128);
+            if (applied) {
+                applied.fix.driftEventId = driftId;
+            }
             await store.recordDrift({
-                id: `drift-${dbCallSiteId}`.slice(0, 128),
+                id: driftId,
                 callSiteId: dbCallSiteId,
                 oldSnapshotId: previous?.id ?? saved.id,
                 newSnapshotId: saved.id,

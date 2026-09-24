@@ -128,12 +128,24 @@ function applyFixesToSource(
     return changed === source ? null : changed;
 }
 
-export function isValidAIFix(fixedCode: string, works: FixWork[], originalCode: string): boolean {
+export function isValidAIFix(
+    fixedCode: string,
+    works: FixWork[],
+    originalCode: string,
+    filePath = "file.ts",
+): boolean {
     if (fixedCode === originalCode) return false;
     if (/\/\/\s*Added new field/i.test(fixedCode)) return false;
+    const loader = filePath.endsWith(".tsx")
+        ? "tsx"
+        : filePath.endsWith(".jsx")
+          ? "jsx"
+          : /\.(js|mjs|cjs)$/.test(filePath)
+            ? "js"
+            : "ts";
     try {
-        // Must be syntactically valid
-        new Function(fixedCode);
+        // Parse source syntax without executing the generated code.
+        new Bun.Transpiler({ loader }).transformSync(fixedCode);
     } catch {
         return false;
     }
@@ -202,7 +214,7 @@ export async function createWebhookFixPR(
                 );
 
                 if (aiResult.confidence >= 60) {
-                    if (!isValidAIFix(aiResult.fixedCode, works, content)) {
+                    if (!isValidAIFix(aiResult.fixedCode, works, content, filePath)) {
                         console.log(
                             `  [AI] ${filePath}: AI fix failed validation (semantic check), falling back to deterministic`,
                         );
