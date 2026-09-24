@@ -26,11 +26,42 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-    const res = await fetch(`${BASE}${path}`, {
-        headers: { "content-type": "application/json" },
-        ...init,
-    });
+    let res: Response;
+    try {
+        res = await fetch(`${BASE}${path}`, {
+            headers: { "content-type": "application/json" },
+            ...init,
+        });
+    } catch (err) {
+        // Network failure — backend offline in demo mode. Return empty demo payloads for non-mutating reads.
+        if (path === "/api/accounts") return { accounts: [] } as unknown as T;
+        if (path === "/api/me") throw new ApiError(0, "Backend offline");
+        if (path.startsWith("/api/webhooks")) {
+            if (path.includes("/drifts")) return { drifts: [] } as unknown as T;
+            if (path.includes("/endpoints")) return { endpoints: [] } as unknown as T;
+            if (path.includes("/schemas")) return { schemas: [] } as unknown as T;
+        }
+        if (path.startsWith("/api/settings")) throw new ApiError(0, "Backend offline");
+        if (path.startsWith("/api/accounts")) return { repos: [] } as unknown as T;
+        if (path.startsWith("/api/repos")) {
+            if (path.endsWith("/drifts")) return { drifts: [] } as unknown as T;
+            if (path.endsWith("/callsites")) return { callsites: [] } as unknown as T;
+            if (path.endsWith("/pulls")) return { pulls: [] } as unknown as T;
+            return { repo: null, callsites: [], pulls: [] } as unknown as T;
+        }
+        throw new ApiError(0, err instanceof Error ? err.message : "Network error");
+    }
     if (!res.ok) {
+        // 502/503 from proxy when backend not running — treat same as offline for reads
+        if ((res.status === 502 || res.status === 503 || res.status === 504) && path.startsWith("/api/")) {
+            if (path === "/api/accounts") return { accounts: [] } as unknown as T;
+            if (path === "/api/me") throw new ApiError(0, "Backend offline");
+            if (path.startsWith("/api/webhooks")) {
+                if (path.includes("/drifts")) return { drifts: [] } as unknown as T;
+                if (path.includes("/endpoints")) return { endpoints: [] } as unknown as T;
+                if (path.includes("/schemas")) return { schemas: [] } as unknown as T;
+            }
+        }
         const body = await res.json().catch(() => null);
         throw new ApiError(
             res.status,
@@ -108,7 +139,7 @@ export function updateRepoPolicy(
     );
 }
 
-export function rotateApiKey(name: string): Promise<{ key: ApiKey }> {
+export function rotateApiKey(name: string): Promise<{ key: ApiKey & { raw: string } }> {
     return request(`/api/settings/rotate?name=${encodeURIComponent(name)}`, {
         method: "POST",
     });

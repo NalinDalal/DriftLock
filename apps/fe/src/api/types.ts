@@ -91,6 +91,7 @@ export interface ApiKey {
     name: string;
     keyMasked: string;
     createdAt: string;
+    raw?: string;
 }
 
 export interface Settings {
