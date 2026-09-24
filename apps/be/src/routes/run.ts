@@ -1,5 +1,5 @@
 import { readFileSync } from "fs";
-import { join } from "path";
+import { join, relative } from "path";
 import {
     analyzeAndCompare,
     applyDriftFix,
@@ -65,9 +65,12 @@ export async function handleRun(req: Request): Promise<Response> {
 
         for (const callSite of result.callSites) {
             const shapes = result.shapes.get(callSite.id);
+            const relPath = callSite.filePath.startsWith(clone.path)
+                ? relative(clone.path, callSite.filePath)
+                : callSite.filePath;
             await store.upsertCallSite(repository.id, {
                 id: callSite.id,
-                filePath: callSite.filePath,
+                filePath: relPath,
                 line: callSite.line,
                 method: callSite.method,
                 endpoint: callSite.endpoint ?? null,
@@ -158,7 +161,8 @@ export async function handleRun(req: Request): Promise<Response> {
 
 function readSource(repoPath: string, filePath: string): string | null {
     try {
-        return readFileSync(join(repoPath, filePath), "utf8");
+        const full = filePath.startsWith("/") ? filePath : join(repoPath, filePath);
+        return readFileSync(full, "utf8");
     } catch {
         return null;
     }
