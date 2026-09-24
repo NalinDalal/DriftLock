@@ -46,13 +46,24 @@ function buildPrompt(ctx: FixContext): string {
         .map((w) => `- ${w.kind}: ${w.description}`)
         .join("\n");
 
+    const hint = (() => {
+        if (ctx.diff.removedFields.length === 1 && ctx.diff.addedFields.length === 1) {
+            const r = ctx.diff.removedFields[0];
+            const a = ctx.diff.addedFields[0];
+            const parent = (p: string) => p.split(".").slice(0, -1).join(".");
+            if (parent(r) === parent(a)) return `Heuristic hint: likely rename ${r} → ${a} (same parent, verify semantics before applying)`;
+        }
+        return null;
+    })();
+
     return `You are a code migration assistant. An API schema changed and you need to fix the user's code.
 
-## Schema Change
-${diffSummary}
+ ## Schema Change
+ ${diffSummary}
+ ${hint ? `\n${hint}` : ""}
 
-## Suggested Fixes
-${worksSummary || "(no deterministic fixes available)"}
+ ## Suggested Fixes
+ ${worksSummary || "(no deterministic fixes available)"}
 
 ## Current Source Code (\`${ctx.filePath}\`)
 \`\`\`typescript

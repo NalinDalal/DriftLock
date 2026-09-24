@@ -415,33 +415,6 @@ export function diffShapes(
             topLevelRemoved = removedPaths;
             topLevelAdded = addedPaths;
         }
-    } else if (removedPaths.length === 1 && addedPaths.length === 1) {
-        const removedPath = removedPaths[0];
-        const addedPath = addedPaths[0];
-        const parent = (p: string) => p.split(".").slice(0, -1).join(".");
-        const removedNode = oldByPath.get(removedPath);
-        const addedNode = newByPath.get(addedPath);
-        if (
-            parent(removedPath) === parent(addedPath) &&
-            removedNode &&
-            addedNode &&
-            removedNode.kind === addedNode.kind &&
-            removedNode.kind !== "null" &&
-            removedNode.kind !== "unknown"
-        ) {
-            const leaf = (p: string) => p.split(".").pop() ?? p;
-            changes.push({
-                kind: "request_renamed",
-                field: removedPath,
-                from: leaf(removedPath),
-                to: leaf(addedPath),
-                breaking: true,
-            });
-            breakingChanges.push(`Renamed field '${removedPath}' to '${addedPath}'`);
-        } else {
-            topLevelRemoved = removedPaths;
-            topLevelAdded = addedPaths;
-        }
     } else {
         topLevelRemoved = removedPaths;
         topLevelAdded = addedPaths;
