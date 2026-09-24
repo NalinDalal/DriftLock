@@ -11,7 +11,7 @@ export interface AIFixConfig {
 }
 
 const SYSTEM_PROMPT =
-    "You are an expert at fixing code when API schemas change. You produce minimal, correct fixes. Use exact field names including snake_case (payment_method not paymentMethod) and do not add explanatory comments.";
+    "You are an expert at fixing code when API schemas change. Migrate semantics, not just names. Understand what the old field meant, what the new field means, and how the behavior must change to stay correct. Preserve functionality.";
 
 export interface FixContext {
     diff: ShapeDiffResult;
@@ -61,16 +61,12 @@ ${ctx.sourceCode}
 
  ## Task
  Fix the source code to handle the schema change. Rules:
- 1. Preserve all existing functionality
- 2. Only change what's necessary for the schema migration
- 3. Add null checks where fields became nullable
- 4. Rename fields that were renamed — use exact spelling including snake_case (payment_method not paymentMethod)
- 5. Add type coercions where types changed
- 6. If a field was removed, remove references to it or add a fallback
- 7. If a field was added and is required, add a default value or placeholder
- 8. Keep the code style consistent with the existing code
- 9. Do not add explanatory comments (no // Added new field)
- 10. Preserve original formatting and final newline
+ 1. Preserve all existing functionality — migrate semantics, not just names
+ 2. Only change what's necessary; if a field was renamed, update all code that relied on the old meaning to use the new field
+ 3. Add null checks where fields became nullable, type coercions where types changed
+ 4. If a field was removed with no replacement, do not invent a new name — explain the impact instead of guessing
+ 5. Keep the code style consistent and do not add explanatory comments
+ 6. Preserve original formatting and final newline
 
 Return ONLY the fixed code inside a \`\`\`typescript block. After the code block, add a brief explanation of what you changed and a confidence score (0-100) for the fix.`;
 }

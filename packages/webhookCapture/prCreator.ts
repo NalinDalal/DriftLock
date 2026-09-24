@@ -128,19 +128,29 @@ function applyFixesToSource(
     return changed === source ? null : changed;
 }
 
-export function isValidAIFix(fixedCode: string, works: FixWork[]): boolean {
+export function isValidAIFix(fixedCode: string, works: FixWork[], originalCode: string): boolean {
+    if (fixedCode === originalCode) return false;
+    if (/\/\/\s*Added new field/i.test(fixedCode)) return false;
+    try {
+        // Must be syntactically valid
+        new Function(fixedCode);
+    } catch {
+        return false;
+    }
     for (const work of works) {
         if (work.kind === "field_rename" && work.from && work.to) {
             const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
             const toRe = new RegExp(`\\b${esc(work.to)}\\b`);
             const fromRe = new RegExp(`\\b${esc(work.from)}\\b`);
+            // New field must appear somewhere
             if (!toRe.test(fixedCode)) return false;
-            if (fromRe.test(fixedCode)) return false;
-            const camel = work.to.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
-            if (camel !== work.to && new RegExp(`\\b${esc(camel)}\\b`).test(fixedCode)) return false;
+            // Old field must not remain as a property access (e.g., .source or source:)
+            if (fromRe.test(fixedCode)) {
+                // Allow if from appears only inside to (not applicable here, but keep strict)
+                return false;
+            }
         }
     }
-    if (/\/\/\s*Added new field/i.test(fixedCode)) return false;
     return true;
 }
 
@@ -192,9 +202,9 @@ export async function createWebhookFixPR(
                 );
 
                 if (aiResult.confidence >= 60) {
-                    if (!isValidAIFix(aiResult.fixedCode, works)) {
+                    if (!isValidAIFix(aiResult.fixedCode, works, content)) {
                         console.log(
-                            `  [AI] ${filePath}: AI fix failed validation (missing exact ${works.map((w) => w.to).join(",")} or leftover ${works.map((w) => w.from).join(",")}), falling back to deterministic`,
+                            `  [AI] ${filePath}: AI fix failed validation (semantic check), falling back to deterministic`,
                         );
                     } else {
                         fixed = aiResult.fixedCode;
