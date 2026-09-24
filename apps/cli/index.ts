@@ -17,7 +17,6 @@ import { analyzeAndCompare, applyDriftFix, buildDriftEvent } from "@driftlock/pi
 import type { CallSite, Fix } from "@driftlock/core";
 import type { DriftResult } from "@driftlock/pipeline";
 import { SnapshotStore } from "./drift";
-// @ts-ignore — workspace subpath, runtime via bun
 import { harToConsumerContract } from "@driftlock/webhookCapture";
 
 const program = new Command();
