@@ -261,6 +261,7 @@
         "@driftlock/git": "workspace:*",
         "@driftlock/parser": "workspace:*",
         "@driftlock/sandbox": "workspace:*",
+        "@driftlock/webhookCapture": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "latest",
