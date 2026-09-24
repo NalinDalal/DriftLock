@@ -82,7 +82,11 @@ function HighlightedCode({ code }: { code: string }) {
                                     </span>
                                 );
                             }
-                            return <span key={`${i}-${j}`}>{sp}</span>;
+                            return (
+                                <span key={`${i}-${j}`} style={{ color: "#0F172A" }}>
+                                    {sp}
+                                </span>
+                            );
                         })}
                     </span>
                 );
@@ -121,7 +125,7 @@ function TryPlayground() {
                         </button>
                     </div>
                     <div className="relative h-[240px] overflow-hidden border border-[#0F172A]/15 bg-white">
-                        <pre className="absolute inset-0 overflow-auto p-3 font-mono text-xs leading-5 whitespace-pre-wrap break-words pointer-events-none" style={{ margin: 0 }}>
+                        <pre className="absolute inset-0 overflow-auto p-3 font-mono text-xs leading-5 whitespace-pre-wrap break-words pointer-events-none text-[#0F172A]" style={{ margin: 0 }}>
                             <HighlightedCode code={highlightRef} />
                             {"\n"}
                         </pre>
@@ -137,7 +141,7 @@ function TryPlayground() {
                                 }
                             }}
                             spellCheck={false}
-                            className="absolute inset-0 h-full w-full resize-none bg-transparent p-3 font-mono text-xs leading-5 caret-[#0F172A] text-transparent selection:bg-[#E6F0F6] focus:outline-none overflow-auto whitespace-pre-wrap break-words"
+                            className="absolute inset-0 h-full w-full resize-none bg-transparent p-3 font-mono text-xs leading-5 caret-[#0F172A] text-transparent selection:bg-[#E6E7EE] focus:outline-none overflow-auto whitespace-pre-wrap break-words"
                             style={{ color: "transparent", caretColor: "#0F172A" }}
                         />
                     </div>

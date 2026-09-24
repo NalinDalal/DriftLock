@@ -92,16 +92,25 @@ export default function AppShell() {
     const onLogin = location.pathname.startsWith("/login");
 
     const navLink = (active: boolean) =>
-        `relative px-3 py-1 text-[13px] font-medium tracking-[-0.01em] transition-colors ${active ? "text-[#0F172A]" : "text-[#64748B] hover:text-[#0F172A]"}`;
+        `relative px-3 py-1 text-[13px] font-medium tracking-[-0.01em] transition-colors ${active ? "text-[var(--color-ink)]" : "text-[var(--color-muted)] hover:text-[var(--color-ink)]"}`;
 
     function handleLogout() {
         localStorage.removeItem("driftlock_token");
         window.location.href = "/";
     }
 
+    const [dark, setDark] = useState(() => {
+        if (typeof window === "undefined") return false;
+        return localStorage.getItem("driftlock_theme") === "dark" || (!localStorage.getItem("driftlock_theme") && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    });
+    useEffect(() => {
+        document.documentElement.classList.toggle("dark", dark);
+        localStorage.setItem("driftlock_theme", dark ? "dark" : "light");
+    }, [dark]);
+
     return (
-        <div className="flex min-h-screen flex-col bg-[#FFFBF5]">
-            <header className="sticky top-0 z-30 border-b border-[#E6E7EE] bg-[#FFFBF5]/85 backdrop-blur-[10px]">
+        <div className="flex min-h-screen flex-col bg-[var(--color-paper)] transition-colors">
+            <header className="sticky top-0 z-30 border-b border-[var(--color-line)] bg-[var(--color-paper)]/85 backdrop-blur-[10px]">
                 <div className="mx-auto flex h-[60px] w-full max-w-[1080px] items-center justify-between gap-4 px-6">
                     <div className="flex items-center gap-6">
                         <Link to="/" className="flex items-center gap-2.5">
@@ -145,6 +154,14 @@ export default function AppShell() {
                     </div>
 
                     <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setDark(!dark)}
+                            aria-label="Toggle theme"
+                            className="flex h-7 w-7 items-center justify-center rounded-full border border-[var(--color-line)] bg-[var(--color-paper)] text-[var(--color-ink)] transition-colors hover:bg-[var(--color-line)]"
+                            title={dark ? "Switch to light" : "Switch to dark"}
+                        >
+                            <span className="text-[11px]">{dark ? "☀" : "☾"}</span>
+                        </button>
                         <nav className="flex items-center gap-0 sm:hidden">
                             <Link
                                 to="/accounts"
@@ -161,19 +178,19 @@ export default function AppShell() {
                         </nav>
                         <Link
                             to="/install"
-                            className={`hidden sm:inline-flex items-center justify-center rounded-full px-4 py-1.5 text-[13px] font-medium transition-[transform,background] active:scale-[0.97] ${onInstall ? "bg-[#0F172A] text-white" : "bg-[#0F172A] text-white hover:bg-[#1E293B]"}`}
+                            className={`hidden sm:inline-flex items-center justify-center rounded-full px-4 py-1.5 text-[13px] font-medium transition-[transform,background] active:scale-[0.97] ${onInstall ? "bg-[var(--color-ink)] text-[var(--color-paper)]" : "bg-[var(--color-ink)] text-[var(--color-paper)] hover:opacity-90"}`}
                         >
                             Install
                         </Link>
                         <Link
                             to="/install"
-                            className="inline-flex items-center justify-center rounded-full bg-[#0F172A] px-3 py-1.5 text-xs font-medium text-white active:scale-[0.97] sm:hidden"
+                            className="inline-flex items-center justify-center rounded-full bg-[var(--color-ink)] px-3 py-1.5 text-xs font-medium text-[var(--color-paper)] active:scale-[0.97] sm:hidden"
                         >
                             Install
                         </Link>
                         {user ? (
                             <div className="hidden items-center gap-2 sm:flex">
-                                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#0F172A] text-[11px] font-semibold text-white">
+                                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-ink)] text-[11px] font-semibold text-[var(--color-paper)]">
                                     {user.name
                                         .split(" ")
                                         .map((p) => p[0])
@@ -182,7 +199,7 @@ export default function AppShell() {
                                 </span>
                                 <button
                                     onClick={handleLogout}
-                                    className="text-xs text-[#ffb09c] decoration-[#ee2400] hover:text-[#ee2400] hover:underline"
+                                    className="text-xs text-[var(--color-muted)] hover:text-[var(--color-ink)] hover:underline"
                                 >
                                     Sign out
                                 </button>
@@ -190,7 +207,7 @@ export default function AppShell() {
                         ) : (
                             <Link
                                 to="/login"
-                                className={`inline-flex items-center justify-center rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${onLogin ? "border-[#0F172A] bg-[#0F172A] text-white" : "border-[#E6E7EE] bg-white text-[#0F172A] hover:bg-zinc-50"}`}
+                                className={`inline-flex items-center justify-center rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${onLogin ? "border-[var(--color-ink)] bg-[var(--color-ink)] text-[var(--color-paper)]" : "border-[var(--color-line)] bg-[var(--color-paper)] text-[var(--color-ink)] hover:bg-[var(--color-line)]"}`}
                             >
                                 Sign in
                             </Link>
@@ -203,9 +220,9 @@ export default function AppShell() {
                 <Outlet />
             </main>
 
-            <footer className="border-t border-[#E6E7EE] bg-white">
+            <footer className="border-t border-[var(--color-line)] bg-[var(--color-paper)]">
                 <div className="mx-auto flex w-full max-w-[1080px] flex-wrap items-center justify-between gap-3 px-6 py-4">
-                    <div className="flex flex-wrap items-center gap-3 text-xs leading-4 text-[#64748B]">
+                    <div className="flex flex-wrap items-center gap-3 text-xs leading-4 text-[var(--color-muted)]">
                         <span>
                             DriftLock is a revision bureau. Every drift is a
                             redline, every fix is a PR. Nothing is merged
@@ -213,12 +230,12 @@ export default function AppShell() {
                         </span>
                         <Link
                             to="/about"
-                            className="font-mono text-[11px] tracking-wide text-[#0F172A] underline decoration-[#CBD5E1] underline-offset-2 hover:decoration-[#0F172A]"
+                            className="font-mono text-[11px] tracking-wide text-[var(--color-ink)] underline decoration-[var(--color-line)] underline-offset-2 hover:decoration-[var(--color-ink)]"
                         >
                             About
                         </Link>
                     </div>
-                    <span className="font-mono text-[11px] tracking-wide text-[#94A3B8]">
+                    <span className="font-mono text-[11px] tracking-wide text-[var(--color-muted)]">
                         DEPENDABOT BUT FOR APIS — REV. 01
                     </span>
                 </div>

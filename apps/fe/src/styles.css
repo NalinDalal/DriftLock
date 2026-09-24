@@ -25,6 +25,43 @@
 html {
     font-family: var(--font-sans);
     scrollbar-gutter: stable;
+    color-scheme: light;
+}
+html.dark {
+    color-scheme: dark;
+}
+
+/* dark blueprint — night revision, same system, inverted paper/ink */
+html.dark {
+    --color-paper: #070B17;
+    --color-surface: #0F1A2E;
+    --color-ink: #F1F5F9;
+    --color-line: #1E293B;
+    --color-cyan: #0F2530;
+    --color-muted: #94A3B8;
+    --color-signal-red: #F87171;
+    --color-signal-green: #34D399;
+}
+/* dark mode typography tune — white on dark needs looser tracking and optical weight */
+html.dark body {
+    font-weight: 380;
+    letter-spacing: 0.01em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+html.dark .display {
+    font-weight: 350;
+    letter-spacing: -0.025em;
+    line-height: 0.92;
+}
+html.dark .heading-section {
+    letter-spacing: -0.015em;
+    line-height: 1.08;
+}
+html.dark .mono,
+html.dark .caption,
+html.dark .label {
+    font-weight: 380;
 }
 
 body {
@@ -37,21 +74,21 @@ body {
 }
 
 ::selection {
-    background: #0F172A;
-    color: #FFFBF5;
+    background: var(--color-ink);
+    color: var(--color-paper);
 }
 
 /* blueprint grid — cyan hairline, not decoration */
 .bg-grid {
     background-image:
-        linear-gradient(to right, #E6F0F6 1px, transparent 1px),
-        linear-gradient(to bottom, #E6F0F6 1px, transparent 1px);
+        linear-gradient(to right, var(--color-cyan) 1px, transparent 1px),
+        linear-gradient(to bottom, var(--color-cyan) 1px, transparent 1px);
     background-size: 28px 28px;
 }
 .bg-grid-faint {
     background-image:
-        linear-gradient(to right, rgba(15,23,42,0.06) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(15,23,42,0.06) 1px, transparent 1px);
+        linear-gradient(to right, color-mix(in srgb, var(--color-ink) 6%, transparent) 1px, transparent 1px),
+        linear-gradient(to bottom, color-mix(in srgb, var(--color-ink) 6%, transparent) 1px, transparent 1px);
     background-size: 28px 28px;
 }
 
