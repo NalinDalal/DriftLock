@@ -248,8 +248,9 @@ export function handleInstallUrl(req: Request): Response {
     if (repos) {
         params.set("repositories", repos);
     }
-    // state carries where to redirect after install
-    params.set("state", encodeURIComponent(returnTo));
+    // state carries where to redirect after install — now points to our success page
+    const successPath = "/install/success";
+    params.set("state", encodeURIComponent(returnTo === "/" ? successPath : returnTo));
 
     const queryString = params.toString();
     if (queryString) {

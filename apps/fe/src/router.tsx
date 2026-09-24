@@ -9,6 +9,7 @@ import WebhookDashboard from "./routes/webhooks";
 import LoginPage from "./routes/login";
 import AuthCallbackPage from "./routes/auth-callback";
 import InstallPage from "./routes/install";
+import InstallSuccessPage from "./routes/install-success";
 import AboutPage from "./routes/about";
 
 const rootRoute = createRootRoute({ component: AppShell });
@@ -73,6 +74,12 @@ const installRoute = createRoute({
     component: InstallPage,
 });
 
+const installSuccessRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/install/success",
+    component: InstallSuccessPage,
+});
+
 const aboutRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/about",
@@ -89,6 +96,7 @@ const routeTree = rootRoute.addChildren([
     loginRoute,
     authCallbackRoute,
     installRoute,
+    installSuccessRoute,
     aboutRoute,
 ]);
 

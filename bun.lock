@@ -41,6 +41,7 @@
       },
       "dependencies": {
         "@driftlock/agent": "workspace:*",
+        "@driftlock/aiFix": "workspace:*",
         "@driftlock/core": "workspace:*",
         "@driftlock/diff": "workspace:*",
         "@driftlock/git": "workspace:*",

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Button } from "../components/Button";
+import { toast } from "../lib/toast";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
 
@@ -73,6 +74,9 @@ export default function InstallPage() {
     const [error, setError] = useState<string | null>(null);
     const [query, setQuery] = useState("");
     const [page, setPage] = useState(1);
+    const [githubOpened, setGithubOpened] = useState(false);
+    const [pendingCount, setPendingCount] = useState(0);
+    const [autoReturned, setAutoReturned] = useState(false);
 
     useEffect(() => {
         const token = localStorage.getItem("driftlock_token");
@@ -118,6 +122,22 @@ export default function InstallPage() {
     useEffect(() => {
         setPage(1);
     }, [query]);
+
+    useEffect(() => {
+        if (!githubOpened) return;
+        const onReturn = () => {
+            if (document.visibilityState === "visible" && !autoReturned) {
+                setAutoReturned(true);
+                toast(`Repo${pendingCount !== 1 ? "s" : ""} added — ${pendingCount} selected. Click Back to DriftLock to continue.`);
+            }
+        };
+        window.addEventListener("focus", onReturn);
+        document.addEventListener("visibilitychange", onReturn);
+        return () => {
+            window.removeEventListener("focus", onReturn);
+            document.removeEventListener("visibilitychange", onReturn);
+        };
+    }, [githubOpened, pendingCount, autoReturned]);
 
     function toggleRepo(id: number) {
         setSelected((prev) => {
@@ -168,8 +188,15 @@ export default function InstallPage() {
             );
             return;
         }
-        const repoIds = Array.from(selected).join(",");
-        window.location.href = `${API_URL}/api/auth/install?repos=${repoIds}`;
+        // For already-installed apps (you have installation 163556203), the selected repos are already fetched
+        // via /api/auth/repos, so no GitHub grant is needed. Just record the watch and stay on DriftLock.
+        // We no longer navigate away to https://github.com/settings/installations/163556203 on every add.
+        const count = selectedRepos.length;
+        setPendingCount(count);
+        toast(`Repo${count !== 1 ? "s" : ""} added — ${count} selected. Watching on DriftLock.`);
+        setGithubOpened(false);
+        setAutoReturned(false);
+        navigate({ to: "/accounts" });
     }
 
     if (loading) {
@@ -243,6 +270,30 @@ export default function InstallPage() {
                     <span className="ml-auto font-mono text-[11px] tracking-wide text-[#64748B]">
                         {filtered.length} repos · {selected.size} selected
                     </span>
+                </div>
+            )}
+
+            {githubOpened && (
+                <div className="mt-4 border border-[#0F172A] bg-[#0F172A] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <p className="font-mono text-xs tracking-wide text-white">GitHub opened — if you need to grant access to a private repo not listed here, do it on GitHub, then return.</p>
+                        <p className="font-mono text-[11px] tracking-wide text-white/60">For repos you already see here, no GitHub step is needed. Just add and we watch them.</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            size="sm"
+                            onClick={() => {
+                                setGithubOpened(false);
+                                setAutoReturned(false);
+                                toast(`Repo${pendingCount !== 1 ? "s" : ""} added — ${pendingCount} selected`);
+                                navigate({ to: "/accounts" });
+                            }}
+                            className="bg-white text-[#0F172A] hover:bg-[#FFFBF5] font-mono text-[11px] tracking-wide"
+                        >
+                            View repos ✓
+                        </Button>
+                        <button onClick={() => { setGithubOpened(false); setAutoReturned(false); }} className="font-mono text-[11px] tracking-wide text-white/70 hover:text-white">Dismiss</button>
+                    </div>
                 </div>
             )}
 

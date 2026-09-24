@@ -29,6 +29,7 @@ import {
     handleInstallUrl,
     handleLogout,
 } from "./routes/auth";
+import { handleGitHubSetup } from "./routes/githubSetup";
 import { handleInstallationsSync } from "./routes/installations";
 
 // Auth routes don't require bearer token
@@ -58,6 +59,12 @@ async function dispatch(req: Request, url: URL): Promise<Response> {
     }
     if (url.pathname === "/api/auth/install") {
         return handleInstallUrl(req);
+    }
+    if (url.pathname === "/api/github/setup") {
+        return handleGitHubSetup(req);
+    }
+    if (url.pathname === "/api/github/setup/callback") {
+        return handleGitHubSetup(req);
     }
     if (url.pathname === "/api/installations/sync" && req.method === "POST") {
         return handleInstallationsSync(req);
