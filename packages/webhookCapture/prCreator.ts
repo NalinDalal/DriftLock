@@ -128,6 +128,22 @@ function applyFixesToSource(
     return changed === source ? null : changed;
 }
 
+export function isValidAIFix(fixedCode: string, works: FixWork[]): boolean {
+    for (const work of works) {
+        if (work.kind === "field_rename" && work.from && work.to) {
+            const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const toRe = new RegExp(`\\b${esc(work.to)}\\b`);
+            const fromRe = new RegExp(`\\b${esc(work.from)}\\b`);
+            if (!toRe.test(fixedCode)) return false;
+            if (fromRe.test(fixedCode)) return false;
+            const camel = work.to.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+            if (camel !== work.to && new RegExp(`\\b${esc(camel)}\\b`).test(fixedCode)) return false;
+        }
+    }
+    if (/\/\/\s*Added new field/i.test(fixedCode)) return false;
+    return true;
+}
+
 export async function createWebhookFixPR(
     input: WebhookPRInput,
 ): Promise<WebhookPRResult> {
@@ -176,10 +192,16 @@ export async function createWebhookFixPR(
                 );
 
                 if (aiResult.confidence >= 60) {
-                    fixed = aiResult.fixedCode;
-                    console.log(
-                        `  [AI] ${filePath}: confidence=${aiResult.confidence} - ${aiResult.explanation.slice(0, 100)}`,
-                    );
+                    if (!isValidAIFix(aiResult.fixedCode, works)) {
+                        console.log(
+                            `  [AI] ${filePath}: AI fix failed validation (missing exact ${works.map((w) => w.to).join(",")} or leftover ${works.map((w) => w.from).join(",")}), falling back to deterministic`,
+                        );
+                    } else {
+                        fixed = aiResult.fixedCode;
+                        console.log(
+                            `  [AI] ${filePath}: confidence=${aiResult.confidence} - ${aiResult.explanation.slice(0, 100)}`,
+                        );
+                    }
                 } else {
                     console.log(
                         `  [AI] ${filePath}: confidence=${aiResult.confidence} too low, falling back to deterministic`,

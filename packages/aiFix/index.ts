@@ -11,7 +11,7 @@ export interface AIFixConfig {
 }
 
 const SYSTEM_PROMPT =
-    "You are an expert at fixing code when API schemas change. You produce minimal, correct fixes.";
+    "You are an expert at fixing code when API schemas change. You produce minimal, correct fixes. Use exact field names including snake_case (payment_method not paymentMethod) and do not add explanatory comments.";
 
 export interface FixContext {
     diff: ShapeDiffResult;
@@ -59,16 +59,18 @@ ${worksSummary || "(no deterministic fixes available)"}
 ${ctx.sourceCode}
 \`\`\`
 
-## Task
-Fix the source code to handle the schema change. Rules:
-1. Preserve all existing functionality
-2. Only change what's necessary for the schema migration
-3. Add null checks where fields became nullable
-4. Rename fields that were renamed
-5. Add type coercions where types changed
-6. If a field was removed, remove references to it or add a fallback
-7. If a field was added and is required, add a default value or placeholder
-8. Keep the code style consistent with the existing code
+ ## Task
+ Fix the source code to handle the schema change. Rules:
+ 1. Preserve all existing functionality
+ 2. Only change what's necessary for the schema migration
+ 3. Add null checks where fields became nullable
+ 4. Rename fields that were renamed — use exact spelling including snake_case (payment_method not paymentMethod)
+ 5. Add type coercions where types changed
+ 6. If a field was removed, remove references to it or add a fallback
+ 7. If a field was added and is required, add a default value or placeholder
+ 8. Keep the code style consistent with the existing code
+ 9. Do not add explanatory comments (no // Added new field)
+ 10. Preserve original formatting and final newline
 
 Return ONLY the fixed code inside a \`\`\`typescript block. After the code block, add a brief explanation of what you changed and a confidence score (0-100) for the fix.`;
 }
@@ -79,15 +81,18 @@ function parseResponse(response: string): {
     confidence: number;
 } {
     const codeMatch = response.match(/```typescript\n([\s\S]*?)```/);
-    const code = codeMatch ? codeMatch[1].trim() : "";
+    let code = codeMatch ? codeMatch[1] : "";
+    // Preserve formatting: don't trim content, just ensure final newline
+    if (code && !code.endsWith("\n")) code += "\n";
 
     const confMatch = response.match(/confidence[:\s]*(\d+)/i);
-    const confidence = confMatch ? parseInt(confMatch[1], 10) : 70;
-
     const explanationMatch = response.match(/```\s*\n([\s\S]*?)$/);
-    const explanation = explanationMatch
-        ? explanationMatch[1].trim()
-        : "AI-generated fix";
+    const explanation = explanationMatch ? explanationMatch[1].trim() : "AI-generated fix";
+    if (!confMatch) {
+        // Missing confidence is not invented — treat as 0 so caller rejects it
+        return { code, explanation, confidence: 0 };
+    }
+    const confidence = parseInt(confMatch[1], 10);
 
     return { code, explanation, confidence };
 }

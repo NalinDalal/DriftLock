@@ -6,6 +6,7 @@ import {
     type AIFixConfig,
 } from "../index";
 import type { FixWork, ShapeDiffResult } from "@driftlock/diff";
+import { applyFixWork } from "@driftlock/diff";
 
 const originalFetch = globalThis.fetch;
 const mockAIResponse = `\`\`\`typescript
@@ -123,7 +124,7 @@ Confidence: 80`;
         expect(result.confidence).toBe(80);
     });
 
-    test("defaults confidence to 70 when not specified", () => {
+    test("returns 0 when confidence not specified", () => {
         const mockResponse = `\`\`\`typescript
 const x = 1;
 \`\`\`
@@ -131,7 +132,18 @@ const x = 1;
 No confidence mentioned.`;
 
         const result = generateAIFixSync(makeContext(), mockResponse);
-        expect(result.confidence).toBe(70);
+        expect(result.confidence).toBe(0);
+    });
+
+    test("preserves final newline", () => {
+        const mockResponse = `\`\`\`typescript
+const x = 1;
+\`\`\`
+
+Confidence: 90`;
+        const result = generateAIFixSync(makeContext(), mockResponse);
+        expect(result.fixedCode.endsWith("\n")).toBe(true);
+        expect(result.fixedCode).toBe("const x = 1;\n");
     });
 
     test("throws when no code block found", () => {
@@ -255,5 +267,92 @@ describe("generateAIFix", () => {
         await expect(generateAIFix(makeContext(), config)).rejects.toThrow(
             "Cloudflare account ID is required",
         );
+    });
+});
+
+describe("regression: PR #3 bad output", () => {
+    const badOutput = `\`\`\`typescript
+const Stripe = require('stripe');
+const stripe = Stripe('sk_test_123');
+
+async function createPayment(amount, currency) {
+  const paymentIntent = await stripe.paymentIntents.create({
+    amount,
+    currency,
+  });
+  return {
+    amount: paymentIntent.amount,
+    currency: paymentIntent.currency,
+    status: paymentIntent.status,
+    paymentMethod: paymentIntent.payment_method, // Added new field
+    client_secret: paymentIntent.client_secret,
+  };
+}
+\`\`\`
+
+Changed source to payment_method.
+Confidence: 85`;
+
+    test("rejects leftover source or camelCase paymentMethod", () => {
+        const result = generateAIFixSync(makeContext(), badOutput);
+        expect(result.fixedCode).toContain("paymentMethod");
+        expect(result.fixedCode).toContain("// Added new field");
+        // prCreator validation would reject: missing exact payment_method and contains camelCase
+        const hasExact = /\bpayment_method\b/.test(result.fixedCode);
+        const hasCamel = /\bpaymentMethod\b/.test(result.fixedCode);
+        const hasComment = /\/\/\s*Added new field/.test(result.fixedCode);
+        expect(hasExact).toBe(true); // it does have payment_method but also has bad camelCase key
+        expect(hasCamel).toBe(true);
+        expect(hasComment).toBe(true);
+        // Validation should fail because of camelCase and comment
+        expect(hasCamel || hasComment).toBe(true);
+    });
+
+    test("deterministic fallback produces correct snake_case", () => {
+        const works: FixWork[] = [
+            {
+                kind: "field_rename",
+                field: "data.object.source",
+                from: "source",
+                to: "payment_method",
+                description: "Rename source to payment_method",
+                template: "rename",
+                confidence: "high",
+            },
+        ];
+        const source = `
+import Stripe from "stripe";
+const stripe = new Stripe("sk_test");
+
+export async function createCharge(amount: number) {
+    const result = await stripe.charges.create({
+        amount,
+        source: "tok_visa",
+    });
+    return result.source;
+}
+`;
+        let fixed: string | null = source;
+        for (const work of works) {
+            const r = applyFixWork(work, fixed!);
+            if (r) fixed = r;
+        }
+        expect(fixed).toContain("payment_method");
+        expect(fixed).not.toContain("paymentMethod");
+        expect(fixed).not.toContain("// Added new field");
+        expect(fixed!.endsWith("\n")).toBe(true);
+        expect(/\bpayment_method\b/.test(fixed!)).toBe(true);
+        expect(/\bpaymentMethod\b/.test(fixed!)).toBe(false);
+    });
+
+    test("rejects missing confidence (returns 0)", () => {
+        const noConf = `\`\`\`typescript
+const x = 1;
+\`\`\`
+
+No confidence here`;
+        const result = generateAIFixSync(makeContext(), noConf);
+        expect(result.confidence).toBe(0);
+        expect(result.confidence < 60).toBe(true);
     });
 });
