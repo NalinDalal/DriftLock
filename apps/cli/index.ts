@@ -17,6 +17,8 @@ import { analyzeAndCompare, applyDriftFix, buildDriftEvent } from "@driftlock/pi
 import type { CallSite, Fix } from "@driftlock/core";
 import type { DriftResult } from "@driftlock/pipeline";
 import { SnapshotStore } from "./drift";
+// @ts-ignore — workspace subpath, runtime via bun
+import { harToConsumerContract } from "@driftlock/webhookCapture";
 
 const program = new Command();
 
@@ -545,6 +547,36 @@ sandbox:
         } catch (error) {
             spinner.fail("Initialization failed");
             console.error(error);
+            process.exit(1);
+        }
+    });
+
+program
+    .command("capture")
+    .description("Turn HAR traffic into a consumer contract (SpecShield bdct capture from-har)")
+    .option("--har <path>", "Input HAR file (HAR 1.2)")
+    .option("--base-url <url>", "Keep only entries matching URL prefix")
+    .option("--out <path>", "Output file (yaml/json), defaults to stdout")
+    .action(async (opts: { har: string; baseUrl?: string; out?: string }) => {
+        if (!opts.har) {
+            console.error(chalk.red("Missing --har <path>"));
+            process.exit(1);
+        }
+        const spinner = ora("Capturing HAR…").start();
+        try {
+            const har = JSON.parse(readFileSync(opts.har, "utf8"));
+            const result = harToConsumerContract(har, { baseUrl: opts.baseUrl });
+            const out = JSON.stringify(result, null, 2);
+            if (opts.out) {
+                writeFileSync(opts.out, out);
+                spinner.succeed(`Wrote consumer contract ${result.stats.kept}/${result.stats.total} entries → ${opts.out}`);
+            } else {
+                spinner.stop();
+                console.log(out);
+            }
+        } catch (e) {
+            spinner.fail("Capture failed");
+            console.error(e);
             process.exit(1);
         }
     });

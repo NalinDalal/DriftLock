@@ -26,3 +26,4 @@ export {
     type WebhookPRInput,
     type WebhookPRResult,
 } from "./prCreator";
+export { harToConsumerContract, type HarCaptureOptions, type HarEntry } from "./harCapture";
