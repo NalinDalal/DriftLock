@@ -18,6 +18,7 @@ import type { CallSite, Fix } from "@driftlock/core";
 import type { DriftResult } from "@driftlock/pipeline";
 import { SnapshotStore } from "./drift";
 import { harToConsumerContract } from "@driftlock/webhookCapture";
+import { runMigrate } from "./migrate";
 
 const program = new Command();
 
@@ -578,6 +579,21 @@ program
             console.error(e);
             process.exit(1);
         }
+    });
+
+program
+    .command("migrate")
+    .description("Migrate a repo via ProviderChange (p5 1.11→2.3 wedge)")
+    .requiredOption("--repo <owner/repo>", "GitHub repo (owner/repo) or local path")
+    .requiredOption("--change <path>", "ProviderChange JSON file")
+    .option("--dry-run", "Don't push, just show patch")
+    .action(async (opts: { repo: string; change: string; dryRun?: boolean }) => {
+        const ai = process.env.CLOUDFLARE_API_TOKEN
+            ? { provider: "cloudflare" as const, apiKey: process.env.CLOUDFLARE_API_TOKEN, accountId: process.env.CLOUDFLARE_ACCOUNT_ID ?? "" }
+            : process.env.AI_API_KEY
+              ? { provider: "openai" as const, apiKey: process.env.AI_API_KEY }
+              : undefined;
+        await runMigrate({ repo: opts.repo, changePath: opts.change, dryRun: opts.dryRun, ai });
     });
 
 program.parse();

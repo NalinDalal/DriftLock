@@ -18,6 +18,7 @@
         "@driftlock/core": "workspace:*",
         "@driftlock/diff": "workspace:*",
         "@driftlock/git": "workspace:*",
+        "@driftlock/aiFix": "workspace:*",
         "@driftlock/parser": "workspace:*",
         "@driftlock/pipeline": "workspace:*",
         "@driftlock/sandbox": "workspace:*",
