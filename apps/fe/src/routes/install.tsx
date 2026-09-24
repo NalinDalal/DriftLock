@@ -70,7 +70,16 @@ export default function InstallPage() {
         setSelected(new Set(repos.map((r) => r.id)));
     }
 
-    function handleInstall() {
+    async function handleInstall() {
+        const token = localStorage.getItem("driftlock_token");
+        const selectedRepos = repos.filter((r) => selected.has(r.id)).map((r) => ({ owner: r.owner, name: r.name, fullName: r.fullName }));
+        if (selectedRepos.length) {
+            await fetch(`${API_URL}/api/installations/sync`, {
+                method: "POST",
+                headers: { "content-type": "application/json", Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ repos: selectedRepos }),
+            }).catch(() => {});
+        }
         const repoIds = Array.from(selected).join(",");
         window.location.href = `${API_URL}/api/auth/install?repos=${repoIds}`;
     }

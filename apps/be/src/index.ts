@@ -29,6 +29,7 @@ import {
     handleInstallUrl,
     handleLogout,
 } from "./routes/auth";
+import { handleInstallationsSync } from "./routes/installations";
 
 // Auth routes don't require bearer token
 const AUTH_ROUTES = new Set([
@@ -57,6 +58,9 @@ async function dispatch(req: Request, url: URL): Promise<Response> {
     }
     if (url.pathname === "/api/auth/install") {
         return handleInstallUrl(req);
+    }
+    if (url.pathname === "/api/installations/sync" && req.method === "POST") {
+        return handleInstallationsSync(req);
     }
     if (url.pathname === "/api/me") {
         return handleMe(req);
