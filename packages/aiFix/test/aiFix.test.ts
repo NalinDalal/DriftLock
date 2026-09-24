@@ -271,50 +271,6 @@ describe("generateAIFix", () => {
 });
 
 describe("regression: PR #3 bad output", () => {
-    const badOutput = `\`\`\`typescript
-const Stripe = require('stripe');
-const stripe = Stripe('sk_test_123');
-
-async function createPayment(amount, currency) {
-  const paymentIntent = await stripe.paymentIntents.create({
-    amount,
-    currency,
-  });
-  return {
-    amount: paymentIntent.amount,
-    currency: paymentIntent.currency,
-    status: paymentIntent.status,
-    paymentMethod: paymentIntent.payment_method, // Added new field
-    client_secret: paymentIntent.client_secret,
-  };
-}
-\`\`\`
-
-Changed source to payment_method.
-Confidence: 85`;
-
-    test("rejects added-comment case via validator", () => {
-        const result = generateAIFixSync(makeContext(), badOutput);
-        // Direct validation (mirrors webhookCapture/isValidAIFix): must not contain // Added and must use exact snake_case
-        const hasComment = /\/\/\s*Added new field/i.test(result.fixedCode);
-        const hasCamel = /\bpaymentMethod\b/.test(result.fixedCode);
-        expect(hasComment).toBe(true);
-        expect(hasCamel).toBe(true);
-        const isValid = !hasComment && !hasCamel && /\bpayment_method\b/.test(result.fixedCode);
-        expect(isValid).toBe(false);
-    });
-
-    test("accepts valid mockAIResponse via validator", () => {
-        const result = generateAIFixSync(makeContext(), mockAIResponse);
-        const hasComment = /\/\/\s*Added new field/i.test(result.fixedCode);
-        const hasCamel = /\bpaymentMethod\b/.test(result.fixedCode);
-        const hasExact = /\bpayment_method\b/.test(result.fixedCode);
-        expect(hasComment).toBe(false);
-        expect(hasCamel).toBe(false);
-        expect(hasExact).toBe(true);
-        expect(!hasComment && !hasCamel && hasExact).toBe(true);
-    });
-
     test("deterministic fallback produces correct snake_case", () => {
         const works: FixWork[] = [
             {

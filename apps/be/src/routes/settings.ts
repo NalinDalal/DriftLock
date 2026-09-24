@@ -76,6 +76,9 @@ export async function handleUpdateSettings(req: Request): Promise<Response> {
     if (typeof patch.webhookConfig === "object" && patch.webhookConfig !== null) {
         const existing = await store.getSetting<AppSettings["webhookConfig"]>(WEBHOOK_CONFIG) ?? {};
         const updated = { ...existing, ...patch.webhookConfig };
+        if (updated.aiProvider !== existing.aiProvider && updated.aiApiKey === existing.aiApiKey) {
+            updated.aiApiKey = "";
+        }
         await store.setSetting(WEBHOOK_CONFIG, updated);
     }
     return handleGetSettings();

@@ -28,6 +28,14 @@ const expectedDiffs: Record<string, SchemaDiff> = {
   },
 };
 
+const expectedConfidence: Record<string, number> = {
+  "01HighSourceToPaymentMethod.json": 85,
+  "02HighAmountStringToNumber.json": 85,
+  "03MediumEmailNullable.json": 85,
+  "04LowCustomerStringToObject.json": 85,
+  "05LowTrialEndRemoved.json": 95,
+};
+
 // Fail before registering scenario tests if fixture coverage changes.
 expect(fixtures).toEqual(Object.keys(expectedDiffs).sort());
 
@@ -59,6 +67,7 @@ describe("webhook wedge: 5 Stripe fixtures", () => {
       }
       expect(alert.diff).toEqual(expectedDiffs[file]);
       expect(confidenceFor(alert)).toBe(data.expected);
+      expect(alert.confidence).toBe(expectedConfidence[file]);
 
       // Evidence placeholder: affected code would be patched here then tests + sandbox replay
       // For HIGH we would assert patch passes; for LOW we assert explain-only

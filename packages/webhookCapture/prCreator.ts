@@ -161,6 +161,25 @@ export function isValidAIFix(
                 // Allow if from appears only inside to (not applicable here, but keep strict)
                 return false;
             }
+            const leaf = work.to.split(".").pop()!;
+            const camelCase = leaf.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
+            if (camelCase !== leaf) {
+                // Reject invented accesses, but preserve existing accesses and local aliases.
+                const accessRe = new RegExp(
+                    `(?<![\\w$])[\\w$]+(?:\\s*(?:\\?\\.|\\.)\\s*[\\w$]+)*\\s*(?:(?:\\?\\.|\\.)\\s*${esc(camelCase)}(?![\\w$])|(?:\\?\\.)?\\s*\\[\\s*(["'])${esc(camelCase)}\\1\\s*\\])`,
+                    "g",
+                );
+                const accesses = (code: string) => new Set(
+                    Array.from(code.matchAll(accessRe), ([access]) => access
+                        .replace(/\s+/g, "")
+                        .replace(/(?:\?\.)?\[['"]([^'"]+)['"]\]/g, ".$1")
+                        .replace(/\?\./g, ".")),
+                );
+                const originalAccesses = accesses(originalCode);
+                for (const access of accesses(fixedCode)) {
+                    if (!originalAccesses.has(access)) return false;
+                }
+            }
         }
     }
     return true;

@@ -26,7 +26,7 @@ export function toPerChangeReviews(changes: SpecChange[], fingerprints: string[]
 
 export function renderPerChangeComment(reviews: ChangeReview[]): string {
   const breaking = reviews.filter((r) => r.severity === "breaking");
-  const pending = breaking.filter((r) => r.status === "pending").length;
+  const pending = reviews.filter((r) => r.status === "pending").length;
   return [
     `### 🔴 ${breaking.length} breaking · ⏳ ${pending} pending review`,
     ...reviews.map((r) => `- [${r.severity}] \`${r.change.kind}\` ${r.change.field ?? r.change.endpoint} — ${r.status}`),

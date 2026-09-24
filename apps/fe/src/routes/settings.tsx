@@ -96,7 +96,13 @@ function WebhookSettings({ webhookConfig, onSave }: {
     });
 
     function handleChange(field: string, value: string) {
-        setForm(prev => ({ ...prev, [field]: value }));
+        setForm(prev => ({
+            ...prev,
+            ...(field === "aiProvider" && value !== prev.aiProvider
+                ? { aiApiKey: "" }
+                : {}),
+            [field]: value,
+        }));
     }
 
     function handleSave() {
@@ -106,7 +112,7 @@ function WebhookSettings({ webhookConfig, onSave }: {
             repoOwner: form.repoOwner || undefined,
             repoName: form.repoName || undefined,
             aiProvider: form.aiProvider || undefined,
-            aiApiKey: form.aiApiKey || undefined,
+            aiApiKey: form.aiApiKey,
             aiModel: form.aiModel,
             cloudflareAccountId: form.cloudflareAccountId,
             forwardUrl: form.forwardUrl || undefined,
@@ -348,10 +354,12 @@ export default function SettingsPage() {
                     title="Webhook Capture"
                     hint="Configure how DriftLock captures and processes webhooks from Stripe, Twilio, and other vendors."
                 />
-                <WebhookSettings
-                    webhookConfig={entry?.webhookConfig ?? {}}
-                    onSave={saveWebhookConfig}
-                />
+                {entry && (
+                    <WebhookSettings
+                        webhookConfig={entry.webhookConfig ?? {}}
+                        onSave={saveWebhookConfig}
+                    />
+                )}
             </section>
 
             <section>

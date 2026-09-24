@@ -7,6 +7,7 @@ import { DriftDetector } from "../driftDetector";
 import { flattenPayload } from "../schemaFlattener";
 import { diffSchemas } from "../schemaDiff";
 import { isValidAIFix } from "../prCreator";
+import { generateAIFixSync, type FixContext } from "@driftlock/aiFix";
 
 function tmpRepo(): string {
     const dir = mkdtempSync(join(tmpdir(), "driftlock-webhook-pr-"));
@@ -52,6 +53,151 @@ describe("AI fix syntax validation", () => {
 
     test("does not execute generated code", () => {
         expect(isValidAIFix('throw new Error("must not execute");', [], "original", "handler.js")).toBe(true);
+    });
+});
+
+describe("AI fix validator regressions", () => {
+    function makeContext(
+        sourceCode = "export const id = payment.source;\n",
+        to = "payment_method",
+    ): FixContext {
+        return {
+            diff: {
+                addedFields: [to],
+                removedFields: ["source"],
+                typeChanges: [],
+                optionalityChanges: [],
+                breakingChanges: [],
+                nonBreakingChanges: [],
+                confidence: "high",
+                changes: [],
+            },
+            works: [{
+                kind: "field_rename",
+                field: "source",
+                from: "source",
+                to,
+                description: `Rename source to ${to}`,
+                template: "rename",
+                confidence: "high",
+            }],
+            sourceCode,
+            filePath: "handler.ts",
+        };
+    }
+
+    function validateResponse(ctx: FixContext, response: string): boolean {
+        const result = generateAIFixSync(ctx, response);
+        return isValidAIFix(result.fixedCode, ctx.works, ctx.sourceCode, ctx.filePath);
+    }
+
+    function validateCode(ctx: FixContext, code: string): boolean {
+        return validateResponse(ctx, `\`\`\`typescript\n${code}\n\`\`\`\nConfidence: 95`);
+    }
+
+    test("rejects PR #3 bad output through the production validator", () => {
+        const ctx = makeContext(`const Stripe = require('stripe');
+const stripe = Stripe('sk_test_123');
+
+async function createPayment(amount, currency) {
+  const paymentIntent = await stripe.paymentIntents.create({ amount, currency });
+  return {
+    amount: paymentIntent.amount,
+    currency: paymentIntent.currency,
+    status: paymentIntent.status,
+    source: paymentIntent.source,
+    client_secret: paymentIntent.client_secret,
+  };
+}
+`);
+        const badOutput = `\`\`\`typescript
+const Stripe = require('stripe');
+const stripe = Stripe('sk_test_123');
+
+async function createPayment(amount, currency) {
+  const paymentIntent = await stripe.paymentIntents.create({
+    amount,
+    currency,
+  });
+  return {
+    amount: paymentIntent.amount,
+    currency: paymentIntent.currency,
+    status: paymentIntent.status,
+    paymentMethod: paymentIntent.payment_method, // Added new field
+    client_secret: paymentIntent.client_secret,
+  };
+}
+\`\`\`
+
+Changed source to payment_method.
+Confidence: 85`;
+
+        expect(validateResponse(ctx, badOutput)).toBe(false);
+    });
+
+    test("accepts clean output through the production validator", () => {
+        const ctx = makeContext(`const stripe = new Stripe("sk_test");
+
+export async function createCharge(amount: number) {
+    return stripe.charges.create({ amount, source: "tok_visa" });
+}
+`);
+        const cleanOutput = `\`\`\`typescript
+const stripe = new Stripe("sk_test");
+
+export async function createCharge(amount: number) {
+    return stripe.charges.create({ amount, payment_method: "pm_123" });
+}
+\`\`\`
+
+Changed the removed field to the new required field.
+Confidence: 95`;
+
+        expect(validateResponse(ctx, cleanOutput)).toBe(true);
+    });
+
+    for (const access of [
+        "payment.paymentMethod",
+        "payment?.paymentMethod",
+        'payment["paymentMethod"]',
+        "payment['paymentMethod']",
+    ]) {
+        test(`rejects mixed exact field and invented ${access}`, () => {
+            const code = `export const id = payment.payment_method; export const method = ${access};`;
+            expect(validateCode(makeContext(), code)).toBe(false);
+        });
+    }
+
+    test("derives the camelCase name from a non-payment rename target", () => {
+        const ctx = makeContext("export const id = customer.source;\n", "billing_address");
+        expect(validateCode(ctx, "export const id = customer.billing_address; export const address = customer.billingAddress;")).toBe(false);
+        expect(validateCode(ctx, "export const id = customer.billing_address;")).toBe(true);
+    });
+
+    test("preserves a preexisting local alias and output property", () => {
+        const ctx = makeContext("const paymentMethod = payment.source; export const view = { paymentMethod };\n");
+        expect(validateCode(ctx, "const paymentMethod = payment.payment_method; export const view = { paymentMethod };")).toBe(true);
+    });
+
+    test("preserves a preexisting destructuring alias", () => {
+        const ctx = makeContext("const { source: paymentMethod } = payment; export { paymentMethod };\n");
+        expect(validateCode(ctx, "const { payment_method: paymentMethod } = payment; export { paymentMethod };")).toBe(true);
+    });
+
+    test("preserves a preexisting camelCase property on the same receiver", () => {
+        const ctx = makeContext("export const id = payment.source; export const method = payment.paymentMethod;\n");
+        expect(validateCode(ctx, "export const id = payment.payment_method; export const method = payment.paymentMethod;")).toBe(true);
+    });
+
+    test("preserves preexisting property accesses across formatting and optional chaining", () => {
+        const ctx = makeContext("export const id = payment.source; export const method = view.paymentMethod;\n");
+        expect(validateCode(ctx, 'export const id = payment.payment_method; export const method = view ?. ["paymentMethod"];')).toBe(true);
+    });
+
+    test("an existing alias on another object does not excuse an invented access", () => {
+        const ctx = makeContext("export const id = payment.source; export const method = view.paymentMethod;\n");
+        const code = "export const id = payment.payment_method; export const method = view.paymentMethod; export const invented = payment.paymentMethod;";
+        expect(validateCode(ctx, code)).toBe(false);
     });
 });
 
