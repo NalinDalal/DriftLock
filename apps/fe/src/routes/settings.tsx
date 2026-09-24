@@ -107,8 +107,8 @@ function WebhookSettings({ webhookConfig, onSave }: {
             repoName: form.repoName || undefined,
             aiProvider: form.aiProvider || undefined,
             aiApiKey: form.aiApiKey || undefined,
-            aiModel: form.aiModel || undefined,
-            cloudflareAccountId: form.cloudflareAccountId || undefined,
+            aiModel: form.aiModel,
+            cloudflareAccountId: form.cloudflareAccountId,
             forwardUrl: form.forwardUrl || undefined,
             confidenceThreshold: parseFloat(form.confidenceThreshold) || 0.7,
         };

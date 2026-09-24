@@ -92,18 +92,14 @@ function getAIConfig(config: WebhookConfig): {
             : typedProvider === "gemini"
               ? "GEMINI_API_KEY"
               : "AI_API_KEY";
-    const apiKey =
-        getConfigValue(config, "aiApiKey", apiKeyEnv, "") ||
-        process.env.AI_API_KEY ||
-        "";
+    const apiKey = getConfigValue(config, "aiApiKey", apiKeyEnv, "");
     const modelEnv =
         typedProvider === "cloudflare"
             ? "CLOUDFLARE_AI_MODEL"
             : typedProvider === "gemini"
               ? "GEMINI_MODEL"
               : "AI_MODEL";
-    const model =
-        config.aiModel || process.env[modelEnv] || process.env.AI_MODEL || "";
+    const model = config.aiModel || process.env[modelEnv] || "";
     const accountId =
         typedProvider === "cloudflare"
             ? getConfigValue(

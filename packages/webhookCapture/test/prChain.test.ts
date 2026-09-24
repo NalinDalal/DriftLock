@@ -6,12 +6,54 @@ import { InMemorySchemaStore } from "../schemaStore";
 import { DriftDetector } from "../driftDetector";
 import { flattenPayload } from "../schemaFlattener";
 import { diffSchemas } from "../schemaDiff";
+import { isValidAIFix } from "../prCreator";
 
 function tmpRepo(): string {
     const dir = mkdtempSync(join(tmpdir(), "driftlock-webhook-pr-"));
     mkdirSync(join(dir, "src"), { recursive: true });
     return dir;
 }
+
+describe("AI fix syntax validation", () => {
+    const rename = {
+        kind: "field_rename" as const,
+        field: "source",
+        from: "source",
+        to: "payment_method",
+        description: "Rename source to payment_method",
+        template: "rename",
+        confidence: "high" as const,
+    };
+
+    for (const [filePath, code] of [
+        ["handler.ts", 'import type { Payment } from "./types"; export const id = (payment: Payment) => payment.payment_method as string;'],
+        ["handler.tsx", 'export const View = ({ payment }: { payment: any }) => <div>{payment.payment_method}</div>;'],
+        ["handler.jsx", 'export const View = ({ payment }) => <div>{payment.payment_method}</div>;'],
+        ["handler.js", 'export const id = payment.payment_method;'],
+        ["handler.mjs", 'import payment from "./payment.mjs"; export const id = payment.payment_method;'],
+        ["handler.cjs", 'module.exports = payment.payment_method;'],
+    ]) {
+        test(`accepts valid source in ${filePath}`, () => {
+            expect(isValidAIFix(code, [rename], "const id = payment.source;", filePath)).toBe(true);
+        });
+    }
+
+    test("rejects malformed source and TypeScript in a JavaScript file", () => {
+        expect(isValidAIFix("export const id = (", [], "original", "handler.ts")).toBe(false);
+        expect(isValidAIFix("export const id: string = 'pm_123';", [], "original", "handler.js")).toBe(false);
+    });
+
+    test("keeps semantic and unchanged-source guards", () => {
+        const code = "export const id = payment.source;";
+        expect(isValidAIFix(code, [rename], "original", "handler.ts")).toBe(false);
+        expect(isValidAIFix("export const id = payment.other;", [rename], code, "handler.ts")).toBe(false);
+        expect(isValidAIFix(code, [], code, "handler.ts")).toBe(false);
+    });
+
+    test("does not execute generated code", () => {
+        expect(isValidAIFix('throw new Error("must not execute");', [], "original", "handler.js")).toBe(true);
+    });
+});
 
 describe("Webhook drift → fix chain (unit)", () => {
     test("flatten → diff → detect → works generation", async () => {

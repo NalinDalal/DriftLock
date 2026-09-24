@@ -80,7 +80,7 @@ interface CallSiteContract {
 - `spec.test.ts` diff taxonomy, `fixWorks.test.ts` migration reasoning.
 
 ### Integration Tests
-- `stripe-test` fixture: 5 deliberate breaking changes, 3 must be HIGH auto-fix, 2 must be LOW explain-only.
+- `stripe-test` fixture: 5 deliberate breaking changes: 2 HIGH auto-fix cases, 1 MEDIUM review-required case, and 2 LOW explain-only cases.
 
 ### E2E Tests
 - `fixtures/sample-project` webhook handler end-to-end: change payload → PR with evidence.
