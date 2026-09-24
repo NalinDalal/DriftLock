@@ -76,3 +76,23 @@ export const TWILIO_VENDOR: VendorConfig = {
         url: "https://www.twilio.com/docs",
     },
 };
+
+export const P5_VENDOR: VendorConfig = {
+    name: "p5",
+    sdk: "p5",
+    clientNames: ["p", "p5", "sketch"],
+    basePath: "",
+    docs: {
+        url: "https://p5js.org/reference/",
+        specUrl: "https://p5js.org/reference/data.json",
+    },
+    resources: {
+        // p5 2.x renames / behavior changes are instance-scoped (p.*), not REST
+        sketch: {
+            overrides: {
+                keyIsPressed: "p5:instance:keyIsPressed",
+                keyIsDown: "p5:instance:keyIsDown",
+            },
+        },
+    },
+};
