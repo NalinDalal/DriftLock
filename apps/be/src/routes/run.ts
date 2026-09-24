@@ -19,6 +19,8 @@ interface RunBody {
     forward?: unknown;
 }
 
+const toDbId = (id: string) => (id.length > 64 ? id.slice(-64) : id);
+
 export async function handleRun(req: Request): Promise<Response> {
     let body: RunBody;
     try {
@@ -68,8 +70,9 @@ export async function handleRun(req: Request): Promise<Response> {
             const relPath = callSite.filePath.startsWith(clone.path)
                 ? relative(clone.path, callSite.filePath)
                 : callSite.filePath;
+            const dbId = toDbId(callSite.id);
             await store.upsertCallSite(repository.id, {
-                id: callSite.id,
+                id: dbId,
                 filePath: relPath,
                 line: callSite.line,
                 method: callSite.method,
@@ -82,7 +85,7 @@ export async function handleRun(req: Request): Promise<Response> {
         }
         await store.deleteObsoleteCallSites(
             repository.id,
-            result.callSites.map((site) => site.id),
+            result.callSites.map((site) => toDbId(site.id)),
         );
 
         const meta = {
@@ -97,9 +100,10 @@ export async function handleRun(req: Request): Promise<Response> {
             if (!current) {
                 continue;
             }
-            const previous = await store.getLatestSnapshot(drift.callSite.id);
+            const dbCallSiteId = toDbId(drift.callSite.id);
+            const previous = await store.getLatestSnapshot(dbCallSiteId);
             const saved = await store.saveSnapshot({
-                callSiteId: drift.callSite.id,
+                callSiteId: dbCallSiteId,
                 ...meta,
                 requestShape: current.request,
                 responseShape: current.response,
@@ -107,8 +111,8 @@ export async function handleRun(req: Request): Promise<Response> {
             const source = readSource(clone.path, drift.callSite.filePath);
             const applied = source ? applyDriftFix(drift, source) : null;
             await store.recordDrift({
-                id: `drift-${drift.callSite.id}`,
-                callSiteId: drift.callSite.id,
+                id: `drift-${dbCallSiteId}`.slice(0, 128),
+                callSiteId: dbCallSiteId,
                 oldSnapshotId: previous?.id ?? saved.id,
                 newSnapshotId: saved.id,
                 diffSummary: driftSummary(drift) as unknown as Record<
@@ -120,7 +124,7 @@ export async function handleRun(req: Request): Promise<Response> {
                 prNumber: null,
                 status: "detected",
             });
-            await store.setCallSiteSnapshotState(drift.callSite.id, "drifted");
+            await store.setCallSiteSnapshotState(dbCallSiteId, "drifted");
             driftCount += 1;
         }
 
