@@ -4,7 +4,7 @@
  * Or: bun test packages/tests/e2e/webhookWedgeHarness.test.ts
  */
 import { describe, test, expect } from "bun:test";
-import { InMemorySchemaStore, DriftDetector, type DriftAlert, type SchemaDiff } from "@driftlock/webhookCapture";
+import { InMemorySchemaStore, DriftDetector, type DriftAlert, type SchemaDiff } from "../../webhookCapture/index.ts";
 import fs from "fs";
 import path from "path";
 
