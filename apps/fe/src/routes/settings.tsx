@@ -89,6 +89,8 @@ function WebhookSettings({ webhookConfig, onSave }: {
         repoName: webhookConfig.repoName ?? "",
         aiProvider: webhookConfig.aiProvider ?? "",
         aiApiKey: webhookConfig.aiApiKey ?? "",
+        aiModel: webhookConfig.aiModel ?? "",
+        cloudflareAccountId: webhookConfig.cloudflareAccountId ?? "",
         forwardUrl: webhookConfig.forwardUrl ?? "",
         confidenceThreshold: webhookConfig.confidenceThreshold?.toString() ?? "0.7",
     });
@@ -105,6 +107,8 @@ function WebhookSettings({ webhookConfig, onSave }: {
             repoName: form.repoName || undefined,
             aiProvider: form.aiProvider || undefined,
             aiApiKey: form.aiApiKey || undefined,
+            aiModel: form.aiModel || undefined,
+            cloudflareAccountId: form.cloudflareAccountId || undefined,
             forwardUrl: form.forwardUrl || undefined,
             confidenceThreshold: parseFloat(form.confidenceThreshold) || 0.7,
         };
@@ -171,6 +175,8 @@ function WebhookSettings({ webhookConfig, onSave }: {
                         <option value="">None</option>
                         <option value="openai">OpenAI</option>
                         <option value="anthropic">Anthropic</option>
+                        <option value="gemini">Google Gemini</option>
+                        <option value="cloudflare">Cloudflare Workers AI</option>
                     </select>
                 </div>
                 <div>
@@ -181,10 +187,46 @@ function WebhookSettings({ webhookConfig, onSave }: {
                         type="password"
                         value={form.aiApiKey}
                         onChange={(e) => handleChange("aiApiKey", e.target.value)}
-                        placeholder="sk-..."
+                        placeholder={
+                            form.aiProvider === "cloudflare"
+                                ? "cfat_..."
+                                : form.aiProvider === "gemini"
+                                  ? "Gemini API key"
+                                  : "sk-..."
+                        }
                         className="w-full rounded-md border border-neutral-300 bg-white px-2.5 py-1.5 font-mono text-xs text-neutral-800 focus:border-neutral-400 focus:outline-none"
                     />
                 </div>
+                <div>
+                    <label className="mb-1 block text-xs font-medium text-neutral-700">
+                        AI Model
+                    </label>
+                    <input
+                        value={form.aiModel}
+                        onChange={(e) => handleChange("aiModel", e.target.value)}
+                        placeholder={
+                            form.aiProvider === "cloudflare"
+                                ? "@cf/google/gemma-4-26b-a4b-it"
+                                : form.aiProvider === "gemini"
+                                  ? "gemini-2.5-flash"
+                                  : "Provider default"
+                        }
+                        className="w-full rounded-md border border-neutral-300 bg-white px-2.5 py-1.5 font-mono text-xs text-neutral-800 focus:border-neutral-400 focus:outline-none"
+                    />
+                </div>
+                {form.aiProvider === "cloudflare" && (
+                    <div>
+                        <label className="mb-1 block text-xs font-medium text-neutral-700">
+                            Cloudflare Account ID
+                        </label>
+                        <input
+                            value={form.cloudflareAccountId}
+                            onChange={(e) => handleChange("cloudflareAccountId", e.target.value)}
+                            placeholder="Cloudflare account ID"
+                            className="w-full rounded-md border border-neutral-300 bg-white px-2.5 py-1.5 font-mono text-xs text-neutral-800 focus:border-neutral-400 focus:outline-none"
+                        />
+                    </div>
+                )}
                 <div>
                     <label className="mb-1 block text-xs font-medium text-neutral-700">
                         Forward URL

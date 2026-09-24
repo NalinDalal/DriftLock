@@ -18,6 +18,8 @@ export interface AppSettings {
         repoName?: string;
         aiProvider?: string;
         aiApiKey?: string;
+        aiModel?: string;
+        cloudflareAccountId?: string;
         forwardUrl?: string;
         confidenceThreshold?: number;
     };

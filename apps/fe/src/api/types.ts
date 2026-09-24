@@ -105,6 +105,8 @@ export interface Settings {
         repoName?: string;
         aiProvider?: string;
         aiApiKey?: string;
+        aiModel?: string;
+        cloudflareAccountId?: string;
         forwardUrl?: string;
         confidenceThreshold?: number;
     };

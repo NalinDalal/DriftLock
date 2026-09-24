@@ -1,11 +1,17 @@
 import type { FixWork, ShapeDiffResult } from "@driftlock/diff";
 
+export type AIProvider = "openai" | "anthropic" | "gemini" | "cloudflare";
+
 export interface AIFixConfig {
-    provider: "openai" | "anthropic";
+    provider: AIProvider;
     apiKey: string;
+    accountId?: string;
     model?: string;
     maxTokens?: number;
 }
+
+const SYSTEM_PROMPT =
+    "You are an expert at fixing code when API schemas change. You produce minimal, correct fixes.";
 
 export interface FixContext {
     diff: ShapeDiffResult;
@@ -104,8 +110,7 @@ async function callOpenAI(
             messages: [
                 {
                     role: "system",
-                    content:
-                        "You are an expert at fixing code when API schemas change. You produce minimal, correct fixes.",
+                    content: SYSTEM_PROMPT,
                 },
                 { role: "user", content: prompt },
             ],
@@ -166,6 +171,103 @@ async function callAnthropic(
     return data.content[0]?.text ?? "";
 }
 
+async function callGemini(
+    prompt: string,
+    config: AIFixConfig,
+): Promise<string> {
+    const model = config.model || "gemini-2.5-flash";
+    const maxTokens = config.maxTokens || 4096;
+    const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+        {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "x-goog-api-key": config.apiKey,
+            },
+            body: JSON.stringify({
+                systemInstruction: {
+                    parts: [{ text: SYSTEM_PROMPT }],
+                },
+                contents: [
+                    {
+                        role: "user",
+                        parts: [{ text: prompt }],
+                    },
+                ],
+                generationConfig: {
+                    maxOutputTokens: maxTokens,
+                    temperature: 0.2,
+                },
+            }),
+        },
+    );
+
+    if (!response.ok) {
+        const err = await response.text();
+        throw new Error(`Gemini API error: ${response.status} ${err}`);
+    }
+
+    const data = (await response.json()) as {
+        candidates?: Array<{
+            content?: { parts?: Array<{ text?: string }> };
+        }>;
+    };
+    return data.candidates?.[0]?.content?.parts
+        ?.map((part) => part.text ?? "")
+        .join("") ?? "";
+}
+
+async function callCloudflare(
+    prompt: string,
+    config: AIFixConfig,
+): Promise<string> {
+    const accountId = config.accountId?.trim();
+    if (!accountId) {
+        throw new Error("Cloudflare account ID is required");
+    }
+
+    const model = config.model || "@cf/google/gemma-4-26b-a4b-it";
+    if (!/^@cf\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(model)) {
+        throw new Error("Cloudflare model must be a Workers AI model such as @cf/google/gemma-4-26b-a4b-it");
+    }
+
+    const maxTokens = config.maxTokens || 4096;
+    const response = await fetch(
+        `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/ai/run/${model}`,
+        {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${config.apiKey}`,
+            },
+            body: JSON.stringify({
+                messages: [
+                    { role: "system", content: SYSTEM_PROMPT },
+                    { role: "user", content: prompt },
+                ],
+                max_tokens: maxTokens,
+                temperature: 0.2,
+            }),
+        },
+    );
+
+    if (!response.ok) {
+        const err = await response.text();
+        throw new Error(`Cloudflare Workers AI error: ${response.status} ${err}`);
+    }
+
+    const data = (await response.json()) as {
+        result?: {
+            response?: string;
+            choices?: Array<{ message?: { content?: string } }>;
+        };
+    };
+    return data.result?.response ??
+        data.result?.choices?.[0]?.message?.content ??
+        "";
+}
+
 export async function generateAIFix(
     ctx: FixContext,
     config: AIFixConfig,
@@ -173,10 +275,21 @@ export async function generateAIFix(
     const prompt = buildPrompt(ctx);
 
     let raw: string;
-    if (config.provider === "openai") {
-        raw = await callOpenAI(prompt, config);
-    } else {
-        raw = await callAnthropic(prompt, config);
+    switch (config.provider) {
+        case "openai":
+            raw = await callOpenAI(prompt, config);
+            break;
+        case "anthropic":
+            raw = await callAnthropic(prompt, config);
+            break;
+        case "gemini":
+            raw = await callGemini(prompt, config);
+            break;
+        case "cloudflare":
+            raw = await callCloudflare(prompt, config);
+            break;
+        default:
+            throw new Error(`Unsupported AI provider: ${String(config.provider)}`);
     }
 
     const parsed = parseResponse(raw);
