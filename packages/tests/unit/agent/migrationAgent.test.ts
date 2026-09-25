@@ -118,7 +118,8 @@ describe("runMigrationAgent", () => {
 
         const result = await runMigrationAgent({ root, packet, client: fakeClient() });
 
-        expect(result.outcome).toBe("auto_pr");
+        // No contract gates this run, so the verified diff is review-only.
+        expect(result.outcome).toBe("review_pr");
         expect(result.filesChanged).toEqual(["src/client.ts"]);
         expect(result.state.commandsRun).toBe(1);
         expect(result.state.lastTestResult?.passed).toBe(true);
@@ -126,6 +127,86 @@ describe("runMigrationAgent", () => {
 
         const updated = await Bun.file(join(root, "src/client.ts")).text();
         expect(updated).toContain("createSurface(1)");
+    });
+
+    test("reports draft_pr when the caller prefers drafts and no contract gates the run", async () => {
+        const init = Bun.spawn(["git", "init"], { cwd: root, stdout: "pipe" });
+        await init.exited;
+        const add = Bun.spawn(["git", "add", "-A"], { cwd: root, stdout: "pipe" });
+        await add.exited;
+
+        apiCalls = [
+            toolCall(
+                "editFile",
+                {
+                    path: "src/client.ts",
+                    patch: [
+                        "--- a/src/client.ts",
+                        "+++ b/src/client.ts",
+                        "@@ -1 +1 @@",
+                        "-createCanvas(1);",
+                        "+createSurface(1);",
+                    ].join("\n"),
+                },
+                "c1",
+            ),
+            toolCall("runCommand", { command: "npm run build" }, "c2"),
+            toolCall(
+                "createPullRequest",
+                { title: "Migrate to p5 2.3", body: "Renamed call", branch: "driftlock/p5-2.3" },
+                "c3",
+            ),
+        ];
+
+        const result = await runMigrationAgent({
+            root,
+            packet,
+            prMode: "draft",
+            client: fakeClient(),
+        });
+
+        expect(result.outcome).toBe("draft_pr");
+        expect(result.filesChanged).toEqual(["src/client.ts"]);
+    });
+
+    test("a passing verification does not survive a later edit", async () => {
+        const init = Bun.spawn(["git", "init"], { cwd: root, stdout: "pipe" });
+        await init.exited;
+        const add = Bun.spawn(["git", "add", "-A"], { cwd: root, stdout: "pipe" });
+        await add.exited;
+
+        apiCalls = [
+            toolCall("runCommand", { command: "npm run build" }, "c1"),
+            toolCall(
+                "editFile",
+                {
+                    path: "src/client.ts",
+                    patch: [
+                        "--- a/src/client.ts",
+                        "+++ b/src/client.ts",
+                        "@@ -1 +1 @@",
+                        "-createCanvas(1);",
+                        "+createSurface(1);",
+                    ].join("\n"),
+                },
+                "c2",
+            ),
+            toolCall(
+                "createPullRequest",
+                { title: "Migrate to p5 2.3", body: "Renamed call", branch: "driftlock/p5-2.3" },
+                "c3",
+            ),
+        ];
+
+        const result = await runMigrationAgent({ root, packet, client: fakeClient() });
+
+        // The build passed before the edit, but the edit wiped that result,
+        // so the PR gate refuses until verification runs again.
+        const pr = result.state.transcript.find(
+            (entry) => entry.role === "tool" && entry.toolCallId === "c3",
+        );
+        expect(pr?.content).toContain("no passing verification command");
+        expect(result.state.pullRequest).toBeUndefined();
     });
 
     test("sends assistant tool-call messages with string content, never null", async () => {

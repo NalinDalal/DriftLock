@@ -380,7 +380,9 @@ describe("createPullRequest", () => {
             ]),
         });
 
-        expect(result.outcome).toBe("auto_pr");
+        // No contract gates this run, so the verified diff is review-only even
+        // though the PR itself opened.
+        expect(result.outcome).toBe("review_pr");
         expect(result.state.pullRequest).toEqual({
             status: "opened",
             url: "https://github.com/acme/widgets/pull/7",

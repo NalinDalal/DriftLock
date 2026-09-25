@@ -128,10 +128,38 @@ describe("canRunMoreCommands", () => {
 });
 
 describe("decideOutcome", () => {
-    test("auto_pr when a change was made and validation passed", () => {
+    test("auto_pr when a change was made, validation passed, and a contract gates the run", () => {
         const current = state({
             filesChanged: ["src/client.ts"],
             lastTestResult: { passed: true, output: "exit code: 0" },
+            hasContract: true,
+        });
+        expect(decideOutcome(current)).toBe("auto_pr");
+    });
+
+    test("review_pr when verified but no contract gates the run", () => {
+        const current = state({
+            filesChanged: ["src/client.ts"],
+            lastTestResult: { passed: true, output: "exit code: 0" },
+        });
+        expect(decideOutcome(current)).toBe("review_pr");
+    });
+
+    test("draft_pr when the caller prefers drafts and no contract gates the run", () => {
+        const current = state({
+            filesChanged: ["src/client.ts"],
+            lastTestResult: { passed: true, output: "exit code: 0" },
+            prMode: "draft",
+        });
+        expect(decideOutcome(current)).toBe("draft_pr");
+    });
+
+    test("auto_pr despite a draft preference when a contract gates the run", () => {
+        const current = state({
+            filesChanged: ["src/client.ts"],
+            lastTestResult: { passed: true, output: "exit code: 0" },
+            hasContract: true,
+            prMode: "draft",
         });
         expect(decideOutcome(current)).toBe("auto_pr");
     });

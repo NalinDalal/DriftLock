@@ -162,7 +162,9 @@ migration's problem.
 
 The gate runs inside `createPullRequest`, after the command check, and
 `decideOutcome` will not return `auto_pr` while any finding stands. A green test
-suite with an unresolved vendor symbol is `review_pr` at best.
+suite with an unresolved vendor symbol is `review_pr` at best. A green suite
+with no contract at all is `review_pr` (`draft_pr` with `prMode: "draft"`) at
+best, for the same reason: nothing verified the edits against the vendor.
 
 ### Why receiver discovery matters
 
@@ -225,15 +227,19 @@ and the installed version of the library being migrated, and injects both those
 facts and the vendor's real API surface into the opening message. It then finds
 the affected call sites, reads them, applies minimal edits, runs a whitelisted
 verification command, checks those edits against the contract, and reports one
-of three outcomes:
+of three outcomes (four when the caller prefers drafts):
 
-| Outcome      | Meaning                                              |
-| ------------ | ---------------------------------------------------- |
-| `auto_pr`    | Files changed and a verification command passed      |
-| `review_pr`  | Files changed but validation failed, or never ran   |
-| `no_action`  | Nothing changed, usually the API is not used        |
+| Outcome      | Meaning                                                              |
+| ------------ | -------------------------------------------------------------------- |
+| `auto_pr`    | Files changed, verification passed, and a vendor contract gates it   |
+| `review_pr`  | Files changed but needs a human: validation failed, never ran, or no contract |
+| `draft_pr`   | Same as `review_pr`, when the caller passed `prMode: "draft"`        |
+| `no_action`  | Nothing changed, usually the API is not used                        |
 
 `auto_pr` means the diff is ready for a human. It never means merged.
+Without a vendor contract the outcome is capped at `review_pr` (or `draft_pr`
+with `prMode: "draft"`): passing tests prove the code runs, but nothing checked
+the edits against the vendor's real API surface, so the diff is never automatic.
 
 ## Files
 
@@ -340,7 +346,7 @@ const result = await runMigrationAgent({
     target: { owner: "acme", repo: "widgets", base: "main" },
 });
 
-result.outcome;         // "auto_pr" | "review_pr" | "no_action"
+result.outcome;         // "auto_pr" | "review_pr" | "draft_pr" | "no_action"
 result.filesChanged;    // ["src/client.ts"]
 result.state.pullRequest; // { status, url, number, branch } when a PR exists
 result.state.transcript;  // full tool conversation

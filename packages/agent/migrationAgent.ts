@@ -18,6 +18,7 @@ import {
     type ChangePacket,
     type MigrationStage,
     type Outcome,
+    type PrMode,
     type ToolCall,
     type TranscriptEntry,
 } from "./state";
@@ -158,6 +159,12 @@ export type RunOptions = {
      */
     contract?: VendorContract;
     vendor?: VendorConfig;
+    /**
+     * What the caller wants when no vendor contract gates the run. Without a
+     * contract the outcome is capped at `review_pr` (`review`, the default) or
+     * `draft_pr` (`draft`), never `auto_pr`.
+     */
+    prMode?: PrMode;
     /**
      * Overrides the repository fingerprint. Normally this is read from disk
      * before the loop starts, because the model cannot be trusted to go looking
@@ -455,6 +462,10 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
     // about a script name is indistinguishable from a real build failure.
     const facts = options.repoFacts ?? (await fingerprintRepo(options.root));
     const state = createInitialState(options.packet, options.contract, facts);
+    // The contract gate needs both halves: the API surface and the config
+    // that says which receivers it applies to. Anything less is ungated.
+    state.hasContract = Boolean(options.contract && options.vendor);
+    if (options.prMode) state.prMode = options.prMode;
     const model = options.model ?? "gpt-4o-mini";
     let lastStage: MigrationStage | null = null;
 

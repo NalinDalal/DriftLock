@@ -9,7 +9,15 @@ export type ChangePacket = {
     migrationDocs: string[];
 };
 
-export type Outcome = "auto_pr" | "review_pr" | "no_action";
+export type Outcome = "auto_pr" | "review_pr" | "draft_pr" | "no_action";
+
+/**
+ * What the caller wants when the migration cannot be fully verified against
+ * a vendor contract. `review` reports `review_pr` (a human must review the
+ * diff); `draft` reports `draft_pr` (open it as a draft, if the entry point
+ * supports drafts, rather than requesting review).
+ */
+export type PrMode = "review" | "draft";
 
 export type ToolCall = {
     id: string;
@@ -39,6 +47,15 @@ export type AgentState = {
     /** Vendor symbols the edits introduced that the contract could not resolve. */
     symbolFindings?: SymbolFinding[];
     contractChecked?: boolean;
+    /**
+     * Whether this run is gated by a vendor contract (both a contract and a
+     * vendor config were supplied). Without one, the outcome can never be
+     * `auto_pr`: an unverified-against-the-vendor diff is review- or
+     * draft-only.
+     */
+    hasContract: boolean;
+    /** The caller's preference for the contract-absent outcome. */
+    prMode: PrMode;
     pullRequest?: {
         status: "opened" | "already_open" | "merged";
         url: string;
@@ -99,6 +116,11 @@ export function createInitialState(
         transcript: [{ role: "user", content: opening.join("\n") }],
         done: false,
         outcome: null,
+        // The runner sets these from its options after creation: a contract
+        // plus vendor config means the contract gate can run, and prMode
+        // records whether the caller wants review or draft when it cannot.
+        hasContract: false,
+        prMode: "review",
     };
 }
 
@@ -194,11 +216,17 @@ export function canRunMoreCommands(state: AgentState): boolean {
 /**
  * A passing test suite is not sufficient on its own. If the contract check found
  * symbols it could not resolve, the migration is unverified no matter what the
- * build says, so it can never reach `auto_pr`.
+ * build says, so it can never reach `auto_pr`. Likewise, without a vendor
+ * contract there is nothing checking the edits against the vendor's real API
+ * surface, so the best a verified diff can get is `review_pr` — or `draft_pr`
+ * when the caller prefers drafts.
  */
 export function decideOutcome(state: AgentState): Outcome {
     const contractClean = !state.symbolFindings || state.symbolFindings.length === 0;
     if (state.lastTestResult?.passed && state.filesChanged.length > 0 && contractClean) {
+        if (!state.hasContract) {
+            return state.prMode === "draft" ? "draft_pr" : "review_pr";
+        }
         return "auto_pr";
     }
     if (state.filesChanged.length > 0 || state.lastTestResult) return "review_pr";

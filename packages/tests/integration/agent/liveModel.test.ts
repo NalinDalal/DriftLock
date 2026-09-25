@@ -126,7 +126,7 @@ describe.skipIf(!configured)("live model loop", () => {
             expect(answer, `tool call ${call.name} (${call.id}) went unanswered`).toBeDefined();
         }
 
-        expect(["auto_pr", "review_pr", "no_action"]).toContain(result.outcome);
+        expect(["auto_pr", "review_pr", "draft_pr", "no_action"]).toContain(result.outcome);
         expect(state.iteration).toBeLessThanOrEqual(state.maxIterations);
         expect(asked.length).toBeGreaterThan(0);
 
