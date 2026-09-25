@@ -12,7 +12,7 @@ function RepoRow({ repo }: { repo: Repo }) {
     const dirty = repo.stats.driftOpen > 0;
     return (
         <Link to="/repos/$owner/$name" params={{ owner: repo.owner, name: repo.name }} className="group">
-            <Card className="flex items-center gap-4 p-4 sm:p-5 transition-all duration-150 hover:shadow-[0_4px_16px_rgba(10,10,15,0.06)] hover:border-zinc-300 group-active:scale-[0.995]">
+            <Card className="flex items-center gap-4 p-4 sm:p-5 transition-all duration-150 hover:shadow-[0_4px_16px_rgba(10,10,15,0.06)] hover:border-[var(--color-line)] group-active:scale-[0.995]">
                 <StatusDot tone={dirty ? "amber" : "green"} pulsing={dirty} />
                 <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -22,12 +22,12 @@ function RepoRow({ repo }: { repo: Repo }) {
                         {repo.isPrivate && <Badge tone="neutral">private</Badge>}
                         {!repo.watched && <Badge tone="neutral">paused</Badge>}
                     </div>
-                    <p className="mt-0.5 truncate text-xs leading-4 text-zinc-500">
+                    <p className="mt-0.5 truncate text-xs leading-4 text-[var(--color-muted)]">
                         {repo.description || "No description"}
                     </p>
                     {/* mobile stats */}
-                    <div className="mt-2 flex gap-3 text-xs text-zinc-500 sm:hidden">
-                        <span className="tabular-nums font-medium text-zinc-700">{repo.stats.callSites} calls</span>
+                    <div className="mt-2 flex gap-3 text-xs text-[var(--color-muted)] sm:hidden">
+                        <span className="tabular-nums font-medium text-[var(--color-ink)]">{repo.stats.callSites} calls</span>
                         <span className={dirty ? "font-medium text-amber-600" : ""}>{repo.stats.driftOpen} drift</span>
                         <span>{repo.stats.pullsOpen} PRs</span>
                     </div>
@@ -35,19 +35,19 @@ function RepoRow({ repo }: { repo: Repo }) {
                 <div className="hidden items-center gap-6 sm:flex">
                     <div className="text-right leading-tight">
                         <p className="text-[13px] font-semibold tabular-nums text-[#0a0a0f]">{repo.stats.callSites}</p>
-                        <p className="text-[11px] text-zinc-400">call sites</p>
+                        <p className="text-[11px] text-[var(--color-muted)]">call sites</p>
                     </div>
                     <div className="text-right leading-tight">
                         <p className={`text-[13px] font-semibold tabular-nums ${dirty ? "text-amber-600" : "text-[#0a0a0f]"}`}>{repo.stats.driftOpen}</p>
-                        <p className="text-[11px] text-zinc-400">drift</p>
+                        <p className="text-[11px] text-[var(--color-muted)]">drift</p>
                     </div>
                     <div className="text-right leading-tight">
                         <p className="text-[13px] font-semibold tabular-nums text-[#0a0a0f]">{repo.stats.pullsOpen}</p>
-                        <p className="text-[11px] text-zinc-400">PRs</p>
+                        <p className="text-[11px] text-[var(--color-muted)]">PRs</p>
                     </div>
-                    <p className="w-20 text-right text-xs tabular-nums text-zinc-400">{timeAgo(repo.stats.lastProbeAt)}</p>
+                    <p className="w-20 text-right text-xs tabular-nums text-[var(--color-muted)]">{timeAgo(repo.stats.lastProbeAt)}</p>
                 </div>
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-400 transition-colors group-hover:border-zinc-300 group-hover:text-zinc-600">→</span>
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-muted)] transition-colors group-hover:border-[var(--color-line)] group-hover:text-zinc-600">→</span>
             </Card>
         </Link>
     );
@@ -60,7 +60,7 @@ export default function AccountPage({ owner }: { owner: string }) {
 
     return (
         <div>
-            <Link to="/" className="mb-4 inline-flex items-center gap-1 text-xs font-medium text-zinc-500 hover:text-zinc-900">
+            <Link to="/" className="mb-4 inline-flex items-center gap-1 text-xs font-medium text-[var(--color-muted)] hover:text-[var(--color-ink)]">
                 ← Accounts
             </Link>
             <PageHeader
@@ -71,8 +71,8 @@ export default function AccountPage({ owner }: { owner: string }) {
 
             {loading ? (
                 <div className="flex flex-col gap-3">
-                    <div className="h-[86px] animate-pulse rounded-[10px] border border-zinc-200 bg-white" />
-                    <div className="h-[86px] animate-pulse rounded-[10px] border border-zinc-200 bg-white" />
+                    <div className="h-[86px] animate-pulse rounded-[10px] border border-[var(--color-line)] bg-[var(--color-surface)]" />
+                    <div className="h-[86px] animate-pulse rounded-[10px] border border-[var(--color-line)] bg-[var(--color-surface)]" />
                 </div>
             ) : error ? (
                 <div className="rounded-[10px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>

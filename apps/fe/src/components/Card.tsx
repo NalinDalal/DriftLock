@@ -15,7 +15,7 @@ export function Card({
         <div
             onClick={onClick}
             style={style}
-            className={`rounded-[10px] border border-[var(--color-line)] bg-white shadow-[0_1px_2px_rgba(10,10,15,0.04)] ${className}`}
+            className={`rounded-[10px] border border-[var(--color-line)] bg-[var(--color-surface)] shadow-[0_1px_2px_rgba(10,10,15,0.04)] ${className}`}
         >
             {children}
         </div>

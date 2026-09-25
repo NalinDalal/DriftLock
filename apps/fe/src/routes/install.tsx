@@ -37,29 +37,29 @@ function RepoCard({
         <button
             type="button"
             onClick={onToggle}
-            className={`text-left w-full border bg-white p-4 transition-colors ${selected ? "border-[#0F172A] bg-[#FFFBF5] shadow-[3px_3px_0_#0F172A]" : "border-[#E6E7EE] hover:border-[#0F172A]/30 hover:bg-[#FFFBF5]/60"}`}
+            className={`text-left w-full border bg-[var(--color-surface)] p-4 transition-colors ${selected ? "border-[var(--color-line-strong)] bg-[var(--color-paper)] shadow-[3px_3px_0_var(--color-line-strong)]" : "border-[var(--color-line)] hover:border-[var(--color-line-strong)]/30 hover:bg-[var(--color-paper)]/60"}`}
         >
             <div className="flex items-start justify-between gap-2">
-                <p className="truncate font-mono text-xs font-semibold tracking-[-0.01em] text-[#0F172A]">
+                <p className="truncate font-mono text-xs font-semibold tracking-[-0.01em] text-[var(--color-ink)]">
                     {repo.fullName}
                 </p>
                 <span
-                    className={`flex h-4 w-4 shrink-0 items-center justify-center border text-[10px] leading-none ${selected ? "border-[#0F172A] bg-[#0F172A] text-white" : "border-[#CBD5E1] bg-white text-transparent"}`}
+                    className={`flex h-4 w-4 shrink-0 items-center justify-center border text-[10px] leading-none ${selected ? "border-[var(--color-line-strong)] bg-[var(--color-ink)] text-[var(--color-paper)]" : "border-[var(--color-line)] bg-[var(--color-surface)] text-transparent"}`}
                 >
                     ✓
                 </span>
             </div>
-            <p className="line-clamp-2 mt-1 min-h-[28px] font-mono text-[11px] leading-4 text-[#64748B]">
+            <p className="line-clamp-2 mt-1 min-h-[28px] font-mono text-[11px] leading-4 text-[var(--color-muted)]">
                 {repo.description || "No description"}
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-1.5 font-mono text-[11px] tracking-wide">
                 <span
-                    className={`border px-1.5 py-0.5 text-[10px] tracking-[0.06em] ${repo.private ? "border-[#DC2626]/20 bg-[#FEF2F2] text-[#DC2626]" : "border-[#059669]/20 bg-[#F0FDF4] text-[#059669]"}`}
+                    className={`border px-1.5 py-0.5 text-[10px] tracking-[0.06em] ${repo.private ? "border-[var(--color-signal-red)]/20 bg-[var(--color-red-bg)] text-[var(--color-signal-red)]" : "border-[var(--color-signal-green)]/20 bg-[var(--color-green-bg)] text-[var(--color-signal-green)]"}`}
                 >
                     {repo.private ? "PRIVATE" : "PUBLIC"}
                 </span>
-                <span className="text-[#94A3B8]">· {repo.defaultBranch}</span>
-                <span className="text-[#94A3B8]">· {depsCount} deps</span>
+                <span className="text-[var(--color-muted)]">· {repo.defaultBranch}</span>
+                <span className="text-[var(--color-muted)]">· {depsCount} deps</span>
             </div>
         </button>
     );
@@ -203,8 +203,8 @@ export default function InstallPage() {
         return (
             <div className="flex min-h-[50vh] items-center justify-center">
                 <div className="text-center">
-                    <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-[#E6E7EE] border-t-[#0F172A]" />
-                    <p className="mt-3 font-mono text-xs tracking-wide text-[#64748B]">
+                    <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-[var(--color-line)] border-t-[#0F172A]" />
+                    <p className="mt-3 font-mono text-xs tracking-wide text-[var(--color-muted)]">
                         LOADING REPOS…
                     </p>
                 </div>
@@ -216,15 +216,15 @@ export default function InstallPage() {
         return (
             <div className="flex min-h-[50vh] items-center justify-center">
                 <div className="text-center">
-                    <h2 className="font-mono text-xs font-semibold tracking-[0.08em] text-[#DC2626]">
+                    <h2 className="font-mono text-xs font-semibold tracking-[0.08em] text-[var(--color-signal-red)]">
                         COULD NOT LOAD REPOS
                     </h2>
-                    <p className="mt-1 font-mono text-xs text-[#64748B]">
+                    <p className="mt-1 font-mono text-xs text-[var(--color-muted)]">
                         {error}
                     </p>
                     <button
                         onClick={() => navigate({ to: "/login" })}
-                        className="mt-4 font-mono text-xs tracking-wide text-[#0F172A] underline underline-offset-2"
+                        className="mt-4 font-mono text-xs tracking-wide text-[var(--color-ink)] underline underline-offset-2"
                     >
                         Sign in again
                     </button>
@@ -239,45 +239,45 @@ export default function InstallPage() {
 
     return (
         <div className="mx-auto max-w-[880px]">
-            <div className="border-b border-[#0F172A] pb-4">
-                <p className="font-mono text-[11px] tracking-[0.14em] text-[#64748B]">
+            <div className="border-b border-[var(--color-line-strong)] pb-4">
+                <p className="font-mono text-[11px] tracking-[0.14em] text-[var(--color-muted)]">
                     INSTALL
                 </p>
-                <h1 className="mt-1 font-display text-[24px] tracking-[-0.02em] text-[#0F172A]">
+                <h1 className="mt-1 font-display text-[24px] tracking-[-0.02em] text-[var(--color-ink)]">
                     Choose repos to watch
                 </h1>
-                <p className="mt-1 font-mono text-xs leading-4 text-[#64748B]">
+                <p className="mt-1 font-mono text-xs leading-4 text-[var(--color-muted)]">
                     Select where DriftLock should scan for API call sites and
                     open fix PRs.
                 </p>
             </div>
 
             {user && (
-                <div className="mt-6 flex items-center gap-3 border border-[#E6E7EE] bg-white px-4 py-3">
+                <div className="mt-6 flex items-center gap-3 border border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-3">
                     <img
                         src={user.avatarUrl}
                         alt={user.login}
-                        className="h-9 w-9 rounded-full border border-[#E6E7EE]"
+                        className="h-9 w-9 rounded-full border border-[var(--color-line)]"
                     />
                     <div>
-                        <p className="font-mono text-xs font-semibold tracking-[-0.01em] text-[#0F172A]">
+                        <p className="font-mono text-xs font-semibold tracking-[-0.01em] text-[var(--color-ink)]">
                             {user.name}
                         </p>
-                        <p className="font-mono text-[11px] tracking-wide text-[#64748B]">
+                        <p className="font-mono text-[11px] tracking-wide text-[var(--color-muted)]">
                             @{user.login}
                         </p>
                     </div>
-                    <span className="ml-auto font-mono text-[11px] tracking-wide text-[#64748B]">
+                    <span className="ml-auto font-mono text-[11px] tracking-wide text-[var(--color-muted)]">
                         {filtered.length} repos · {selected.size} selected
                     </span>
                 </div>
             )}
 
             {githubOpened && (
-                <div className="mt-4 border border-[#0F172A] bg-[#0F172A] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+                <div className="mt-4 border border-[var(--color-line-strong)] bg-[var(--color-ink)] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
                     <div>
-                        <p className="font-mono text-xs tracking-wide text-white">GitHub opened — if you need to grant access to a private repo not listed here, do it on GitHub, then return.</p>
-                        <p className="font-mono text-[11px] tracking-wide text-white/60">For repos you already see here, no GitHub step is needed. Just add and we watch them.</p>
+                        <p className="font-mono text-xs tracking-wide text-[var(--color-paper)]">GitHub opened — if you need to grant access to a private repo not listed here, do it on GitHub, then return.</p>
+                        <p className="font-mono text-[11px] tracking-wide text-[var(--color-paper)]/60">For repos you already see here, no GitHub step is needed. Just add and we watch them.</p>
                     </div>
                     <div className="flex items-center gap-2">
                         <Button
@@ -288,11 +288,11 @@ export default function InstallPage() {
                                 toast(`Repo${pendingCount !== 1 ? "s" : ""} added — ${pendingCount} selected`);
                                 navigate({ to: "/accounts" });
                             }}
-                            className="bg-white text-[#0F172A] hover:bg-[#FFFBF5] font-mono text-[11px] tracking-wide"
+                            className="bg-[var(--color-surface)] text-[var(--color-ink)] hover:bg-[var(--color-paper)] font-mono text-[11px] tracking-wide"
                         >
                             View repos ✓
                         </Button>
-                        <button onClick={() => { setGithubOpened(false); setAutoReturned(false); }} className="font-mono text-[11px] tracking-wide text-white/70 hover:text-white">Dismiss</button>
+                        <button onClick={() => { setGithubOpened(false); setAutoReturned(false); }} className="font-mono text-[11px] tracking-wide text-[var(--color-paper)]/70 hover:text-[var(--color-paper)]">Dismiss</button>
                     </div>
                 </div>
             )}
@@ -303,22 +303,22 @@ export default function InstallPage() {
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                         placeholder="Search repos…"
-                        className="w-full border border-[#0F172A]/15 bg-white px-3 py-2 pl-8 font-mono text-xs text-[#0F172A] placeholder:text-[#94A3B8] focus:border-[#0F172A] focus:outline-none"
+                        className="w-full border border-[var(--color-line-strong)]/15 bg-[var(--color-surface)] px-3 py-2 pl-8 font-mono text-xs text-[var(--color-ink)] placeholder:text-[var(--color-muted)] focus:border-[var(--color-line-strong)] focus:outline-none"
                     />
-                    <span className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 font-mono text-xs text-[#94A3B8]">
+                    <span className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 font-mono text-xs text-[var(--color-muted)]">
                         ⌕
                     </span>
                     {query && (
                         <button
                             onClick={() => setQuery("")}
-                            className="absolute top-1/2 right-2 -translate-y-1/2 font-mono text-[11px] text-[#94A3B8] hover:text-[#0F172A]"
+                            className="absolute top-1/2 right-2 -translate-y-1/2 font-mono text-[11px] text-[var(--color-muted)] hover:text-[var(--color-ink)]"
                         >
                             ✕
                         </button>
                     )}
                 </div>
                 <div className="flex items-center gap-2">
-                    <span className="hidden font-mono text-[11px] tracking-wide text-[#94A3B8] sm:inline">
+                    <span className="hidden font-mono text-[11px] tracking-wide text-[var(--color-muted)] sm:inline">
                         {filtered.length} found · page {currentPage} of{" "}
                         {totalPages}
                     </span>
@@ -326,7 +326,7 @@ export default function InstallPage() {
                         size="sm"
                         variant="secondary"
                         onClick={togglePageAll}
-                        className="border border-[#E6E7EE] bg-white font-mono text-[11px] tracking-wide text-[#0F172A] hover:bg-[#FFFBF5]"
+                        className="border border-[var(--color-line)] bg-[var(--color-surface)] font-mono text-[11px] tracking-wide text-[var(--color-ink)] hover:bg-[var(--color-paper)]"
                     >
                         {pageAllSelected ? "Deselect page" : "Select page"}
                     </Button>
@@ -334,7 +334,7 @@ export default function InstallPage() {
                         size="sm"
                         onClick={handleInstall}
                         disabled={selected.size === 0}
-                        className="bg-[#0F172A] font-mono text-[11px] tracking-wide text-white hover:bg-[#1E293B] disabled:opacity-40"
+                        className="bg-[var(--color-ink)] font-mono text-[11px] tracking-wide text-[var(--color-paper)] hover:bg-[var(--color-ink)]/90 disabled:opacity-40"
                     >
                         Install on {selected.size}
                     </Button>
@@ -342,11 +342,11 @@ export default function InstallPage() {
             </div>
 
             {paged.length === 0 ? (
-                <div className="mt-6 border border-dashed border-[#E6E7EE] bg-[#FFFBF5] p-8 text-center">
-                    <p className="font-mono text-xs text-[#0F172A]">
+                <div className="mt-6 border border-dashed border-[var(--color-line)] bg-[var(--color-paper)] p-8 text-center">
+                    <p className="font-mono text-xs text-[var(--color-ink)]">
                         No repos match “{query}”
                     </p>
-                    <p className="mt-1 font-mono text-[11px] text-[#64748B]">
+                    <p className="mt-1 font-mono text-[11px] text-[var(--color-muted)]">
                         Try a different search.
                     </p>
                 </div>
@@ -363,15 +363,15 @@ export default function InstallPage() {
                 </div>
             )}
 
-            <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-[#E6E7EE] pt-4">
-                <p className="font-mono text-[11px] tracking-wide text-[#94A3B8]">
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--color-line)] pt-4">
+                <p className="font-mono text-[11px] tracking-wide text-[var(--color-muted)]">
                     {paged.length} of {filtered.length} shown
                 </p>
                 <div className="flex items-center gap-1">
                     <button
                         disabled={currentPage <= 1}
                         onClick={() => setPage((p) => Math.max(1, p - 1))}
-                        className="border border-[#E6E7EE] bg-white px-3 py-1.5 font-mono text-xs text-[#0F172A] hover:bg-[#FFFBF5] disabled:cursor-not-allowed disabled:opacity-40"
+                        className="border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 font-mono text-xs text-[var(--color-ink)] hover:bg-[var(--color-paper)] disabled:cursor-not-allowed disabled:opacity-40"
                     >
                         ← Prev
                     </button>
@@ -381,13 +381,13 @@ export default function InstallPage() {
                             <button
                                 key={n}
                                 onClick={() => setPage(n)}
-                                className={`h-8 w-8 border font-mono text-xs ${n === currentPage ? "border-[#0F172A] bg-[#0F172A] text-white" : "border-[#E6E7EE] bg-white text-[#0F172A] hover:bg-[#FFFBF5]"}`}
+                                className={`h-8 w-8 border font-mono text-xs ${n === currentPage ? "border-[var(--color-line-strong)] bg-[var(--color-ink)] text-[var(--color-paper)]" : "border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-ink)] hover:bg-[var(--color-paper)]"}`}
                             >
                                 {n}
                             </button>
                         ))}
                     {totalPages > 7 && (
-                        <span className="px-1 font-mono text-xs text-[#94A3B8]">
+                        <span className="px-1 font-mono text-xs text-[var(--color-muted)]">
                             …{totalPages}
                         </span>
                     )}
@@ -396,7 +396,7 @@ export default function InstallPage() {
                         onClick={() =>
                             setPage((p) => Math.min(totalPages, p + 1))
                         }
-                        className="border border-[#E6E7EE] bg-white px-3 py-1.5 font-mono text-xs text-[#0F172A] hover:bg-[#FFFBF5] disabled:cursor-not-allowed disabled:opacity-40"
+                        className="border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 font-mono text-xs text-[var(--color-ink)] hover:bg-[var(--color-paper)] disabled:cursor-not-allowed disabled:opacity-40"
                     >
                         Next →
                     </button>

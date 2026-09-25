@@ -104,13 +104,13 @@ function DriftCard({ event, owner, name }: { event: DriftEvent; owner: string; n
                     </div>
                 )}
 
-                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-zinc-400">
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[var(--color-muted)]">
                     <span>{timeAgo(event.detectedAt)}</span>
                     <span>·</span>
                     <span className={event.confirmed ? "text-emerald-600" : ""}>{event.confirmed ? "confirmed" : "unconfirmed"}</span>
                     <span>·</span>
                     {event.prNumber ? (
-                        <a href={`https://github.com/${owner}/${name}/pull/${event.prNumber}`} target="_blank" rel="noreferrer" className="font-medium text-zinc-900 underline decoration-zinc-300 underline-offset-2 hover:decoration-zinc-600">
+                        <a href={`https://github.com/${owner}/${name}/pull/${event.prNumber}`} target="_blank" rel="noreferrer" className="font-medium text-[var(--color-ink)] underline decoration-zinc-300 underline-offset-2 hover:decoration-zinc-600">
                             PR #{event.prNumber} ↗
                         </a>
                     ) : (
@@ -120,15 +120,15 @@ function DriftCard({ event, owner, name }: { event: DriftEvent; owner: string; n
 
                 {/* confidence explainer — scope control: one hypothesis, measured */}
                 {open && (
-                    <div className="mt-4 rounded-[10px] border border-zinc-200 bg-zinc-50 px-3 py-3">
-                        <p className="text-xs font-medium text-zinc-700">Why {event.confidence} confidence</p>
-                        <p className="mt-1 text-xs leading-4 text-zinc-500">{confidenceExplain[event.confidence]}</p>
+                    <div className="mt-4 rounded-[10px] border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-3">
+                        <p className="text-xs font-medium text-[var(--color-ink)]">Why {event.confidence} confidence</p>
+                        <p className="mt-1 text-xs leading-4 text-[var(--color-muted)]">{confidenceExplain[event.confidence]}</p>
                         <div className="mt-2 flex flex-wrap gap-1.5 font-mono text-[11px]">
-                            <span className="rounded bg-white border border-zinc-200 px-1.5 py-0.5 text-zinc-600">{event.changes.length} field changes</span>
-                            <span className="rounded bg-white border border-zinc-200 px-1.5 py-0.5 text-zinc-600">{event.confirmed ? "confirmed by traffic" : "unconfirmed"}</span>
-                            <span className="rounded bg-white border border-zinc-200 px-1.5 py-0.5 text-zinc-600">tag: {event.tag}</span>
+                            <span className="rounded bg-[var(--color-surface)] border border-[var(--color-line)] px-1.5 py-0.5 text-zinc-600">{event.changes.length} field changes</span>
+                            <span className="rounded bg-[var(--color-surface)] border border-[var(--color-line)] px-1.5 py-0.5 text-zinc-600">{event.confirmed ? "confirmed by traffic" : "unconfirmed"}</span>
+                            <span className="rounded bg-[var(--color-surface)] border border-[var(--color-line)] px-1.5 py-0.5 text-zinc-600">tag: {event.tag}</span>
                         </div>
-                        <p className="mt-2 text-[11px] text-zinc-400">If confidence is low, open the PR as draft and check response reads in {event.method}.</p>
+                        <p className="mt-2 text-[11px] text-[var(--color-muted)]">If confidence is low, open the PR as draft and check response reads in {event.method}.</p>
                     </div>
                 )}
             </div>
@@ -143,31 +143,31 @@ function CallSiteRow({ site }: { site: CallSiteSummary }) {
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                     <p className="truncate font-mono text-[13px] font-medium text-[#0a0a0f]">{site.method}</p>
-                    <p className="mt-1 truncate font-mono text-xs text-zinc-500">
+                    <p className="mt-1 truncate font-mono text-xs text-[var(--color-muted)]">
                         {site.filePath}:{site.line}
                     </p>
                     <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
-                        <span className="rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-[11px] text-zinc-600">{site.packageName}</span>
+                        <span className="rounded bg-[var(--color-surface)] px-1.5 py-0.5 font-mono text-[11px] text-zinc-600">{site.packageName}</span>
                         {site.endpoint ? (
-                            <span className="font-mono text-zinc-500">
+                            <span className="font-mono text-[var(--color-muted)]">
                                 {site.httpMethod} {site.endpoint}
                             </span>
                         ) : (
-                            <span className="text-zinc-400">endpoint pending capture</span>
+                            <span className="text-[var(--color-muted)]">endpoint pending capture</span>
                         )}
                     </p>
                 </div>
                 <Badge tone={SNAPSHOT_TONE[site.snapshot]}>{site.snapshot.replace("-", " ")}</Badge>
             </div>
             {(site.requestShape?.length || site.responseFields.length > 0) && (
-                <div className="mt-3 rounded-[8px] bg-zinc-50 px-3 py-2">
+                <div className="mt-3 rounded-[8px] bg-[var(--color-surface)] px-3 py-2">
                     {site.requestShape && site.requestShape.length > 0 && (
-                        <p className="font-mono text-[11px] leading-4 text-zinc-500">
+                        <p className="font-mono text-[11px] leading-4 text-[var(--color-muted)]">
                             <span className="font-semibold text-zinc-600">request</span> {site.requestShape.map((f) => f.field).join(", ")}
                         </p>
                     )}
                     {site.responseFields.length > 0 && (
-                        <p className="mt-1 font-mono text-[11px] leading-4 text-zinc-500">
+                        <p className="mt-1 font-mono text-[11px] leading-4 text-[var(--color-muted)]">
                             <span className="font-semibold text-zinc-600">reads</span> {site.responseFields.join(", ")}
                         </p>
                     )}
@@ -179,7 +179,7 @@ function CallSiteRow({ site }: { site: CallSiteSummary }) {
 
 function PullRow({ pull }: { pull: Pull }) {
     return (
-        <Card className="flex items-center gap-4 p-4 transition-colors hover:bg-zinc-50">
+        <Card className="flex items-center gap-4 p-4 transition-colors hover:bg-[var(--color-surface)]">
             <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs ${pull.status === "open" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
                 {pull.status === "open" ? "◐" : "✓"}
             </div>
@@ -187,7 +187,7 @@ function PullRow({ pull }: { pull: Pull }) {
                 <a href={pull.url} target="_blank" rel="noreferrer" className="truncate text-[13px] font-medium text-[#0a0a0f] hover:underline">
                     #{pull.number} {pull.title}
                 </a>
-                <p className="mt-0.5 font-mono text-xs text-zinc-500">
+                <p className="mt-0.5 font-mono text-xs text-[var(--color-muted)]">
                     {pull.branch} · updated {timeAgo(pull.updatedAt)}
                 </p>
             </div>
@@ -220,7 +220,7 @@ export default function RepoPage({ owner, name }: { owner: string; name: string 
 
     return (
         <div>
-            <Link to="/accounts/$owner" params={{ owner }} className="mb-4 inline-flex items-center gap-1 text-xs font-medium text-zinc-500 hover:text-zinc-900">
+            <Link to="/accounts/$owner" params={{ owner }} className="mb-4 inline-flex items-center gap-1 text-xs font-medium text-[var(--color-muted)] hover:text-[var(--color-ink)]">
                 ← {owner}
             </Link>
 
@@ -231,14 +231,14 @@ export default function RepoPage({ owner, name }: { owner: string; name: string 
                 actions={
                     repo && (
                         <div className="flex flex-wrap items-center gap-3">
-                            <label className="flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700">
+                            <label className="flex items-center gap-2 rounded-full border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium text-[var(--color-ink)]">
                                 Watch
                                 <Toggle checked={repo.watched} onChange={(watched) => setPolicy({ watched })} label="Watch repo" />
                             </label>
                             <select
                                 value={repo.permission}
                                 onChange={(e) => setPolicy({ permission: e.target.value as Permission })}
-                                className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 focus:border-zinc-300 focus:outline-none"
+                                className="rounded-full border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium text-[var(--color-ink)] focus:border-[var(--color-line)] focus:outline-none"
                             >
                                 <option value="read">Read</option>
                                 <option value="read-write">Read + write</option>
@@ -252,33 +252,33 @@ export default function RepoPage({ owner, name }: { owner: string; name: string 
             {repo && (
                 <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <Card className="px-4 py-3">
-                        <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-400">Call sites</p>
+                        <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-muted)]">Call sites</p>
                         <p className="mt-1 text-[20px] font-semibold tabular-nums tracking-tight text-[#0a0a0f]">{repo.stats.callSites}</p>
                     </Card>
                     <Card className={`px-4 py-3 ${repo.stats.driftOpen > 0 ? "border-amber-200 bg-amber-50/50" : ""}`}>
-                        <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-400">Drift open</p>
+                        <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-muted)]">Drift open</p>
                         <p className={`mt-1 text-[20px] font-semibold tabular-nums tracking-tight ${repo.stats.driftOpen > 0 ? "text-amber-600" : "text-[#0a0a0f]"}`}>{repo.stats.driftOpen}</p>
                     </Card>
                     <Card className="px-4 py-3">
-                        <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-400">Open PRs</p>
+                        <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-muted)]">Open PRs</p>
                         <p className="mt-1 text-[20px] font-semibold tabular-nums tracking-tight text-[#0a0a0f]">{repo.stats.pullsOpen}</p>
                     </Card>
                     <Card className="px-4 py-3">
-                        <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-400">Pending capture</p>
+                        <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-muted)]">Pending capture</p>
                         <p className="mt-1 text-[20px] font-semibold tabular-nums tracking-tight text-[#0a0a0f]">{repo.stats.pendingCapture}</p>
-                        <p className="text-[11px] text-zinc-400">last probe {timeAgo(repo.stats.lastProbeAt)}</p>
+                        <p className="text-[11px] text-[var(--color-muted)]">last probe {timeAgo(repo.stats.lastProbeAt)}</p>
                     </Card>
                 </div>
             )}
 
-            <div className="mb-5 flex gap-1 rounded-full bg-zinc-100 p-1">
+            <div className="mb-5 flex gap-1 rounded-full bg-[var(--color-surface)] p-1">
                 {TABS.map(({ id, label }) => (
                     <button
                         key={id}
                         type="button"
                         onClick={() => setTab(id)}
                         className={`flex-1 sm:flex-none rounded-full px-4 py-1.5 text-[13px] font-medium transition-colors ${
-                            tab === id ? "bg-white text-[#0a0a0f] shadow-sm" : "text-zinc-500 hover:text-zinc-700"
+                            tab === id ? "bg-[var(--color-surface)] text-[#0a0a0f] shadow-sm" : "text-[var(--color-muted)] hover:text-[var(--color-ink)]"
                         }`}
                     >
                         {label}
@@ -289,8 +289,8 @@ export default function RepoPage({ owner, name }: { owner: string; name: string 
             {tab === "drift" &&
                 (drifts.loading ? (
                     <div className="space-y-3">
-                        <div className="h-[110px] animate-pulse rounded-[10px] border border-zinc-200 bg-white" />
-                        <div className="h-[110px] animate-pulse rounded-[10px] border border-zinc-200 bg-white" />
+                        <div className="h-[110px] animate-pulse rounded-[10px] border border-[var(--color-line)] bg-[var(--color-surface)]" />
+                        <div className="h-[110px] animate-pulse rounded-[10px] border border-[var(--color-line)] bg-[var(--color-surface)]" />
                     </div>
                 ) : drifts.error ? (
                     <div className="rounded-[10px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{drifts.error}</div>
@@ -306,7 +306,7 @@ export default function RepoPage({ owner, name }: { owner: string; name: string 
 
             {tab === "callsites" &&
                 (detail.loading ? (
-                    <p className="text-sm text-zinc-500">Loading call sites...</p>
+                    <p className="text-sm text-[var(--color-muted)]">Loading call sites...</p>
                 ) : detail.error ? (
                     <div className="rounded-[10px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{detail.error}</div>
                 ) : (detail.data?.callsites ?? []).length === 0 ? (
@@ -321,7 +321,7 @@ export default function RepoPage({ owner, name }: { owner: string; name: string 
 
             {tab === "pulls" &&
                 (detail.loading ? (
-                    <p className="text-sm text-zinc-500">Loading pull requests...</p>
+                    <p className="text-sm text-[var(--color-muted)]">Loading pull requests...</p>
                 ) : detail.error ? (
                     <div className="rounded-[10px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{detail.error}</div>
                 ) : (detail.data?.pulls ?? []).length === 0 ? (

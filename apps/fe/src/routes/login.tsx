@@ -19,24 +19,24 @@ export default function LoginPage() {
         <div className="flex min-h-[70vh] items-center justify-center px-6 py-12">
             <div className="w-full max-w-[420px]">
                 <div className="mb-6 text-center">
-                    <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-[10px] bg-[#0a0a0f] text-sm font-bold text-white">DL</div>
+                    <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-[10px] bg-[#0a0a0f] text-sm font-bold text-[var(--color-paper)]">DL</div>
                     <h1 className="mt-4 text-[22px] font-semibold tracking-tight text-[#0a0a0f]">Sign in to DriftLock</h1>
-                    <p className="mt-1.5 text-[13px] leading-5 text-zinc-500">Self-maintaining APIs. DriftLock opens a PR when a vendor contract changes.</p>
+                    <p className="mt-1.5 text-[13px] leading-5 text-[var(--color-muted)]">Self-maintaining APIs. DriftLock opens a PR when a vendor contract changes.</p>
                 </div>
 
-                <div className="rounded-[12px] border border-zinc-200 bg-white p-6 shadow-[0_1px_2px_rgba(10,10,15,0.04)]">
+                <div className="rounded-[12px] border border-[var(--color-line)] bg-[var(--color-surface)] p-6 shadow-[0_1px_2px_rgba(10,10,15,0.04)]">
                     <h2 className="text-[13px] font-semibold text-[#0a0a0f]">Continue with GitHub</h2>
-                    <p className="mt-1 text-xs leading-4 text-zinc-500">We request read access to find call sites and permission to open fix PRs. Nothing is merged without you.</p>
+                    <p className="mt-1 text-xs leading-4 text-[var(--color-muted)]">We request read access to find call sites and permission to open fix PRs. Nothing is merged without you.</p>
 
                     <Button onClick={handleLogin} className="mt-5 w-full justify-center gap-2">
                         <GitHubIcon />
                         Continue with GitHub
                     </Button>
 
-                    <p className="mt-4 text-center text-xs text-zinc-400">You will be redirected to GitHub to authorize.</p>
+                    <p className="mt-4 text-center text-xs text-[var(--color-muted)]">You will be redirected to GitHub to authorize.</p>
                 </div>
 
-                <p className="mt-4 text-center text-xs text-zinc-400">
+                <p className="mt-4 text-center text-xs text-[var(--color-muted)]">
                     By signing in you agree to the Terms. Questions? <a href="https://discord.gg/driftlock" className="underline decoration-zinc-300 underline-offset-2 hover:decoration-zinc-500">Discord</a>
                 </p>
             </div>

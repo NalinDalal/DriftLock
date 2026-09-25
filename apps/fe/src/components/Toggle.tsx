@@ -20,7 +20,7 @@ export function Toggle({
         >
             <span
                 aria-hidden
-                className={`inline-block h-[18px] w-[18px] transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                className={`inline-block h-[18px] w-[18px] transform rounded-full bg-[var(--color-surface)] shadow-sm transition-transform duration-200 ${
                     checked ? "translate-x-[18px]" : "translate-x-[2px]"
                 }`}
             />

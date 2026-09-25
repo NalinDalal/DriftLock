@@ -5,7 +5,7 @@ import { onToast } from "../lib/toast";
 
 function LockMark() {
     return (
-        <span className="relative flex h-[28px] w-[28px] items-center justify-center rounded-[6px] bg-[#0F172A] text-white">
+        <span className="relative flex h-[28px] w-[28px] items-center justify-center rounded-[6px] bg-[var(--color-ink)] text-[var(--color-paper)]">
             <svg
                 width="14"
                 height="14"
@@ -29,7 +29,7 @@ function LockMark() {
                 />
                 <circle cx="7" cy="9" r="1" fill="white" />
             </svg>
-            <span className="absolute -top-[3px] -right-[3px] h-[7px] w-[7px] rounded-full bg-[#DC2626] ring-2 ring-[#FFFBF5]" />
+            <span className="absolute -top-[3px] -right-[3px] h-[7px] w-[7px] rounded-full bg-[var(--color-signal-red)] ring-2 ring-[var(--color-paper)]" />
         </span>
     );
 }
@@ -115,10 +115,10 @@ export default function AppShell() {
                     <div className="flex items-center gap-6">
                         <Link to="/" className="flex items-center gap-2.5">
                             <LockMark />
-                            <span className="text-[16px] font-semibold tracking-[-0.025em] text-[#0F172A]">
+                            <span className="text-[16px] font-semibold tracking-[-0.025em] text-[var(--color-ink)] dark:text-[var(--color-paper)]">
                                 DriftLock
                             </span>
-                            <span className="hidden items-center gap-1 rounded-[6px] border border-[#0F172A]/10 bg-white px-1.5 py-0.5 font-mono text-[10px] leading-none tracking-wide text-[#0F172A] sm:inline-flex">
+                            <span className="hidden items-center gap-1 rounded-[6px] border border-[var(--color-line-strong)]/10 bg-[var(--color-surface)] px-1.5 py-0.5 font-mono text-[10px] leading-none tracking-wide text-[var(--color-ink)] sm:inline-flex">
                                 REV. 01
                             </span>
                         </Link>
@@ -129,7 +129,7 @@ export default function AppShell() {
                             >
                                 Repos
                                 {onAccounts && (
-                                    <span className="absolute inset-x-3 -bottom-[14px] h-[2px] bg-[#0F172A]" />
+                                    <span className="absolute inset-x-3 -bottom-[14px] h-[2px] bg-[var(--color-ink)]" />
                                 )}
                             </Link>
                             <Link
@@ -138,7 +138,7 @@ export default function AppShell() {
                             >
                                 Webhooks
                                 {onWebhooks && (
-                                    <span className="absolute inset-x-3 -bottom-[14px] h-[2px] bg-[#0F172A]" />
+                                    <span className="absolute inset-x-3 -bottom-[14px] h-[2px] bg-[var(--color-ink)]" />
                                 )}
                             </Link>
                             <Link
@@ -147,7 +147,7 @@ export default function AppShell() {
                             >
                                 Settings
                                 {onSettings && (
-                                    <span className="absolute inset-x-3 -bottom-[14px] h-[2px] bg-[#0F172A]" />
+                                    <span className="absolute inset-x-3 -bottom-[14px] h-[2px] bg-[var(--color-ink)]" />
                                 )}
                             </Link>
                         </nav>
@@ -243,7 +243,7 @@ export default function AppShell() {
 
             {toastMsg && (
                 <div className="pointer-events-none fixed inset-x-0 bottom-6 flex justify-center px-6">
-                    <div className="pointer-events-auto rounded-full bg-[#0F172A] px-4 py-2.5 text-[13px] font-medium text-white shadow-lg">
+                    <div className="pointer-events-auto rounded-full bg-[var(--color-ink)] px-4 py-2.5 text-[13px] font-medium text-[var(--color-paper)] shadow-lg">
                         {toastMsg}
                     </div>
                 </div>
