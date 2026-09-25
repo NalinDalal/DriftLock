@@ -45,6 +45,7 @@ import {
     type VendorContract,
 } from "./vendorContract";
 import type { VendorConfig } from "@driftlock/core";
+import { fingerprintRepo, type RepoFacts } from "./repoFacts";
 
 /**
  * Reads the changed files off disk and runs the contract check over them.
@@ -154,6 +155,12 @@ export type RunOptions = {
      */
     contract?: VendorContract;
     vendor?: VendorConfig;
+    /**
+     * Overrides the repository fingerprint. Normally this is read from disk
+     * before the loop starts, because the model cannot be trusted to go looking
+     * for it, but a caller that already knows the facts can supply them.
+     */
+    repoFacts?: RepoFacts;
 };
 
 export type RunResult = {
@@ -422,7 +429,13 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
             ...(options.baseURL ? { baseURL: options.baseURL } : {}),
         });
     const deps: RunnerDeps = { create: client.chat.completions.create.bind(client.chat.completions) };
-    const state = createInitialState(options.packet, options.contract);
+    // Stage 0. Read what the repository is before the model gets a say, so that
+    // the opening message contains the real scripts, the real package manager,
+    // and the installed version of whatever is being migrated. An agent asked to
+    // migrate a repository it has not looked at will guess, and a wrong guess
+    // about a script name is indistinguishable from a real build failure.
+    const facts = options.repoFacts ?? (await fingerprintRepo(options.root));
+    const state = createInitialState(options.packet, options.contract, facts);
     const model = options.model ?? "gpt-4o-mini";
 
     while (!state.done && state.iteration < state.maxIterations) {

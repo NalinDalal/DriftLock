@@ -1,4 +1,5 @@
 import { stat } from "node:fs/promises";
+import { fingerprintRepo } from "./repoFacts";
 
 export type ToolResult = { ok: boolean; output: string };
 
@@ -7,12 +8,15 @@ const ALLOWED_COMMANDS = new Set([
     "npm run test",
     "npm run build",
     "npm run typecheck",
+    "npm run lint",
     "pnpm test",
     "pnpm run build",
     "pnpm run typecheck",
+    "pnpm run lint",
     "bun test",
     "bun run build",
     "bun run typecheck",
+    "bun run lint",
 ]);
 
 const SKIP_DIRS = new Set([
@@ -39,7 +43,6 @@ const SCANNABLE_EXTENSIONS = [
 const MAX_READ_CHARS = 8000;
 const MAX_COMMAND_CHARS = 4000;
 const MAX_SEARCH_HITS = 200;
-const MAX_FILE_LIST = 200;
 
 const PROTECTED_PATTERNS = [
     /(?:^|\/)\.env(?:\..*)?$/,
@@ -92,49 +95,25 @@ async function collectSourceFiles(root: string): Promise<string[]> {
 
 export async function inspectRepo(root: string): Promise<ToolResult> {
     try {
-        const files = await collectSourceFiles(root);
-        const manifest = files.find((file) => file === "package.json");
-        let dependencies: Record<string, string> = {};
-        let packageManager = "unknown";
-        let scripts: Record<string, string> = {};
-
-        if (manifest) {
-            const raw = await Bun.file(`${root}/${manifest}`).text();
-            const parsed = JSON.parse(raw) as {
-                packageManager?: string;
-                dependencies?: Record<string, string>;
-                devDependencies?: Record<string, string>;
-                scripts?: Record<string, string>;
-            };
-            dependencies = { ...parsed.dependencies, ...parsed.devDependencies };
-            scripts = parsed.scripts ?? {};
-            packageManager =
-                parsed.packageManager ??
-                (files.includes("pnpm-lock.yaml") ? "pnpm" : "npm");
-        }
-
-        const lockfiles = files.filter((file) =>
-            /^(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?)$/.test(
-                file,
-            ),
-        );
-        const frameworks = Object.keys(dependencies).filter((name) =>
-            ["next", "react", "express", "fastify", "hono", "@nestjs/core"].some(
-                (f) => name === f || name.startsWith(`${f}/`),
-            ),
-        );
-
+        const facts = await fingerprintRepo(root);
         return {
             ok: true,
             output: JSON.stringify(
                 {
-                    packageManager,
-                    lockfiles,
-                    scripts: Object.keys(scripts),
-                    dependencies: Object.keys(dependencies).sort(),
-                    frameworks,
-                    sourceFiles: files.slice(0, MAX_FILE_LIST),
-                    totalSourceFiles: files.length,
+                    ecosystem: facts.ecosystem,
+                    packageManager: facts.packageManager,
+                    lockfiles: facts.lockfiles,
+                    manifests: facts.manifests,
+                    runtime: facts.runtime,
+                    scripts: facts.scripts,
+                    dependencies: Object.keys(facts.dependencies).sort(),
+                    resolvedVersions: facts.resolvedVersions,
+                    frameworks: facts.frameworks,
+                    ci: facts.ci,
+                    verificationCommands: facts.verificationCommands,
+                    sourceFiles: facts.sourceFiles,
+                    totalSourceFiles: facts.totalSourceFiles,
+                    warnings: facts.warnings,
                 },
                 null,
                 2,

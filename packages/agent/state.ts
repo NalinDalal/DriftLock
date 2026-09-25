@@ -1,4 +1,5 @@
 import { describeContract, type SymbolFinding, type VendorContract } from "./vendorContract";
+import { describeRepoFacts, type RepoFacts } from "./repoFacts";
 
 export type ChangePacket = {
     provider: string;
@@ -55,11 +56,20 @@ export const limits = {
 export function createInitialState(
     packet: ChangePacket,
     contract?: VendorContract,
+    facts?: RepoFacts,
 ): AgentState {
-    const opening = [
-        "ChangePacket:",
-        JSON.stringify(packet, null, 2),
-    ];
+    const opening = ["ChangePacket:", JSON.stringify(packet, null, 2)];
+
+    if (facts) {
+        opening.push(
+            "",
+            "What this repository actually is, read from its own files before you were asked",
+            "to change anything. Trust this over any assumption you would otherwise make.",
+            "",
+            describeRepoFacts(facts),
+        );
+    }
+
     if (contract) {
         opening.push(
             "",
@@ -70,9 +80,12 @@ export function createInitialState(
             describeContract(contract),
         );
     }
+
     opening.push(
         "",
-        "Migrate this repository. Inspect before editing, make the smallest correct change, then verify with the whitelisted commands.",
+        facts
+            ? "Migrate this repository. Search for call sites rather than assuming where they are, make the smallest correct change, then verify with the exact commands listed above."
+            : "Migrate this repository. Inspect before editing, make the smallest correct change, then verify with the whitelisted commands.",
     );
 
     return {

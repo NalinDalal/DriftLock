@@ -21,7 +21,7 @@ export const tools: ToolDefinition[] = [
     {
         name: "inspectRepo",
         description:
-            "Inspect the repository: package manager, dependencies, and top-level source files. Takes no arguments.",
+            "Inspect the repository: ecosystem, package manager, installed dependency versions, scripts, CI commands, and top-level source files. This information is already in your opening message; call this only if you need the full file list. Takes no arguments.",
         inputSchema: { type: "object", properties: {}, required: [] },
     },
     {
@@ -96,7 +96,7 @@ export const tools: ToolDefinition[] = [
     {
         name: "runCommand",
         description:
-            "Run a whitelisted verification command in the repository. Allowed: npm test, npm run build, npm run typecheck, and pnpm/bun equivalents.",
+            "Run a whitelisted verification command in the repository. Only the commands listed in your opening message will be accepted, and only if that script actually exists.",
         inputSchema: {
             type: "object",
             properties: {

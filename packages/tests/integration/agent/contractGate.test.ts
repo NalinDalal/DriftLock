@@ -299,6 +299,128 @@ describe("the contract is shown to the model before it edits", () => {
     });
 });
 
+describe("the repository is fingerprinted before the model is asked to change it", () => {
+    test("the opening message names the real scripts and installed version", async () => {
+        // A byte-for-byte copy of the manifest in
+        // /Users/nalindalal/driftlock-p5.js-test, the repository that produced
+        // three commands exiting 127 before the fingerprint existed. Note there
+        // is no lockfile, so the version comes from the exact pin, and `dev` is
+        // present but is a server rather than verification.
+        const real = await mkdtemp(join(tmpdir(), "driftlock-p5real-"));
+        await writeFile(
+            join(real, "package.json"),
+            JSON.stringify(
+                {
+                    name: "driftlock-p5.js-test",
+                    private: true,
+                    version: "1.0.0",
+                    type: "module",
+                    scripts: { dev: "vite", build: "vite build" },
+                    dependencies: { p5: "1.11.13" },
+                    devDependencies: { vite: "^6.0.0" },
+                },
+                null,
+                2,
+            ),
+        );
+        await mkdir(join(real, "src"), { recursive: true });
+        await writeFile(join(real, "src/sketch.js"), "export const x = 1;\n");
+
+        const sent: Record<string, unknown>[][] = [];
+        let index = 0;
+        apiCalls = [toolCall("inspectRepo", {}, "c1")];
+        const client = {
+            chat: {
+                completions: {
+                    create: async (body: Record<string, unknown>) => {
+                        sent.push(body.messages as Record<string, unknown>[]);
+                        const next = apiCalls[Math.min(index, apiCalls.length - 1)];
+                        index += 1;
+                        return next as never;
+                    },
+                },
+            },
+        } as unknown as Parameters<typeof runMigrationAgent>[0]["client"];
+
+        await runMigrationAgent({
+            root: real,
+            packet: p5Packet,
+            contract: p5Contract,
+            vendor: P5_VENDOR,
+            client,
+        });
+        await rm(real, { recursive: true, force: true });
+
+        const opening = String(sent[0][1].content);
+        expect(opening).toContain("Scripts that exist: dev, build");
+        expect(opening).toContain("npm run build");
+        expect(opening).toContain("p5@1.11.13");
+        expect(opening).toContain("Search for call sites");
+
+        // The commands that do not exist must not be offered as if they did.
+        expect(opening).not.toContain("npm test");
+        expect(opening).not.toContain("npm run typecheck");
+    });
+
+    test("says so plainly when the repository has no verification command", async () => {
+        const empty = await mkdtemp(join(tmpdir(), "driftlock-noverify-"));
+        await writeFile(
+            join(empty, "package.json"),
+            JSON.stringify({ scripts: { dev: "vite" } }),
+        );
+
+        const sent: Record<string, unknown>[][] = [];
+        let index = 0;
+        apiCalls = [toolCall("inspectRepo", {}, "c1")];
+        const client = {
+            chat: {
+                completions: {
+                    create: async (body: Record<string, unknown>) => {
+                        sent.push(body.messages as Record<string, unknown>[]);
+                        const next = apiCalls[Math.min(index, apiCalls.length - 1)];
+                        index += 1;
+                        return next as never;
+                    },
+                },
+            },
+        } as unknown as Parameters<typeof runMigrationAgent>[0]["client"];
+
+        await runMigrationAgent({ root: empty, packet: p5Packet, client });
+        await rm(empty, { recursive: true, force: true });
+
+        const opening = String(sent[0][1].content);
+        expect(opening).toContain("no verification command");
+        expect(opening).toContain("rather than inventing one");
+    });
+
+    test("never guesses a command when the manifest is missing entirely", async () => {
+        const bare = await mkdtemp(join(tmpdir(), "driftlock-bare-"));
+
+        const sent: Record<string, unknown>[][] = [];
+        let index = 0;
+        apiCalls = [toolCall("inspectRepo", {}, "c1")];
+        const client = {
+            chat: {
+                completions: {
+                    create: async (body: Record<string, unknown>) => {
+                        sent.push(body.messages as Record<string, unknown>[]);
+                        const next = apiCalls[Math.min(index, apiCalls.length - 1)];
+                        index += 1;
+                        return next as never;
+                    },
+                },
+            },
+        } as unknown as Parameters<typeof runMigrationAgent>[0]["client"];
+
+        await runMigrationAgent({ root: bare, packet: p5Packet, client });
+        await rm(bare, { recursive: true, force: true });
+
+        const opening = String(sent[0][1].content);
+        expect(opening).toContain("unknown project");
+        expect(opening).not.toContain("npm test");
+    });
+});
+
 describe("changePacketFromDrift", () => {
     test("writes the summary from observed fields rather than prose", () => {
         const packet = changePacketFromDrift({

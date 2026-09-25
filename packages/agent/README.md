@@ -3,6 +3,51 @@
 The migration agent. Takes a vendor API change, edits a customer repository to
 match, verifies the result, and stops with a verdict.
 
+## [shipped] Stage 0: knowing what repository this is
+
+Before the model is asked to change anything, the agent reads the repository and
+reports what it actually is. No model, no network, no guessing.
+
+The reason is a specific observed failure. On a real run the agent executed
+three verification commands that did not exist, because it guessed at script
+names instead of reading the manifest. A wrong guess about a script name is
+indistinguishable from a real build failure, so the diagnosis sends you looking in
+completely the wrong place.
+
+`fingerprintRepo(root)` returns `RepoFacts`:
+
+| Field                   | What it answers                                        |
+| ----------------------- | ------------------------------------------------------ |
+| `ecosystem`             | npm, cargo, python, go, or unknown                    |
+| `packageManager`        | which one to actually invoke                           |
+| `scripts`               | script name to the command it runs                     |
+| `dependencies`          | declared ranges                                        |
+| `resolvedVersions`      | versions the lockfile pinned, which beat those ranges |
+| `verificationCommands`  | commands that exist, ordered most authoritative first  |
+| `ci`                    | what the workflows run, as evidence                    |
+| `frameworks`, `runtime` | what kind of project this is                           |
+
+`versionOf(facts, "p5")` returns `1.11.13` rather than `^1.11.0` when a lockfile
+pins it, because the lockfile records what is installed. When there is no
+lockfile, an exact pin in the manifest is still used, which matters: the p5
+repository in the real run has no lockfile and states `"p5": "1.11.13"`, and
+reading only the lockfile would have reported no version at all.
+
+`describeRepoFacts` renders this for the opening message, and the model is told
+to run only the listed commands. When the list is empty the message says
+verification is unavailable rather than leaving the model to invent one.
+
+Two deliberate limits:
+
+- **CI commands are read but never executed.** A workflow can contain a deploy
+  or a migration. They are surfaced as evidence of what the project considers
+  verification and are deliberately kept out of `verificationCommands`, because
+  a repository can easily run a command in CI that its own manifest does not
+  define.
+- **A malformed manifest is a warning, not a failure.** A repository we cannot
+  fully understand is still one we can migrate, and refusing would be worse than
+  proceeding with the problem recorded.
+
 ## [shipped] Checking edits against the real vendor
 
 A passing test suite does not mean a migration is correct. It means the code
@@ -106,12 +151,13 @@ your migration is correct for the traffic you actually receive.
 ## [shipped] What this does
 
 You hand it a `ChangePacket` (provider, from version, to version, summary,
-migration docs) and a path to a git repository. You can also hand it a
-`VendorContract`, in which case the vendor's real API surface is injected into
-the opening message and enforced before any pull request. It inspects the repo,
-finds the affected call sites, reads them, applies minimal edits, runs a
-whitelisted verification command, checks those edits against the contract, and
-reports one of three outcomes:
+migration docs) and a path to a git repository. Before the model sees anything,
+the agent reads that repository to learn its package manager, its real scripts,
+and the installed version of the library being migrated, and injects both those
+facts and the vendor's real API surface into the opening message. It then finds
+the affected call sites, reads them, applies minimal edits, runs a whitelisted
+verification command, checks those edits against the contract, and reports one
+of three outcomes:
 
 | Outcome      | Meaning                                              |
 | ------------ | ---------------------------------------------------- |
@@ -325,6 +371,18 @@ example a local `CommandRunner` that skips Docker entirely.
 - `probeLiveContract` is not called from inside `runMigrationAgent`. A caller
   builds the contract and passes it in. That keeps credentials out of the model
   loop, but it also means nobody is probing on a schedule.
+- The agent has no way to resolve a vendor symbol it has not been told about. The
+  contract gate will correctly refuse `p.keyIsCurrentlyDown`, but the model has
+  no tool that turns "I do not know what replaced this" into a cited answer, so
+  its only remaining move is another guess. This is the next stage and it is the
+  reason the gate currently grades honesty on a board the agent was never given.
+- `fingerprintRepo` reads the top-level manifest only. Workspaces, monorepo
+  members, and nested packages are not resolved, so a monorepo reports the root
+  manifest's scripts and misses a package that has its own.
+- CI command extraction is a regex over `run:` lines. It misses multi-line
+  commands, composite actions, and anything expressed as a reusable workflow.
+- `verificationCommands` only covers npm, cargo, and go. Python and Go facts are
+  populated, but the derived command list is not the authority for either yet.
 
 ## Real repository runs
 
@@ -402,9 +460,10 @@ bun test --cwd packages/tests integration/agent/
 ```
 
 `unit/agent/vendorContract.test.ts` covers the contract machinery, including the
-two real bugs as fixtures. `integration/agent/contractGate.test.ts` drives the
-whole agent with a stub model and asserts the gate refuses the PR. Neither needs
-credentials or a network.
+two real bugs as fixtures. `unit/agent/repoFacts.test.ts` covers the fingerprint
+across npm, cargo, python, and go, including the malformed-manifest path.
+`integration/agent/contractGate.test.ts` drives the whole agent with a stub model
+and asserts the gate refuses the PR. None of these need credentials or a network.
 
 `integration/agent/vendorContractLive.test.ts` is the one that talks to real
 vendors: it fetches p5's reference dump, probes a live JSON API, and reads
