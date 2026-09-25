@@ -32,7 +32,6 @@ function RepoCard({
     selected: boolean;
     onToggle: () => void;
 }) {
-    const depsCount = (Math.abs(repo.fullName.length * 3 + repo.id) % 18) + 1;
     return (
         <button
             type="button"
@@ -59,7 +58,6 @@ function RepoCard({
                     {repo.private ? "PRIVATE" : "PUBLIC"}
                 </span>
                 <span className="text-[var(--color-muted)]">· {repo.defaultBranch}</span>
-                <span className="text-[var(--color-muted)]">· {depsCount} deps</span>
             </div>
         </button>
     );
@@ -72,6 +70,7 @@ export default function InstallPage() {
     const [selected, setSelected] = useState<Set<number>>(new Set());
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [syncError, setSyncError] = useState<string | null>(null);
     const [query, setQuery] = useState("");
     const [page, setPage] = useState(1);
     const [githubOpened, setGithubOpened] = useState(false);
@@ -169,6 +168,27 @@ export default function InstallPage() {
                 fullName: r.fullName,
             }));
         if (!selectedRepos.length) return;
+        const repoIds = Array.from(selected).join(",");
+        try {
+            const accountsRes = await fetch(`${API_URL}/api/accounts`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (accountsRes.ok) {
+                const data = (await accountsRes.json()) as { accounts: Array<{ owner: string }> };
+                const installed = new Set((data.accounts ?? []).map((a) => a.owner));
+                const missing = selectedRepos.some((r) => !installed.has(r.owner));
+                if (missing) {
+                    setPendingCount(selectedRepos.length);
+                    setGithubOpened(true);
+                    setAutoReturned(false);
+                    window.location.href = `${API_URL}/api/auth/install?repos=${repoIds}&returnTo=${encodeURIComponent("/install/success")}`;
+                    return;
+                }
+            }
+        } catch {
+            // Fall through to local sync — a failed check must not block install.
+        }
+        setSyncError(null);
         try {
             const response = await fetch(`${API_URL}/api/installations/sync`, {
                 method: "POST",
@@ -181,7 +201,9 @@ export default function InstallPage() {
             if (!response.ok)
                 throw new Error("Failed to sync selected repositories");
         } catch (err) {
-            setError(
+            // Kept beside the picker rather than replacing the page: the
+            // selection is still valid, so the user can retry the sync.
+            setSyncError(
                 err instanceof Error
                     ? err.message
                     : "Failed to sync selected repositories",
@@ -341,7 +363,35 @@ export default function InstallPage() {
                 </div>
             </div>
 
-            {paged.length === 0 ? (
+            {syncError && (
+                <div
+                    role="alert"
+                    className="mt-4 border border-[var(--color-signal-red)]/30 bg-[var(--color-red-bg)] px-4 py-3"
+                >
+                    <p className="font-mono text-[11px] font-semibold tracking-[0.08em] text-[var(--color-signal-red)]">
+                        SYNC FAILED
+                    </p>
+                    <p className="mt-1 font-mono text-xs text-[var(--color-ink)]">
+                        {syncError}
+                    </p>
+                    <p className="mt-1 font-mono text-[11px] text-[var(--color-muted)]">
+                        Your {selected.size}{" "}
+                        {selected.size === 1 ? "selection is" : "selections are"}{" "}
+                        still selected. Press Install to try again.
+                    </p>
+                </div>
+            )}
+
+            {repos.length === 0 ? (
+                <div className="mt-6 border border-dashed border-[var(--color-line)] bg-[var(--color-paper)] p-8 text-center">
+                    <p className="font-mono text-xs text-[var(--color-ink)]">
+                        No repositories available
+                    </p>
+                    <p className="mt-1 font-mono text-[11px] text-[var(--color-muted)]">
+                        Install the GitHub App to grant repository access.
+                    </p>
+                </div>
+            ) : paged.length === 0 ? (
                 <div className="mt-6 border border-dashed border-[var(--color-line)] bg-[var(--color-paper)] p-8 text-center">
                     <p className="font-mono text-xs text-[var(--color-ink)]">
                         No repos match “{query}”

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getAccounts, getAccountRepos, getSettings, rotateApiKey, updateRepoPolicy, updateSettings } from "../api/client";
 import type { Permission, Repo } from "../api/types";
 import { Badge } from "../components/Badge";
@@ -28,7 +28,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const inputBase = "w-full border border-[var(--color-line-strong)]/15 bg-[var(--color-surface)] px-3 py-2 font-mono text-xs text-[var(--color-ink)] placeholder:text-[var(--color-muted)] focus:border-[var(--color-line-strong)] focus:outline-none";
-const selectBase = "w-full border border-[var(--color-line-strong)]/15 bg-[var(--color-surface)] px-3 py-2 font-mono text-xs text-[var(--color-ink)] focus:border-[var(--color-line-strong)] focus:outline-none";
 
 function RepoPolicyRow({ repo }: { repo: Repo }) {
     async function patch(p: Partial<{ watched: boolean; permission: Permission; schedule: string }>) {
@@ -86,8 +85,33 @@ function WebhookSettings({
         confidenceThreshold: webhookConfig.confidenceThreshold?.toString() ?? "0.7",
     });
 
+    const [providerOpen, setProviderOpen] = useState(false);
+    const providerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!providerOpen) return;
+        function onKey(e: KeyboardEvent) {
+            if (e.key === "Escape") setProviderOpen(false);
+        }
+        function onClick(e: MouseEvent) {
+            if (providerRef.current && !providerRef.current.contains(e.target as Node)) {
+                setProviderOpen(false);
+            }
+        }
+        document.addEventListener("keydown", onKey);
+        document.addEventListener("mousedown", onClick);
+        return () => {
+            document.removeEventListener("keydown", onKey);
+            document.removeEventListener("mousedown", onClick);
+        };
+    }, [providerOpen]);
+
     function handleChange(field: string, value: string) {
-        setForm((prev) => ({ ...prev, ...(field === "aiProvider" && value !== prev.aiProvider ? { aiApiKey: "" } : {}), [field]: value }));
+        setForm((prev) => ({
+            ...prev,
+            ...(field === "aiProvider" && value !== prev.aiProvider ? { aiApiKey: "", aiModel: "" } : {}),
+            [field]: value,
+        }));
     }
 
     function handleSave() {
@@ -116,41 +140,42 @@ function WebhookSettings({
                 <Field label="Repository Owner"><input value={form.repoOwner} onChange={(e) => handleChange("repoOwner", e.target.value)} placeholder="your-org" className={inputBase} /></Field>
                 <Field label="Repository Name"><input value={form.repoName} onChange={(e) => handleChange("repoName", e.target.value)} placeholder="your-repo" className={inputBase} /></Field>
                 <Field label="AI Provider">
-                    <div className="relative">
+                    <div className="relative" ref={providerRef}>
                         <button
                             type="button"
-                            onClick={() => {
-                                const el = document.getElementById("ai-provider-list");
-                                if (el) el.classList.toggle("hidden");
-                            }}
+                            onClick={() => setProviderOpen((v) => !v)}
                             className="flex w-full items-center justify-between border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-3 py-2 font-mono text-xs tracking-wide text-[var(--color-ink)] hover:bg-[var(--color-paper)]"
                             aria-haspopup="listbox"
-                            aria-expanded="false"
+                            aria-expanded={providerOpen}
                         >
                             <span>{form.aiProvider ? form.aiProvider.toUpperCase() : "NONE — DETERMINISTIC ONLY"}</span>
                             <span className="ml-2 text-[var(--color-muted)]">▾</span>
                         </button>
-                        <div id="ai-provider-list" className="hidden absolute z-10 mt-1 w-full border border-[var(--color-line-strong)] bg-[var(--color-surface)] shadow-[3px_3px_0_var(--color-line-strong)]">
-                            {[
-                                { v: "", l: "NONE — DETERMINISTIC ONLY" },
-                                { v: "openai", l: "OPENAI" },
-                                { v: "anthropic", l: "ANTHROPIC" },
-                                { v: "gemini", l: "GEMINI" },
-                                { v: "cloudflare", l: "CLOUDFLARE" },
-                            ].map((o) => (
-                                <button
-                                    key={o.v}
-                                    type="button"
-                                    onClick={() => {
-                                        handleChange("aiProvider", o.v);
-                                        document.getElementById("ai-provider-list")?.classList.add("hidden");
-                                    }}
-                                    className={`flex w-full px-3 py-2 text-left font-mono text-xs tracking-wide hover:bg-[var(--color-paper)] ${form.aiProvider === o.v ? "bg-[var(--color-ink)] text-[var(--color-paper)]" : "text-[var(--color-ink)]"}`}
-                                >
-                                    {o.l}
-                                </button>
-                            ))}
-                        </div>
+                        {providerOpen && (
+                            <div id="ai-provider-list" role="listbox" className="absolute z-10 mt-1 w-full border border-[var(--color-line-strong)] bg-[var(--color-surface)] shadow-[3px_3px_0_var(--color-line-strong)]">
+                                {[
+                                    { v: "", l: "NONE — DETERMINISTIC ONLY" },
+                                    { v: "openai", l: "OPENAI" },
+                                    { v: "anthropic", l: "ANTHROPIC" },
+                                    { v: "gemini", l: "GEMINI" },
+                                    { v: "cloudflare", l: "CLOUDFLARE" },
+                                ].map((o) => (
+                                    <button
+                                        key={o.v}
+                                        type="button"
+                                        role="option"
+                                        aria-selected={form.aiProvider === o.v}
+                                        onClick={() => {
+                                            handleChange("aiProvider", o.v);
+                                            setProviderOpen(false);
+                                        }}
+                                        className={`flex w-full px-3 py-2 text-left font-mono text-xs tracking-wide hover:bg-[var(--color-paper)] ${form.aiProvider === o.v ? "bg-[var(--color-ink)] text-[var(--color-paper)]" : "text-[var(--color-ink)]"}`}
+                                    >
+                                        {o.l}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </Field>
                 <Field label="AI API Key"><input type="password" value={form.aiApiKey} onChange={(e) => handleChange("aiApiKey", e.target.value)} placeholder={form.aiProvider === "cloudflare" ? "cfat_..." : form.aiProvider === "gemini" ? "Gemini API key" : "sk-..."} className={inputBase} /></Field>
