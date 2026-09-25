@@ -10,6 +10,12 @@ env:
   BUN_VERSION: "1.3.11"
   NODE_VERSION: "20"
 
+# A new push to the same PR supersedes the old run: cancel it instead of
+# burning runners on code that has already been replaced.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     name: Lint
@@ -42,6 +48,10 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    # Expensive work (postgres service, full suites) only runs after the cheap
+    # signal is green. A lint or type error stops here instead of failing
+    # three more jobs after it.
+    needs: [lint, typecheck]
     services:
       postgres:
         image: postgres:16-alpine
@@ -89,6 +99,7 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
+    needs: [lint, typecheck]
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -103,6 +114,9 @@ jobs:
   docker:
     name: Docker Build
     runs-on: ubuntu-latest
+    # Images are built from source that already linted, typechecked, and
+    # compiled. No point baking an image of code that does not build.
+    needs: [lint, typecheck, build]
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
