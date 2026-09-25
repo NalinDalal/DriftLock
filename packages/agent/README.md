@@ -52,6 +52,9 @@ The agent edits a real repository, so the executor is the boundary.
 - `runCommand` is an exact string match against a fixed whitelist (`npm test`,
   `npm run build`, `npm run typecheck`, and pnpm/bun equivalents). Shell
   operators are not accepted, so `npm test && rm -rf /` is refused.
+- A whitelisted command is not run on the host. It runs in a Docker container
+  against a disposable copy of the repository, with the network off. See
+  [Sandboxed command execution](#shipped-sandboxed-command-execution).
 - The environment handed to a command is an allowlist. Anything matching
   `KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `CREDENTIAL`, `PRIVATE`, `SESSION`,
   `COOKIE`, or `AUTH` is dropped, so a customer build script cannot read
@@ -124,22 +127,53 @@ It is refused when any of these hold:
 reports `already_open` rather than opening a second one. A merged PR reports
 `merged`, which is the signal to rebaseline the snapshot.
 
+## [shipped] Sandboxed command execution
+
+`runCommand` defaults to `createSandboxCommandRunner()`, which runs the command
+through `@driftlock/sandbox`:
+
+- The repository is copied to a throwaway temp directory first, and the copy is
+  what gets mounted. The real checkout is never passed to Docker, so a build
+  script cannot write to it, and `.git` is not copied either.
+- The copy is mounted writable (`readOnly: false`), so `tsc` and bundlers can
+  emit. The original `node_modules` is bind-mounted read-only when present, so a
+  full dependency tree does not have to be copied.
+- The network is off (`NetworkMode: none`) and no endpoints are allowlisted.
+- The container env is exactly `CI=1`. The host environment is never forwarded.
+- The command is passed as argv, never as a shell string, after the whitelist
+  check.
+- Defaults: `node:22-alpine`, 5 minute timeout, 2 GB, 2 CPUs.
+- The temp copy is removed in a `finally`, so a timeout or a Docker error does
+  not leak it.
+
+Pass `commandRunner` to `runMigrationAgent` to substitute your own seam, for
+example a local `CommandRunner` that skips Docker entirely.
+
 ## [planned] Not done yet
 
-- Commands run directly in the working tree. Sandboxed execution through
-  `@driftlock/sandbox` is not wired in, so a customer build script still runs
-  with the developer's own privileges and network access.
 - The agent does not create the temporary branch yet. It assumes one exists.
 - No confidence signal beyond pass/fail. A richer verdict would feed the
   `auto_pr` threshold rather than hardcode "tests passed".
 - The loop has never run against the live OpenAI API. Tests inject a fake
   client, so the wire format is type-checked but not proven.
+- The sandbox uses `SandboxRunner`'s proxy allowlist model, but the agent always
+  disables the network. A migration that must reach a registry mid-run is not
+  supported yet.
 
 ## Tests
 
 ```bash
 bun test --cwd packages/tests unit/agent/
+bun test --cwd packages/tests integration/agent/
 ```
 
-Covers path guards, patch validation, command whitelist rejection, the full
-inspect to PR walk against a real temp git repo, and each outcome branch.
+`unit/agent` covers path guards, patch validation, command whitelist rejection,
+the full inspect to PR walk against a real temp git repo, and each outcome
+branch.
+
+`integration/agent` is the one that proves the isolation claims. It needs a
+running Docker daemon and it skips itself with a loud failing prerequisite test
+when there is not one. It asserts against a real `node:22-alpine` container that
+a build cannot write to the real checkout, cannot resolve DNS, cannot see
+`.git`, and cannot read `OPENAI_API_KEY` out of the host environment.
+

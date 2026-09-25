@@ -33,6 +33,7 @@ import {
     type PullRequestPublisher,
     type PullRequestTarget,
 } from "./publisher";
+import type { CommandRunner } from "./commandRunner";
 
 export type RunOptions = {
     root: string;
@@ -42,6 +43,7 @@ export type RunOptions = {
     client?: OpenAI;
     publisher?: PullRequestPublisher;
     target?: PullRequestTarget;
+    commandRunner?: CommandRunner;
 };
 
 export type RunResult = {
@@ -151,7 +153,10 @@ async function execute(
                 };
             }
             state.commandsRun += 1;
-            const result = await runCommand(root, readString(args, "command"));
+            const command = readString(args, "command");
+            const result = options.commandRunner
+                ? await options.commandRunner.run(root, command)
+                : await runCommand(root, command);
             state.lastTestResult = { passed: result.ok, output: result.output };
             return result;
         }
