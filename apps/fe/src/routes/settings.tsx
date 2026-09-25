@@ -12,7 +12,7 @@ import { titleCase } from "../lib/format";
 function SectionLabel({ title, hint }: { title: string; hint?: string }) {
     return (
         <div className="mb-4 border-b border-[var(--color-line-strong)] pb-3">
-            <h2 className="font-mono text-[11px] font-semibold tracking-[0.12em] text-[var(--color-ink)] dark:text-[var(--color-paper)]">{title}</h2>
+            <h2 className="font-mono text-[11px] font-semibold tracking-[0.12em] text-[var(--color-ink)]">{title}</h2>
             {hint && <p className="mt-1 font-mono text-xs leading-4 text-[var(--color-muted)]">{hint}</p>}
         </div>
     );
@@ -21,14 +21,14 @@ function SectionLabel({ title, hint }: { title: string; hint?: string }) {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
         <div>
-            <label className="mb-1.5 block font-mono text-[11px] tracking-[0.08em] text-[var(--color-ink)] dark:text-[var(--color-paper)]">{label}</label>
+            <label className="mb-1.5 block font-mono text-[11px] tracking-[0.08em] text-[var(--color-ink)]">{label}</label>
             {children}
         </div>
     );
 }
 
-const inputBase = "w-full border border-[var(--color-line-strong)]/15 bg-[var(--color-surface)] px-3 py-2 font-mono text-xs text-[var(--color-ink)] dark:text-[var(--color-paper)] placeholder:text-[var(--color-muted)] focus:border-[var(--color-line-strong)] focus:outline-none";
-const selectBase = "w-full border border-[var(--color-line-strong)]/15 bg-[var(--color-surface)] px-3 py-2 font-mono text-xs text-[var(--color-ink)] dark:text-[var(--color-paper)] focus:border-[var(--color-line-strong)] focus:outline-none";
+const inputBase = "w-full border border-[var(--color-line-strong)]/15 bg-[var(--color-surface)] px-3 py-2 font-mono text-xs text-[var(--color-ink)] placeholder:text-[var(--color-muted)] focus:border-[var(--color-line-strong)] focus:outline-none";
+const selectBase = "w-full border border-[var(--color-line-strong)]/15 bg-[var(--color-surface)] px-3 py-2 font-mono text-xs text-[var(--color-ink)] focus:border-[var(--color-line-strong)] focus:outline-none";
 
 function RepoPolicyRow({ repo }: { repo: Repo }) {
     async function patch(p: Partial<{ watched: boolean; permission: Permission; schedule: string }>) {
@@ -42,16 +42,16 @@ function RepoPolicyRow({ repo }: { repo: Repo }) {
     return (
         <div className="flex flex-wrap items-center gap-3 border-b border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-3 first:border-t hover:bg-[var(--color-paper)]/50">
             <div className="min-w-0 flex-1">
-                <p className="font-mono text-xs font-semibold tracking-[-0.01em] text-[var(--color-ink)] dark:text-[var(--color-paper)]">
+                <p className="font-mono text-xs font-semibold tracking-[-0.01em] text-[var(--color-ink)]">
                     {repo.owner}/{repo.name}
                 </p>
                 <p className="mt-0.5 font-mono text-[11px] tracking-wide text-[var(--color-muted)]">{repo.stats.callSites} call sites · {repo.stats.driftOpen} drift open</p>
             </div>
-            <label className="flex items-center gap-2 font-mono text-[11px] tracking-wide text-[var(--color-ink)] dark:text-[var(--color-paper)]">
+            <label className="flex items-center gap-2 font-mono text-[11px] tracking-wide text-[var(--color-ink)]">
                 WATCH
                 <Toggle checked={repo.watched} onChange={(watched) => patch({ watched })} label="Watch repo" />
             </label>
-            <select value={repo.permission} onChange={(e) => patch({ permission: e.target.value as Permission })} className="border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 font-mono text-[11px] tracking-wide text-[var(--color-ink)] dark:text-[var(--color-paper)] focus:border-[var(--color-line-strong)] focus:outline-none">
+            <select value={repo.permission} onChange={(e) => patch({ permission: e.target.value as Permission })} className="border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 font-mono text-[11px] tracking-wide text-[var(--color-ink)] focus:border-[var(--color-line-strong)] focus:outline-none">
                 <option value="read">READ</option>
                 <option value="read-write">READ + WRITE</option>
                 <option value="suggest-only">SUGGEST ONLY</option>
@@ -61,7 +61,7 @@ function RepoPolicyRow({ repo }: { repo: Repo }) {
                 onChange={(e) => patch({ schedule: e.target.value })}
                 onBlur={() => toast("Schedule saved")}
                 placeholder="cron: 0 * * * *"
-                className="w-28 border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 font-mono text-[11px] tracking-wide text-[var(--color-ink)] dark:text-[var(--color-paper)] placeholder:text-[var(--color-muted)] focus:border-[var(--color-line-strong)] focus:outline-none"
+                className="w-28 border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 font-mono text-[11px] tracking-wide text-[var(--color-ink)] placeholder:text-[var(--color-muted)] focus:border-[var(--color-line-strong)] focus:outline-none"
             />
         </div>
     );
@@ -108,7 +108,7 @@ function WebhookSettings({
     return (
         <div className="border border-[var(--color-line-strong)] bg-[var(--color-surface)]">
             <div className="border-b border-[var(--color-line-strong)] bg-[var(--color-paper)] px-4 py-2">
-                <p className="font-mono text-[11px] tracking-[0.08em] text-[var(--color-ink)] dark:text-[var(--color-paper)]">WEBHOOK CAPTURE · SHEET W01</p>
+                <p className="font-mono text-[11px] tracking-[0.08em] text-[var(--color-ink)]">WEBHOOK CAPTURE · SHEET W01</p>
             </div>
             <div className="grid gap-4 p-4 sm:grid-cols-2">
                 <Field label="GitHub Token"><input type="password" value={form.githubToken} onChange={(e) => handleChange("githubToken", e.target.value)} placeholder="ghp_••••••••" className={inputBase} /></Field>
@@ -123,7 +123,7 @@ function WebhookSettings({
                                 const el = document.getElementById("ai-provider-list");
                                 if (el) el.classList.toggle("hidden");
                             }}
-                            className="flex w-full items-center justify-between border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-3 py-2 font-mono text-xs tracking-wide text-[var(--color-ink)] dark:text-[var(--color-paper)] hover:bg-[var(--color-paper)]"
+                            className="flex w-full items-center justify-between border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-3 py-2 font-mono text-xs tracking-wide text-[var(--color-ink)] hover:bg-[var(--color-paper)]"
                             aria-haspopup="listbox"
                             aria-expanded="false"
                         >
@@ -145,7 +145,7 @@ function WebhookSettings({
                                         handleChange("aiProvider", o.v);
                                         document.getElementById("ai-provider-list")?.classList.add("hidden");
                                     }}
-                                    className={`flex w-full px-3 py-2 text-left font-mono text-xs tracking-wide hover:bg-[var(--color-paper)] ${form.aiProvider === o.v ? "bg-[var(--color-ink)] text-[var(--color-paper)]" : "text-[var(--color-ink)] dark:text-[var(--color-paper)]"}`}
+                                    className={`flex w-full px-3 py-2 text-left font-mono text-xs tracking-wide hover:bg-[var(--color-paper)] ${form.aiProvider === o.v ? "bg-[var(--color-ink)] text-[var(--color-paper)]" : "text-[var(--color-ink)]"}`}
                                 >
                                     {o.l}
                                 </button>
@@ -264,7 +264,7 @@ export default function SettingsPage() {
                     <div className="border border-[var(--color-line)] bg-[var(--color-surface)] p-8 text-center font-mono text-xs text-[var(--color-muted)]">Loading repos…</div>
                 ) : repos.length === 0 ? (
                     <div className="border border-dashed border-[var(--color-line)] bg-[var(--color-paper)] p-8 text-center">
-                        <p className="font-mono text-xs text-[var(--color-ink)] dark:text-[var(--color-paper)]">No repos yet.</p>
+                        <p className="font-mono text-xs text-[var(--color-ink)]">No repos yet.</p>
                         <p className="mt-1 font-mono text-[11px] text-[var(--color-muted)]">Install the GitHub App to populate this sheet.</p>
                     </div>
                 ) : (
@@ -281,19 +281,19 @@ export default function SettingsPage() {
                 <div className="border border-[var(--color-line-strong)] bg-[var(--color-surface)]">
                     <div className="flex items-center justify-between gap-4 border-b border-[var(--color-line)] bg-[var(--color-paper)] px-4 py-3">
                         <div>
-                            <p className="font-mono text-xs font-semibold tracking-[0.06em] text-[var(--color-ink)] dark:text-[var(--color-paper)]">AUTO PROBE ON SCHEDULE</p>
+                            <p className="font-mono text-xs font-semibold tracking-[0.06em] text-[var(--color-ink)]">AUTO PROBE ON SCHEDULE</p>
                             <p className="font-mono text-[11px] leading-4 text-[var(--color-muted)]">Run sandbox capture after every repo change.</p>
                         </div>
                         <Toggle checked={entry?.autoProbe ?? false} onChange={toggleAutoProbe} label="Auto probe" />
                     </div>
                     <div className="p-4">
-                        <p className="font-mono text-[11px] tracking-[0.08em] text-[var(--color-ink)] dark:text-[var(--color-paper)]">FORWARD WHITELIST</p>
+                        <p className="font-mono text-[11px] tracking-[0.08em] text-[var(--color-ink)]">FORWARD WHITELIST</p>
                         <div className="mt-2 flex min-h-[28px] flex-wrap gap-1.5">
                             {whitelist.length === 0 ? (
                                 <span className="font-mono text-xs text-[var(--color-muted)]">No whitelisted endpoints.</span>
                             ) : (
                                 whitelist.map((entryLine) => (
-                                    <span key={entryLine} className="inline-flex items-center gap-1 border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-2 py-1 font-mono text-xs text-[var(--color-ink)] dark:text-[var(--color-paper)]">
+                                    <span key={entryLine} className="inline-flex items-center gap-1 border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-2 py-1 font-mono text-xs text-[var(--color-ink)]">
                                         {entryLine}
                                         <button type="button" aria-label={`Remove ${entryLine}`} onClick={() => void saveWhitelist(whitelist.filter((w) => w !== entryLine))} className="ml-1 text-[var(--color-muted)] hover:text-[var(--color-signal-red)]">
                                             ×
@@ -303,8 +303,8 @@ export default function SettingsPage() {
                             )}
                         </div>
                         <form className="mt-3 flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); const value = whitelistDraft.trim(); if (!value || whitelist.includes(value)) return; void saveWhitelist([...whitelist, value]); setWhitelistDraft(""); }}>
-                            <input value={whitelistDraft} onChange={(e) => setWhitelistDraft(e.target.value)} placeholder="POST /v3/mail/send" className="w-64 border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 font-mono text-xs text-[var(--color-ink)] dark:text-[var(--color-paper)] placeholder:text-[var(--color-muted)] focus:border-[var(--color-line-strong)] focus:outline-none" />
-                            <Button size="sm" variant="secondary" type="submit" className="border border-[var(--color-line-strong)] bg-[var(--color-surface)] text-[var(--color-ink)] dark:text-[var(--color-paper)] hover:bg-[var(--color-paper)]">
+                            <input value={whitelistDraft} onChange={(e) => setWhitelistDraft(e.target.value)} placeholder="POST /v3/mail/send" className="w-64 border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 font-mono text-xs text-[var(--color-ink)] placeholder:text-[var(--color-muted)] focus:border-[var(--color-line-strong)] focus:outline-none" />
+                            <Button size="sm" variant="secondary" type="submit" className="border border-[var(--color-line-strong)] bg-[var(--color-surface)] text-[var(--color-ink)] hover:bg-[var(--color-paper)]">
                                 ADD
                             </Button>
                         </form>
@@ -322,7 +322,7 @@ export default function SettingsPage() {
                                 <button onClick={() => setNewKey(null)} className="font-mono text-[11px] tracking-wide text-[var(--color-paper)]/70 hover:text-[var(--color-paper)]">DISMISS ×</button>
                             </div>
                             <div className="flex items-center gap-2 p-3">
-                                <input readOnly value={newKey} className="flex-1 border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-3 py-2 font-mono text-xs text-[var(--color-ink)] dark:text-[var(--color-paper)] focus:outline-none" onFocus={(e) => e.target.select()} />
+                                <input readOnly value={newKey} className="flex-1 border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-3 py-2 font-mono text-xs text-[var(--color-ink)] focus:outline-none" onFocus={(e) => e.target.select()} />
                                 <Button
                                     size="sm"
                                     onClick={async () => {
@@ -346,10 +346,10 @@ export default function SettingsPage() {
                             (entry?.apiKeys ?? []).map((key) => (
                                 <div key={key.id} className="flex items-center justify-between border-b border-[var(--color-line)] px-4 py-3 last:border-b-0">
                                     <div>
-                                        <p className="font-mono text-xs font-semibold tracking-[-0.01em] text-[var(--color-ink)] dark:text-[var(--color-paper)]">{titleCase(key.name)}</p>
+                                        <p className="font-mono text-xs font-semibold tracking-[-0.01em] text-[var(--color-ink)]">{titleCase(key.name)}</p>
                                         <p className="mt-0.5 font-mono text-[11px] tracking-wide text-[var(--color-muted)]">{key.keyMasked}</p>
                                     </div>
-                                    <Button size="sm" variant="secondary" onClick={() => void handleRotate()} className="border border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-ink)] dark:text-[var(--color-paper)] hover:bg-[var(--color-paper)]">
+                                    <Button size="sm" variant="secondary" onClick={() => void handleRotate()} className="border border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-ink)] hover:bg-[var(--color-paper)]">
                                         ROTATE
                                     </Button>
                                 </div>
@@ -369,7 +369,7 @@ export default function SettingsPage() {
                                         <Badge tone="neutral">{titleCase(cred.provider)}</Badge>
                                         <span className="font-mono text-[11px] tracking-wide text-[var(--color-muted)]">{cred.kind}</span>
                                     </div>
-                                    <span className="font-mono text-[11px] tracking-wide text-[var(--color-ink)] dark:text-[var(--color-paper)]">{cred.masked}</span>
+                                    <span className="font-mono text-[11px] tracking-wide text-[var(--color-ink)]">{cred.masked}</span>
                                 </div>
                             ))
                         )}

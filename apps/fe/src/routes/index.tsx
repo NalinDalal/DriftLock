@@ -237,7 +237,7 @@ export default function LandingPage() {
                         <span className="word-reveal italic font-normal" style={{ animationDelay: "170ms" }}>maintain</span>{" "}
                         <span className="word-reveal italic font-normal" style={{ animationDelay: "240ms" }}>themselves.</span>
                     </h1>
-                    <p className="mt-4 max-w-[520px] font-mono text-[13px] leading-5 text-[var(--color-ink)]/80 dark:text-[var(--color-paper)]/90" style={stagger(2)}>
+                    <p className="mt-4 max-w-[520px] font-mono text-[13px] leading-5 text-[var(--color-ink)]/80" style={stagger(2)}>
                         When Stripe renames source to payment_method, DriftLock redlines every call site and pins a PR. No hunt, no guide.
                     </p>
 
@@ -266,12 +266,12 @@ export default function LandingPage() {
                                     <div className="flex">
                                         <span className="w-9 select-none text-right text-[var(--color-muted)]">144</span>
                                         <span className="w-6 select-none text-center text-[var(--color-muted)]"></span>
-                                        <span className="text-[var(--color-ink)]/80 dark:text-[var(--color-paper)]/90">await stripe.charges.create({"{"}</span>
+                                        <span className="text-[var(--color-ink)]/80">await stripe.charges.create({"{"}</span>
                                     </div>
                                     <div className="flex">
                                         <span className="w-9 select-none text-right text-[var(--color-muted)]">145</span>
                                         <span className="w-6 select-none text-center text-[var(--color-muted)]"></span>
-                                        <span className="text-[var(--color-ink)]/80 dark:text-[var(--color-paper)]/90">&nbsp;&nbsp;amount: 2000,</span>
+                                        <span className="text-[var(--color-ink)]/80">&nbsp;&nbsp;amount: 2000,</span>
                                     </div>
                                     <div className="flex bg-[var(--color-red-bg)]">
                                         <span className="w-9 select-none text-right text-[var(--color-muted)]">146</span>
@@ -281,7 +281,7 @@ export default function LandingPage() {
                                     <div className="flex">
                                         <span className="w-9 select-none text-right text-[var(--color-muted)]">147</span>
                                         <span className="w-6 select-none text-center text-[var(--color-muted)]"></span>
-                                        <span className="text-[var(--color-ink)]/80 dark:text-[var(--color-paper)]/90">&#125;);</span>
+                                        <span className="text-[var(--color-ink)]/80">&#125;);</span>
                                     </div>
                                 </div>
                                 <div className="mt-3 flex items-center gap-2 border-t border-[var(--color-line)] pt-2 font-mono text-[11px]">
@@ -297,7 +297,7 @@ export default function LandingPage() {
                                     <div className="flex">
                                         <span className="w-9 select-none text-right text-[var(--color-signal-green)]/70">144</span>
                                         <span className="w-6 select-none text-center text-[var(--color-signal-green)]/70"></span>
-                                        <span className="text-[var(--color-ink)] dark:text-[var(--color-paper)]">await stripe.charges.create({"{"}</span>
+                                        <span className="text-[var(--color-ink)]">await stripe.charges.create({"{"}</span>
                                     </div>
                                     <div className="flex">
                                         <span className="w-9 select-none text-right text-[var(--color-signal-green)]/70">145</span>
@@ -358,9 +358,9 @@ export default function LandingPage() {
                         </h2>
                         <div className="mt-6 h-px w-full bg-[var(--color-ink)]" />
                         <div className="mt-6 grid gap-6 font-mono text-xs leading-5 sm:grid-cols-3">
-                            <p className="text-[var(--color-ink)]/80 dark:text-[var(--color-paper)]/90">Teams freeze on old API versions because migration is tedious and grepping misses calls.</p>
-                            <p className="text-[var(--color-ink)]/80 dark:text-[var(--color-paper)]/90">Semver is a convention, not a guarantee. Many APIs do not follow it strictly.</p>
-                            <p className="text-[var(--color-ink)]/80 dark:text-[var(--color-paper)]/90">Mocked tests cannot catch drift. DriftLock classifies real versus mocked traffic.</p>
+                            <p className="text-[var(--color-ink)]/80">Teams freeze on old API versions because migration is tedious and grepping misses calls.</p>
+                            <p className="text-[var(--color-ink)]/80">Semver is a convention, not a guarantee. Many APIs do not follow it strictly.</p>
+                            <p className="text-[var(--color-ink)]/80">Mocked tests cannot catch drift. DriftLock classifies real versus mocked traffic.</p>
                         </div>
                         <p className="mt-6 border-l-2 border-[var(--color-line-strong)] pl-4 font-mono text-xs leading-4 text-[var(--color-muted)]">I built DriftLock because Prisma 7 broke my app before interviews. What I needed was not a version bump but a code migration. <span className="text-[var(--color-muted)]"> — README</span></p>
                     </div>
@@ -404,7 +404,7 @@ export default function LandingPage() {
                         </div>
                         <div className="p-5">
                             <p className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-ink)]">INBOUND · Webhooks you receive</p>
-                            <div className="mt-3 border border-[var(--color-line)] bg-[var(--color-paper)] px-3 py-2 font-mono text-xs leading-5 text-[var(--color-ink)]/80 dark:text-[var(--color-paper)]/90">POST /webhooks/capture/stripe → forward → handler<br />flatten data.amount → "number"<br /><span className="text-[var(--color-signal-red)]">diff</span> +payment_method −source · 84%</div>
+                            <div className="mt-3 border border-[var(--color-line)] bg-[var(--color-paper)] px-3 py-2 font-mono text-xs leading-5 text-[var(--color-ink)]/80">POST /webhooks/capture/stripe → forward → handler<br />flatten data.amount → "number"<br /><span className="text-[var(--color-signal-red)]">diff</span> +payment_method −source · 84%</div>
                         </div>
                     </div>
                 </div>
@@ -415,7 +415,7 @@ export default function LandingPage() {
                     <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
                         <div>
                             <h3 className="font-display text-[20px] tracking-[-0.02em] text-[var(--color-ink)]">They bump the version. We migrate the code.</h3>
-                            <div className="mt-4 space-y-3 font-mono text-xs leading-5 text-[var(--color-ink)]/80 dark:text-[var(--color-paper)]/90">
+                            <div className="mt-4 space-y-3 font-mono text-xs leading-5 text-[var(--color-ink)]/80">
                                 <p>Renovate updates package.json. When stripe.charges.create needs a new field, they do not touch it.</p>
                                 <p>Semver is a convention. Hunting every call site by hand is why teams stay vulnerable.</p>
                             </div>
@@ -427,7 +427,7 @@ export default function LandingPage() {
                         <div className="grid grid-cols-2 gap-0 border border-[var(--color-line-strong)]">
                             <div className="bg-[var(--color-surface)] p-4">
                                 <p className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-muted)]">BEFORE · MANUAL</p>
-                                <ul className="mt-3 space-y-1.5 font-mono text-xs leading-4 text-[var(--color-ink)]/80 dark:text-[var(--color-paper)]/90"><li>• Avoid upgrades</li><li>• Grep, miss one</li><li>• Copy guide by hand</li><li>• Weeks, so you postpone</li></ul>
+                                <ul className="mt-3 space-y-1.5 font-mono text-xs leading-4 text-[var(--color-ink)]/80"><li>• Avoid upgrades</li><li>• Grep, miss one</li><li>• Copy guide by hand</li><li>• Weeks, so you postpone</li></ul>
                                 <p className="mt-4 border-t border-[var(--color-line)] pt-2 font-mono text-[11px] text-[var(--color-signal-red)]">Result: stuck</p>
                             </div>
                             <div className="bg-[var(--color-ink)] p-4 text-[var(--color-paper)]">

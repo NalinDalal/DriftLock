@@ -115,7 +115,7 @@ export default function AppShell() {
                     <div className="flex items-center gap-6">
                         <Link to="/" className="flex items-center gap-2.5">
                             <LockMark />
-                            <span className="text-[16px] font-semibold tracking-[-0.025em] text-[var(--color-ink)] dark:text-[var(--color-paper)]">
+                            <span className="text-[16px] font-semibold tracking-[-0.025em] text-[var(--color-ink)]">
                                 DriftLock
                             </span>
                             <span className="hidden items-center gap-1 rounded-[6px] border border-[var(--color-line-strong)]/10 bg-[var(--color-surface)] px-1.5 py-0.5 font-mono text-[10px] leading-none tracking-wide text-[var(--color-ink)] sm:inline-flex">
