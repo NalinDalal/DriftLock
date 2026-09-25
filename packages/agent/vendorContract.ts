@@ -863,7 +863,9 @@ export function verifyVendorSymbols(
     const instanceHint = options.vendor.clientNames[0] ?? "the instance";
 
     for (const [file, raw] of sources) {
-        const source = raw.replace(BLOCK_COMMENT, "").replace(LINE_COMMENT, "");
+        const source = raw
+            .replace(BLOCK_COMMENT, (match) => match.replace(/[^\n]/g, " "))
+            .replace(LINE_COMMENT, "");
         const receivers = new Set([
             ...discoverVendorReceivers(raw, options.vendor),
             ...(options.clientNames ?? []),

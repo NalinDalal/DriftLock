@@ -1,5 +1,6 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
+import { isAllowedCommand } from "./allowedCommands";
 
 /**
  * Stage 0 of the migration pipeline: know what repository this is before asking
@@ -249,14 +250,20 @@ export function isTextSearchable(file: string): boolean {
  */
 export async function listRepoFiles(
     root: string,
-    options: { max?: number } = {},
+    options: { max?: number; scope?: string } = {},
 ): Promise<string[]> {
     const max = options.max ?? MAX_REPO_FILES;
 
-    // A caller may point us at a subdirectory that is itself inside an ignored
-    // tree. Preserving that means searchCode keeps its previous behaviour.
-    const rootSegments = root.split("/");
-    if (rootSegments.some((segment) => SKIP_DIRS.has(segment))) return [];
+    // The scope is the search path relative to the repository root (as passed
+    // by searchCode). Only its segments are checked against SKIP_DIRS, so a
+    // repository that merely lives under a directory named `build` or `target`
+    // is not mistaken for an ignored tree. Searching inside an ignored tree
+    // still returns no files, because the scope itself contains the skip dir.
+    const scope = options.scope;
+    if (scope !== undefined) {
+        const segments = scope.split("/").filter((segment) => segment && segment !== ".");
+        if (segments.some((segment) => SKIP_DIRS.has(segment))) return [];
+    }
 
     const out: string[] = [];
     const queue: string[] = [root];
@@ -566,14 +573,17 @@ async function readCiCommands(
  * agent that invents `npm run validate` discovers the invention only by running
  * it, and a failed exit code is a weak signal for "that was never a script".
  */
-export function deriveVerificationCommands(facts: RepoFacts): string[] {
+export function deriveVerificationCommands(
+    facts: RepoFacts,
+    isAllowed: (command: string) => boolean = isAllowedCommand,
+): string[] {
     const manager = facts.packageManager;
     const out: string[] = [];
 
     if (facts.ecosystem === "rust" || facts.ecosystem === "go") {
         for (const name of Object.keys(facts.scripts)) {
             const command = facts.scripts[name];
-            if (command && !out.includes(command)) out.push(command);
+            if (command && !out.includes(command) && isAllowed(command)) out.push(command);
         }
         return out;
     }
@@ -581,7 +591,7 @@ export function deriveVerificationCommands(facts: RepoFacts): string[] {
     for (const name of VERIFICATION_SCRIPTS) {
         if (!facts.scripts[name]) continue;
         const command = name === "test" ? `${manager} test` : `${manager} run ${name}`;
-        if (!out.includes(command)) out.push(command);
+        if (!out.includes(command) && isAllowed(command)) out.push(command);
     }
     return out;
 }

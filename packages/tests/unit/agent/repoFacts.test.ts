@@ -242,7 +242,10 @@ describe("fingerprintRepo, cargo", () => {
         expect(facts.dependencies.tokio).toBe("1.35");
         expect(facts.dependencies.criterion).toBe("0.5");
         expect(facts.resolvedVersions.serde).toBe("1.0.195");
-        expect(facts.verificationCommands).toEqual(["cargo check", "cargo build", "cargo test"]);
+        // Cargo commands are real but runCommand cannot execute them (its
+        // allowlist is npm/pnpm/bun only), so they are filtered out rather
+        // than handed to the model as runnable commands.
+        expect(facts.verificationCommands).toEqual([]);
     });
 });
 
@@ -269,7 +272,9 @@ describe("fingerprintRepo, python and go", () => {
         const facts = await fingerprintRepo(root);
         expect(facts.ecosystem).toBe("go");
         expect(facts.dependencies["github.com/gin-gonic/gin"]).toBe("v1.9.1");
-        expect(facts.verificationCommands).toContain("go test ./...");
+        // Same allowlist filtering as cargo above: `go test ./...` is real
+        // but not runnable via runCommand, so it is not suggested.
+        expect(facts.verificationCommands).toEqual([]);
     });
 });
 
@@ -392,8 +397,15 @@ describe("listRepoFiles is the single walk", () => {
         await mkdir(join(nested, "node_modules", "pkg"), { recursive: true });
         await writeFile(join(nested, "node_modules", "pkg", "index.js"), "x\n");
 
-        expect(await listRepoFiles(join(nested, "node_modules"))).toEqual([]);
-        expect(await listRepoFiles(join(nested, "node_modules", "pkg"))).toEqual([]);
+        // The ignored-tree check runs on the search scope relative to the
+        // repository root (what searchCode passes as `path`), never on
+        // segments of the absolute root path.
+        expect(await listRepoFiles(join(nested, "node_modules"), { scope: "node_modules" })).toEqual([]);
+        expect(
+            await listRepoFiles(join(nested, "node_modules", "pkg"), {
+                scope: "node_modules/pkg",
+            }),
+        ).toEqual([]);
 
         await rm(nested, { recursive: true, force: true });
     });

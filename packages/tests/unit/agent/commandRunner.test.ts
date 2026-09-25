@@ -282,6 +282,7 @@ describe("agent with a sandboxed command runner", () => {
                     },
                 ],
             },
+            { choices: [{ message: { content: "done" } }] },
         ];
         const client = {
             chat: {

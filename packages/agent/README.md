@@ -254,7 +254,8 @@ of three outcomes:
 | `readFile`         | File contents with 1-indexed line numbers  |
 | `editFile`         | Applies one unified diff                  |
 | `replaceInFile`    | Replaces one exact snippet               |
-| `runCommand`       | Runs an allowed verification command      || `createPullRequest`| Summarises the diff and targets a branch   |
+| `runCommand`       | Runs an allowed verification command      |
+| `createPullRequest`| Summarises the diff and targets a branch   |
 
 ## [shipped] Safety
 

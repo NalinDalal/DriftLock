@@ -365,7 +365,7 @@ describe("runMigrationAgent", () => {
                                 ],
                             };
                         }
-                        return finalText("should not be reached");
+                        return finalText("stopping after the refused PR");
                     },
                 },
             },
@@ -384,7 +384,10 @@ describe("runMigrationAgent", () => {
         for (const id of requested) {
             expect(answered).toContain(id);
         }
-        expect(result.state.iteration).toBe(1);
+        // The batch's createPullRequest is refused (bad branch, no passing
+        // verification), and only a successful PR ends the loop, so the model
+        // gets a second turn instead of stopping after the first.
+        expect(result.state.iteration).toBe(2);
     });
 
     test("sends the system prompt and the ChangePacket to the model", async () => {

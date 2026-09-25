@@ -332,6 +332,22 @@ describe("verifyVendorSymbols against the stripe completeness bug", () => {
         expect(findings[0].line).toBe(11);
     });
 
+    test("keeps line numbers stable across multi-line block comments", () => {
+        const source = `const paymentIntent = await stripe.paymentIntents.retrieve(id);
+/* a stale-looking mention:
+paymentIntent.source
+end of comment */
+return paymentIntent.source;
+`;
+        const findings = verifyVendorSymbols(sampled, new Map([["webhook.js", source]]), {
+            vendor: STRIPE_VENDOR,
+        });
+        // The mention inside the comment is ignored, and the real read keeps
+        // its original line number instead of shifting up by the removed lines.
+        expect(findings).toHaveLength(1);
+        expect(findings[0].line).toBe(5);
+    });
+
     test("passes once every site is migrated", () => {
         const complete = halfMigratedWebhook.replace(
             "paymentIntent.source",

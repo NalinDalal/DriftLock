@@ -1,23 +1,10 @@
 import { stat } from "node:fs/promises";
 import { fingerprintRepo, isTextSearchable, listRepoFiles } from "./repoFacts";
+import { allowedCommands, isAllowedCommand } from "./allowedCommands";
+
+export { allowedCommands, isAllowedCommand };
 
 export type ToolResult = { ok: boolean; output: string };
-
-const ALLOWED_COMMANDS = new Set([
-    "npm test",
-    "npm run test",
-    "npm run build",
-    "npm run typecheck",
-    "npm run lint",
-    "pnpm test",
-    "pnpm run build",
-    "pnpm run typecheck",
-    "pnpm run lint",
-    "bun test",
-    "bun run build",
-    "bun run typecheck",
-    "bun run lint",
-]);
 
 const MAX_READ_CHARS = 8000;
 const MAX_COMMAND_CHARS = 4000;
@@ -59,8 +46,8 @@ export function resolveInsideRoot(
     return `${root}/${segments.join("/")}`;
 }
 
-async function collectSourceFiles(root: string): Promise<string[]> {
-    const files = await listRepoFiles(root, { max: 2000 });
+async function collectSourceFiles(root: string, scope?: string): Promise<string[]> {
+    const files = await listRepoFiles(root, scope === undefined ? { max: 2000 } : { max: 2000, scope });
     return files.filter(isTextSearchable);
 }
 
@@ -115,7 +102,7 @@ export async function searchCode(
     }
 
     try {
-        const files = await collectSourceFiles(target);
+        const files = await collectSourceFiles(target, path);
         const hits: string[] = [];
         const needle = query.toLowerCase();
 
@@ -346,14 +333,6 @@ export function buildSandboxEnv(
         env[key] = value;
     }
     return env;
-}
-
-export function isAllowedCommand(command: string): boolean {
-    return ALLOWED_COMMANDS.has(command.trim());
-}
-
-export function allowedCommands(): string[] {
-    return [...ALLOWED_COMMANDS];
 }
 
 export async function runCommand(
