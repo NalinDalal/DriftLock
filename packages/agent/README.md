@@ -33,10 +33,6 @@ lockfile, an exact pin in the manifest is still used, which matters: the p5
 repository in the real run has no lockfile and states `"p5": "1.11.13"`, and
 reading only the lockfile would have reported no version at all.
 
-`describeRepoFacts` renders this for the opening message, and the model is told
-to run only the listed commands. When the list is empty the message says
-verification is unavailable rather than leaving the model to invent one.
-
 Two deliberate limits:
 
 - **CI commands are read but never executed.** A workflow can contain a deploy
@@ -47,6 +43,78 @@ Two deliberate limits:
 - **A malformed manifest is a warning, not a failure.** A repository we cannot
   fully understand is still one we can migrate, and refusing would be worse than
   proceeding with the problem recorded.
+
+`describeRepoFacts` renders this for the opening message, and the model is told
+to run only the listed commands. When the list is empty the message says
+verification is unavailable rather than leaving the model to invent one.
+
+### Ecosystems are detected, not enumerated
+
+`Ecosystem` is an open `string`, not a union. A closed union of `"npm" |
+"cargo" | "python" | "go" | "unknown"` reports `unknown` for every language
+nobody thought of, which is simply false: the repository is perfectly
+identifiable, we just cannot parse it. Detection runs from a marker table
+(`mix.exs` to elixir, `Gemfile` to ruby, `composer.json` to php, `pom.xml` to
+java, `pubspec.yaml` to dart, `*.csproj` to dotnet) that is independent of
+whether a parser exists, and `ecosystemSupport` says which of the two happened:
+
+| `ecosystemSupport` | Meaning                                                    |
+| ------------------ | ---------------------------------------------------------- |
+| `parsed`           | dependencies and scripts were read out of the manifest      |
+| `detected`         | the language is known, but nothing was parsed               |
+| `none`             | no marker file was found, so we genuinely do not know       |
+
+A detected-only repository is told so explicitly, and the warning names the
+marker file that identified it, because "elixir is recognised from Gemfile"
+sends the reader to the wrong file. `alsoDetected` reports polyglot and monorepo
+repositories rather than silently picking one. Adding a language is a new row in
+the marker table, not a new branch in a type.
+
+The distinction matters most where it is least comfortable. A repository whose
+`package.json` will not parse is still an npm repository; only the manifest
+contents were lost. Reporting `unknown` there would hide that, so it reports npm
+with `ecosystemSupport: "detected"` and no dependencies.
+
+`DETECTED_PACKAGE_MANAGER` supplies the tool for a language we recognise but
+cannot parse, and deliberately does not fall back to the ecosystem name, because
+"using rust" and "using elixir" are not commands anyone can run.
+
+### One directory walk
+
+`listRepoFiles` is the only place the agent walks a repository. Both the
+fingerprint and `searchCode` go through it, because two walks in one package
+means two lists of skip directories that drift apart and then quietly disagree
+about what a repository contains. A plain recursive glob is not enough: it
+cannot prune, so a double-star pattern descends into `node_modules` and `target`
+and spends its budget on build output.
+
+`extensionOf` splits on the last dot in the basename, so `Dockerfile.prod` has
+extension `.prod` and `.nvmrc` has none, rather than both being treated as
+extensions.
+
+## [shipped] Progressive instructions
+
+The opening message does not contain the whole workflow. It contains the packet,
+the repository facts, the contract, and **Step 1**. Each later step is appended
+the moment the work reaches it, so a model is never asked to satisfy the edit
+rules, the gate rules, and the hard rules before it has found a single call site.
+
+`stageOf(state)` derives the stage from what actually happened, not from what the
+model says it intends to do:
+
+| Stage     | Becomes true when             | What the model is told                 |
+| --------- | ----------------------------- | -------------------------------------- |
+| `locate`  | nothing yet                   | search once per deprecated name        |
+| `read`    | it has searched               | read each file, plus direct callers    |
+| `edit`    | it has read a file            | prefer `replaceInFile`, minimal change |
+| `verify`  | it changed a file             | run exactly one listed command         |
+| `pr`      | a command passed              | summarise and open the pull request    |
+
+A single instruction wall is a wall in which every constraint competes for
+attention with every other one, and models reliably satisfy the rules nearest the
+end. Progressive disclosure also means the ordering is enforced by the harness
+rather than merely requested in a prompt, which is the difference between asking
+for the right behaviour and depending on it.
 
 ## [shipped] Checking edits against the real vendor
 
@@ -378,11 +446,15 @@ example a local `CommandRunner` that skips Docker entirely.
   reason the gate currently grades honesty on a board the agent was never given.
 - `fingerprintRepo` reads the top-level manifest only. Workspaces, monorepo
   members, and nested packages are not resolved, so a monorepo reports the root
-  manifest's scripts and misses a package that has its own.
+  manifest's scripts and misses a package that has its own. `alsoDetected` is the
+  only warning that a polyglot layout exists.
+- Only npm, rust, python, and go are parsed. Every other ecosystem is reported as
+  `detected`, which means the model is told to go read the manifest itself. There
+  is no fallback that tries to guess a manifest format.
 - CI command extraction is a regex over `run:` lines. It misses multi-line
   commands, composite actions, and anything expressed as a reusable workflow.
-- `verificationCommands` only covers npm, cargo, and go. Python and Go facts are
-  populated, but the derived command list is not the authority for either yet.
+- `verificationCommands` is derived only for npm, rust, and go. Python and Go
+  facts are populated, but the derived list is not authoritative for either.
 
 ## Real repository runs
 

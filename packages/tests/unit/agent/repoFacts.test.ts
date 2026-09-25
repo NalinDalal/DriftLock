@@ -5,7 +5,10 @@ import { join } from "node:path";
 import {
     deriveVerificationCommands,
     describeRepoFacts,
+    extensionOf,
     fingerprintRepo,
+    listRepoFiles,
+    searchCode,
     versionOf,
 } from "@driftlock/agent";
 
@@ -98,12 +101,19 @@ describe("fingerprintRepo, npm", () => {
         expect(facts.verificationCommands).toContain("bun test");
     });
 
-    test("records a malformed manifest as a warning instead of throwing", async () => {
+    test("still identifies npm when the manifest is unparseable", async () => {
         await write("package.json", "{ not json");
 
         const facts = await fingerprintRepo(root);
         expect(facts.warnings).toContain("package.json is not valid JSON");
-        expect(facts.ecosystem).toBe("unknown");
+
+        // The file is still a package.json, so the repository is still npm. The
+        // old behaviour reported `unknown` here, which was simply false, and hid
+        // the fact that only the manifest contents were lost.
+        expect(facts.ecosystem).toBe("npm");
+        expect(facts.ecosystemSupport).toBe("detected");
+        expect(facts.verificationCommands).toEqual([]);
+        expect(describeRepoFacts(facts)).toContain("cannot parse its manifest");
     });
 
     test("falls back to declared ranges when the lockfile is unreadable", async () => {
@@ -226,7 +236,7 @@ describe("fingerprintRepo, cargo", () => {
 
         const facts = await fingerprintRepo(root);
 
-        expect(facts.ecosystem).toBe("cargo");
+        expect(facts.ecosystem).toBe("rust");
         expect(facts.packageManager).toBe("cargo");
         expect(facts.dependencies.serde).toBe("1.0");
         expect(facts.dependencies.tokio).toBe("1.35");
@@ -260,6 +270,154 @@ describe("fingerprintRepo, python and go", () => {
         expect(facts.ecosystem).toBe("go");
         expect(facts.dependencies["github.com/gin-gonic/gin"]).toBe("v1.9.1");
         expect(facts.verificationCommands).toContain("go test ./...");
+    });
+});
+
+describe("ecosystem detection is open, not a closed union", () => {
+    test("recognises elixir rather than reporting unknown", async () => {
+        await write("mix.exs", "defmodule App.MixProject do\nend\n");
+        await write("lib/app.ex", "defmodule App do\nend\n");
+
+        const facts = await fingerprintRepo(root);
+
+        expect(facts.ecosystem).toBe("elixir");
+        expect(facts.ecosystemSupport).toBe("detected");
+        expect(facts.packageManager).toBe("mix");
+        expect(facts.manifests).toContain("mix.exs");
+        expect(facts.sourceFiles).toContain("lib/app.ex");
+        expect(describeRepoFacts(facts)).toContain("cannot parse its manifest");
+    });
+
+    test("recognises ruby, php, java, dart, and dotnet from markers alone", async () => {
+        const cases: readonly [string, string, string][] = [
+            ["Gemfile", "app.rb", "ruby"],
+            ["composer.json", "app.php", "php"],
+            ["pom.xml", "App.java", "java"],
+            ["pubspec.yaml", "lib/main.dart", "dart"],
+            ["App.csproj", "Program.cs", "dotnet"],
+        ];
+
+        for (const [manifest, source, ecosystem] of cases) {
+            // A fresh root per case, otherwise the previous case's marker file
+            // is still on disk and detection correctly reports whichever comes
+            // first in the marker table.
+            const dir = await mkdtemp(join(tmpdir(), `driftlock-${ecosystem}-`));
+            await writeFile(join(dir, manifest), "{}\n");
+            await mkdir(join(dir, "lib"), { recursive: true });
+            await writeFile(join(dir, source), "// fixture\n");
+
+            const facts = await fingerprintRepo(dir);
+            expect(facts.ecosystem).toBe(ecosystem);
+            expect(facts.ecosystemSupport).toBe("detected");
+            expect(facts.sourceFiles).toContain(source);
+
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
+    test("names the marker file that actually identified the ecosystem", async () => {
+        // Regression: the warning credited the first manifest alphabetically,
+        // so an elixir repository with a Gemfile alongside it was told its
+        // marker was Gemfile, which points at the wrong file entirely.
+        await write("mix.exs", "defmodule App do\nend\n");
+        await write("Gemfile", "gem \"rails\"\n");
+
+        const facts = await fingerprintRepo(root);
+        const warning = facts.warnings.find((entry) => entry.includes("elixir")) ?? "";
+
+        expect(facts.ecosystem).toBe("elixir");
+        expect(warning).toContain("mix.exs");
+        expect(warning).not.toContain("Gemfile");
+    });
+
+    test("uses a correct article before the ecosystem name", async () => {
+        await write("mix.exs", "defmodule App do\nend\n");
+        expect(describeRepoFacts(await fingerprintRepo(root))).toContain(
+            "is an elixir project",
+        );
+
+        await write("Cargo.toml", "[package]\nname = \"x\"\n");
+        expect(describeRepoFacts(await fingerprintRepo(root))).toContain("is a rust project");
+    });
+
+    test("never guesses a package manager that is not a runnable command", async () => {
+        await write("Cargo.toml", "[package]\nname = \"x\"\n");
+        const facts = await fingerprintRepo(root);
+        // A manifest we cannot parse must not be reported as a command to run.
+        expect(facts.packageManager).not.toBe("rust");
+    });
+
+    test("reports a polyglot repository rather than picking one silently", async () => {
+        await write("package.json", JSON.stringify({ scripts: { test: "vitest" } }));
+        await write("mix.exs", "defmodule App do\nend\n");
+
+        const facts = await fingerprintRepo(root);
+        expect(facts.ecosystem).toBe("npm");
+        expect(facts.alsoDetected).toContain("elixir");
+        expect(describeRepoFacts(facts)).toContain("polyglot or monorepo");
+    });
+
+    test("reports unknown honestly when there is no marker at all", async () => {
+        await write("notes.txt", "hello\n");
+        const facts = await fingerprintRepo(root);
+        expect(facts.ecosystem).toBe("unknown");
+        expect(facts.ecosystemSupport).toBe("none");
+        expect(facts.packageManager).toBe("unknown");
+    });
+});
+
+describe("listRepoFiles is the single walk", () => {
+    test("prunes ignored directories rather than descending into them", async () => {
+        await write("src/app.ts", "export const a = 1;\n");
+        await write("node_modules/pkg/index.js", "module.exports = {};\n");
+        await write("dist/bundle.js", "compiled\n");
+        await write("target/debug/main.rs", "fn main() {}\n");
+
+        const files = await listRepoFiles(root);
+
+        expect(files).toContain("src/app.ts");
+        expect(files.some((file) => file.startsWith("node_modules/"))).toBe(false);
+        expect(files.some((file) => file.startsWith("dist/"))).toBe(false);
+        expect(files.some((file) => file.startsWith("target/"))).toBe(false);
+    });
+
+    test("keeps nested paths relative to the root", async () => {
+        await write("a/b/c/deep.ts", "export const d = 1;\n");
+        const files = await listRepoFiles(root);
+        expect(files).toContain("a/b/c/deep.ts");
+    });
+
+    test("refuses a root that is itself inside an ignored tree", async () => {
+        const nested = await mkdtemp(join(tmpdir(), "driftlock-nested-"));
+        await mkdir(join(nested, "node_modules", "pkg"), { recursive: true });
+        await writeFile(join(nested, "node_modules", "pkg", "index.js"), "x\n");
+
+        expect(await listRepoFiles(join(nested, "node_modules"))).toEqual([]);
+        expect(await listRepoFiles(join(nested, "node_modules", "pkg"))).toEqual([]);
+
+        await rm(nested, { recursive: true, force: true });
+    });
+
+    test("searchCode and the fingerprint agree on what the repository contains", async () => {
+        await write("package.json", JSON.stringify({ scripts: { test: "vitest" } }));
+        await write("src/client.ts", "const stripe = 1;\n");
+
+        const facts = await fingerprintRepo(root);
+        const searched = await searchCode(root, "stripe");
+
+        expect(searched.ok).toBe(true);
+        expect(searched.output).toContain("src/client.ts");
+        expect(facts.sourceFiles).toContain("src/client.ts");
+    });
+});
+
+describe("extensionOf", () => {
+    test("reads the real extension and ignores dotfiles", () => {
+        expect(extensionOf("src/app.ts")).toBe(".ts");
+        expect(extensionOf("src/app.TSX")).toBe(".tsx");
+        expect(extensionOf("Dockerfile.prod")).toBe(".prod");
+        expect(extensionOf(".nvmrc")).toBe("");
+        expect(extensionOf("Makefile")).toBe("");
     });
 });
 

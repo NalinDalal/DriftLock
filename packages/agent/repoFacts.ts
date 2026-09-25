@@ -17,10 +17,31 @@ import { join } from "node:path";
  * grounding artifacts the model works from.
  */
 
-export type Ecosystem = "npm" | "cargo" | "python" | "go" | "unknown";
+/**
+ * Open set. A closed union of ecosystems is a bug waiting to happen: every
+ * repository in a language nobody thought of would report `unknown`, which is a
+ * lie, because the repository is perfectly identifiable. Detection is cheap and
+ * data-driven below, so a language we cannot parse is still reported honestly as
+ * detected-but-unparsed rather than being rounded down to nothing.
+ */
+export type Ecosystem = string;
+
+/** How much this module actually understood about the ecosystem. */
+export type EcosystemSupport = "parsed" | "detected" | "none";
+
+/** Ecosystems with a real dependency/script parser in this module. */
+export const PARSED_ECOSYSTEMS = ["npm", "rust", "python", "go"] as const;
 
 export type RepoFacts = {
     ecosystem: Ecosystem;
+    /**
+     * Whether the ecosystem above was actually parsed or merely recognised from
+     * a marker file. `detected` means the language is known and its files are
+     * listed, but no dependency versions were extracted.
+     */
+    ecosystemSupport: EcosystemSupport;
+    /** Other ecosystems whose markers are present, e.g. a monorepo or a polyglot repo. */
+    alsoDetected: Ecosystem[];
     /** Which package manager to invoke, e.g. "npm", "pnpm", "bun", "cargo". */
     packageManager: string;
     manifests: string[];
@@ -67,9 +88,73 @@ const SKIP_DIRS = new Set([
     "__pycache__",
     ".venv",
     "venv",
+    ".tox",
+    ".gradle",
+    "_build",
+    "deps",
 ]);
 
-const SOURCE_EXTENSIONS = [
+/**
+ * Recognises an ecosystem from a manifest file. This table is the extension
+ * point: teaching the fingerprint a language is a new row here, not a new branch
+ * in a type union. Files ending in `.csproj`, `.fsproj` and `.sln` are handled
+ * as a suffix so dotnet projects do not need one row per template.
+ */
+const ECOSYSTEM_MARKERS: readonly (readonly [string, Ecosystem])[] = [
+    ["package.json", "npm"],
+    ["deno.json", "deno"],
+    ["deno.jsonc", "deno"],
+    ["Cargo.toml", "rust"],
+    ["pyproject.toml", "python"],
+    ["requirements.txt", "python"],
+    ["Pipfile", "python"],
+    ["go.mod", "go"],
+    ["mix.exs", "elixir"],
+    ["Gemfile", "ruby"],
+    ["composer.json", "php"],
+    ["pom.xml", "java"],
+    ["build.gradle", "java"],
+    ["build.gradle.kts", "java"],
+    ["pubspec.yaml", "dart"],
+    ["Package.swift", "swift"],
+    ["CMakeLists.txt", "cpp"],
+];
+
+const ECOSYSTEM_SUFFIX_MARKERS: readonly (readonly [string, Ecosystem])[] = [
+    [".csproj", "dotnet"],
+    [".fsproj", "dotnet"],
+    [".vbproj", "dotnet"],
+    [".sln", "dotnet"],
+];
+
+/**
+ * The tool that drives each ecosystem, for the case where we can identify the
+ * language but not parse its manifest. Guessing the ecosystem name as though it
+ * were a command produces "using elixir" and "using rust", which are not
+ * commands anyone can run.
+ */
+const DETECTED_PACKAGE_MANAGER: Readonly<Record<Ecosystem, string>> = {
+    npm: "npm",
+    deno: "deno",
+    rust: "cargo",
+    go: "go",
+    elixir: "mix",
+    ruby: "bundler",
+    php: "composer",
+    java: "maven",
+    dotnet: "dotnet",
+    dart: "dart",
+    swift: "swift",
+    cpp: "cmake",
+    python: "python",
+};
+
+const MANIFEST_FILES = new Set(
+    ECOSYSTEM_MARKERS.map(([file]) => file).filter((file) => !file.includes("/")),
+);
+
+/** Source extensions the fingerprint will list as candidate call sites. */
+const SOURCE_EXTENSIONS = new Set([
     ".ts",
     ".tsx",
     ".js",
@@ -80,10 +165,22 @@ const SOURCE_EXTENSIONS = [
     ".py",
     ".go",
     ".java",
+    ".kt",
+    ".kts",
     ".rb",
     ".php",
-];
+    ".ex",
+    ".exs",
+    ".swift",
+    ".dart",
+    ".cs",
+    ".scala",
+]);
 
+/** Additional extensions worth grepping, beyond files we would edit. */
+const TEXT_EXTENSIONS = new Set([...SOURCE_EXTENSIONS, ".json", ".md", ".yaml", ".yml"]);
+
+const MAX_REPO_FILES = 20_000;
 const MAX_SOURCE_FILES = 2000;
 const MAX_LISTED_FILES = 200;
 
@@ -116,15 +213,51 @@ const FRAMEWORK_PACKAGES = [
     "d3",
 ];
 
-async function readText(path: string): Promise<string | null> {
-    try {
-        return await Bun.file(path).text();
-    } catch {
-        return null;
-    }
+/**
+ * The extension of a path, or `""`. Uses the last dot in the basename, so
+ * `Dockerfile.prod` has extension `.prod` and a dotfile like `.nvmrc` has none,
+ * rather than both being mistaken for extensions.
+ */
+export function extensionOf(file: string): string {
+    const base = file.slice(file.lastIndexOf("/") + 1);
+    const dot = base.lastIndexOf(".");
+    if (dot <= 0) return "";
+    return base.slice(dot).toLowerCase();
 }
 
-async function listFiles(root: string): Promise<string[]> {
+export function isSourceFile(file: string): boolean {
+    return SOURCE_EXTENSIONS.has(extensionOf(file));
+}
+
+/** Whether a file is worth grepping, which is a wider set than is worth editing. */
+export function isTextSearchable(file: string): boolean {
+    return TEXT_EXTENSIONS.has(extensionOf(file));
+}
+
+/**
+ * Walks a repository once and returns every file path, relative and sorted.
+ *
+ * This is the single directory walk for the whole agent. Both the fingerprint
+ * and `searchCode` go through it, because two walks in one package means two
+ * lists of skip directories that inevitably drift apart and quietly disagree
+ * about what a repository contains.
+ *
+ * A plain recursive glob is not enough here: it cannot prune a directory, so a
+ * double-star pattern descends into `node_modules` and `target` and burns the
+ * budget on build output. Pruning during the walk is the whole reason this
+ * exists.
+ */
+export async function listRepoFiles(
+    root: string,
+    options: { max?: number } = {},
+): Promise<string[]> {
+    const max = options.max ?? MAX_REPO_FILES;
+
+    // A caller may point us at a subdirectory that is itself inside an ignored
+    // tree. Preserving that means searchCode keeps its previous behaviour.
+    const rootSegments = root.split("/");
+    if (rootSegments.some((segment) => SKIP_DIRS.has(segment))) return [];
+
     const out: string[] = [];
     const queue: string[] = [root];
 
@@ -137,20 +270,30 @@ async function listFiles(root: string): Promise<string[]> {
         } catch {
             continue;
         }
+        const relativeDir = dir === root ? "" : dir.slice(root.length + 1);
         for (const entry of entries) {
             if (entry.isDirectory()) {
                 if (!SKIP_DIRS.has(entry.name)) queue.push(join(dir, entry.name));
                 continue;
             }
-            if (out.length >= MAX_SOURCE_FILES) return out.sort();
-            out.push(dir === root ? entry.name : `${dir.slice(root.length + 1)}/${entry.name}`);
+            if (!entry.isFile()) continue;
+            if (out.length >= max) return out.sort();
+            out.push(relativeDir ? `${relativeDir}/${entry.name}` : entry.name);
         }
     }
     return out.sort();
 }
 
-function isSourceFile(file: string): boolean {
-    return SOURCE_EXTENSIONS.some((ext) => file.endsWith(ext));
+async function readText(path: string): Promise<string | null> {
+    try {
+        return await Bun.file(path).text();
+    } catch {
+        return null;
+    }
+}
+
+async function listFiles(root: string): Promise<string[]> {
+    return listRepoFiles(root);
 }
 
 /**
@@ -304,7 +447,7 @@ async function readCargoFacts(
         : null;
 
     return {
-        ecosystem: "cargo",
+        ecosystem: "rust",
         packageManager: "cargo",
         lockfiles,
         scripts: {
@@ -427,7 +570,7 @@ export function deriveVerificationCommands(facts: RepoFacts): string[] {
     const manager = facts.packageManager;
     const out: string[] = [];
 
-    if (facts.ecosystem === "cargo" || facts.ecosystem === "go") {
+    if (facts.ecosystem === "rust" || facts.ecosystem === "go") {
         for (const name of Object.keys(facts.scripts)) {
             const command = facts.scripts[name];
             if (command && !out.includes(command)) out.push(command);
@@ -459,23 +602,44 @@ export async function fingerprintRepo(root: string): Promise<RepoFacts> {
     const python = await readPythonFacts(root, files);
     const go = await readGoFacts(root, files);
 
-    const chosen = npm.ecosystem ? npm : cargo.ecosystem ? cargo : python.ecosystem ? python : go;
-    const manifests = files.filter((file) =>
-        /^(package\.json|Cargo\.toml|pyproject\.toml|requirements\.txt|Pipfile|go\.mod)$/.test(
-            file,
-        ),
-    );
+    // Detection runs from the marker table and is independent of whether a
+    // parser exists. This is what keeps a Ruby or Elixir repository from being
+    // reported as `unknown` just because nobody has written its parser yet.
+    const detected = detectEcosystems(files);
+    const parsed = [npm, cargo, python, go].find((entry) => entry.ecosystem);
+    const chosen = parsed ?? {};
 
     const dependencies = chosen.dependencies ?? {};
     const frameworks = Object.keys(dependencies).filter((name) =>
         FRAMEWORK_PACKAGES.some((pkg) => name === pkg || name.startsWith(`${pkg}/`)),
     );
 
-    const sourceFiles = files.filter(isSourceFile);
+    const ecosystem = chosen.ecosystem ?? detected[0]?.ecosystem ?? "unknown";
+    const marker = detected.find((entry) => entry.ecosystem === ecosystem)?.marker;
+    const support: EcosystemSupport = chosen.ecosystem
+        ? "parsed"
+        : detected.length > 0
+          ? "detected"
+          : "none";
+
+    // Bounded independently of the file walk, because a monorepo can hold tens
+    // of thousands of files and the source list is only ever advisory.
+    const sourceFiles: string[] = [];
+    for (const file of files) {
+        if (sourceFiles.length >= MAX_SOURCE_FILES) break;
+        if (isSourceFile(file)) sourceFiles.push(file);
+    }
     const partial: RepoFacts = {
-        ecosystem: chosen.ecosystem ?? "unknown",
-        packageManager: chosen.packageManager ?? "unknown",
-        manifests,
+        ecosystem,
+        ecosystemSupport: support,
+        alsoDetected: detected
+            .map((entry) => entry.ecosystem)
+            .filter((entry) => entry !== ecosystem),
+        packageManager:
+            chosen.packageManager ??
+            (support === "detected" ? DETECTED_PACKAGE_MANAGER[ecosystem] : undefined) ??
+            "unknown",
+        manifests: files.filter((file) => MANIFEST_FILES.has(file)),
         lockfiles: chosen.lockfiles ?? [],
         runtime: chosen.runtime,
         scripts: chosen.scripts ?? {},
@@ -489,8 +653,40 @@ export async function fingerprintRepo(root: string): Promise<RepoFacts> {
         warnings,
     };
 
+    if (support === "detected") {
+        warnings.push(
+            `${ecosystem} is recognised from ${marker ?? "a manifest file"}, but this module cannot parse it, so dependency versions and verification commands are empty. Read ${marker ?? "the manifest"} yourself.`,
+        );
+    }
+
     partial.verificationCommands = deriveVerificationCommands(partial);
     return partial;
+}
+
+/**
+ * Every ecosystem whose marker file is present, paired with the file that
+ * identified it. A repository with both `package.json` and `Cargo.toml` reports
+ * both, and the first is treated as primary.
+ *
+ * Returning the marker matters: an error message that says "elixir is recognised
+ * from Gemfile" is worse than no message, because it points at the wrong file.
+ */
+function detectEcosystems(files: string[]): { ecosystem: Ecosystem; marker: string }[] {
+    const present = new Set(files);
+    const out: { ecosystem: Ecosystem; marker: string }[] = [];
+
+    for (const [file, ecosystem] of ECOSYSTEM_MARKERS) {
+        if (present.has(file) && !out.some((entry) => entry.ecosystem === ecosystem)) {
+            out.push({ ecosystem, marker: file });
+        }
+    }
+    for (const [suffix, ecosystem] of ECOSYSTEM_SUFFIX_MARKERS) {
+        const marker = files.find((file) => file.endsWith(suffix));
+        if (marker && !out.some((entry) => entry.ecosystem === ecosystem)) {
+            out.push({ ecosystem, marker });
+        }
+    }
+    return out;
 }
 
 /**
@@ -513,11 +709,27 @@ export function versionOf(facts: RepoFacts, name: string): string | undefined {
  * the pinned version of the library being migrated, and the exact commands it may
  * run. Everything else is noise that competes for attention.
  */
+/** "a rust" reads badly, and the text is read by a model, not just by us. */
+function withArticle(ecosystem: string): string {
+    return `${"aeiou".includes(ecosystem[0] ?? "") ? "an" : "a"} ${ecosystem}`;
+}
+
 export function describeRepoFacts(facts: RepoFacts): string {
     const lines: string[] = [];
     lines.push(
-        `This repository is a ${facts.ecosystem} project using ${facts.packageManager}.`,
+        `This repository is ${withArticle(facts.ecosystem)} project using ${facts.packageManager}.`,
     );
+
+    if (facts.ecosystemSupport === "detected") {
+        lines.push(
+            `I can recognise ${facts.ecosystem} but I cannot parse its manifest, so the details below may be empty. Read the manifest file yourself rather than assuming it has no dependencies.`,
+        );
+    }
+    if (facts.alsoDetected.length > 0) {
+        lines.push(
+            `Markers for these are also present, so this may be a polyglot or monorepo: ${facts.alsoDetected.join(", ")}.`,
+        );
+    }
 
     if (facts.runtime) {
         lines.push(`Runtime: ${facts.runtime.name} ${facts.runtime.version}.`);

@@ -10,10 +10,13 @@ import {
     canRunMoreCommands,
     createInitialState,
     decideOutcome,
+    describeNextStep,
     limits,
     recordFileChanged,
+    stageOf,
     type AgentState,
     type ChangePacket,
+    type MigrationStage,
     type Outcome,
     type ToolCall,
     type TranscriptEntry,
@@ -437,9 +440,26 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
     const facts = options.repoFacts ?? (await fingerprintRepo(options.root));
     const state = createInitialState(options.packet, options.contract, facts);
     const model = options.model ?? "gpt-4o-mini";
+    let lastStage: MigrationStage | null = null;
 
     while (!state.done && state.iteration < state.maxIterations) {
         state.iteration++;
+
+        // The opening message carries the grounding and the first instruction
+        // only. Each time the work crosses into a new stage, the instruction for
+        // that stage is appended, so the model is told what to do next at the
+        // moment it becomes relevant rather than being handed the whole plan up
+        // front and expected to remember the relevant part.
+        const stage = stageOf(state);
+        if (stage !== lastStage) {
+            if (lastStage !== null) {
+                state.transcript.push({
+                    role: "user",
+                    content: describeNextStep(stage, facts),
+                });
+            }
+            lastStage = stage;
+        }
 
         const response = await deps.create({
             model,
@@ -475,6 +495,7 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
 
         for (const call of toolCalls) {
             const result = await execute(call.name, call.args, options, state);
+            if (!state.toolsUsed.includes(call.name)) state.toolsUsed.push(call.name);
             state.transcript.push({
                 role: "tool",
                 toolCallId: call.id,

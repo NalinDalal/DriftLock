@@ -1,5 +1,5 @@
 import { stat } from "node:fs/promises";
-import { fingerprintRepo } from "./repoFacts";
+import { fingerprintRepo, isTextSearchable, listRepoFiles } from "./repoFacts";
 
 export type ToolResult = { ok: boolean; output: string };
 
@@ -18,27 +18,6 @@ const ALLOWED_COMMANDS = new Set([
     "bun run typecheck",
     "bun run lint",
 ]);
-
-const SKIP_DIRS = new Set([
-    ".git",
-    "node_modules",
-    "dist",
-    "build",
-    ".next",
-    "coverage",
-    ".turbo",
-]);
-
-const SCANNABLE_EXTENSIONS = [
-    ".ts",
-    ".tsx",
-    ".js",
-    ".jsx",
-    ".mjs",
-    ".cjs",
-    ".json",
-    ".md",
-];
 
 const MAX_READ_CHARS = 8000;
 const MAX_COMMAND_CHARS = 4000;
@@ -81,16 +60,8 @@ export function resolveInsideRoot(
 }
 
 async function collectSourceFiles(root: string): Promise<string[]> {
-    const glob = new Bun.Glob("**/*");
-    const files: string[] = [];
-    for await (const entry of glob.scan({ cwd: root, onlyFiles: true })) {
-        const segments = entry.split("/");
-        if (segments.some((segment) => SKIP_DIRS.has(segment))) continue;
-        if (!SCANNABLE_EXTENSIONS.some((ext) => entry.endsWith(ext))) continue;
-        files.push(entry);
-        if (files.length >= 2000) break;
-    }
-    return files.sort();
+    const files = await listRepoFiles(root, { max: 2000 });
+    return files.filter(isTextSearchable);
 }
 
 export async function inspectRepo(root: string): Promise<ToolResult> {

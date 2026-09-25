@@ -355,11 +355,66 @@ describe("the repository is fingerprinted before the model is asked to change it
         expect(opening).toContain("Scripts that exist: dev, build");
         expect(opening).toContain("npm run build");
         expect(opening).toContain("p5@1.11.13");
-        expect(opening).toContain("Search for call sites");
+        expect(opening).toContain("Step 1: find every call site");
 
         // The commands that do not exist must not be offered as if they did.
         expect(opening).not.toContain("npm test");
         expect(opening).not.toContain("npm run typecheck");
+    });
+
+    test("hands over one step at a time instead of the whole plan", async () => {
+        const sent: Record<string, unknown>[][] = [];
+        let index = 0;
+        apiCalls = [
+            toolCall("searchCode", { query: "keyCode" }, "c1"),
+            toolCall("readFile", { path: "src/sketch.js" }, "c2"),
+            toolCall(
+                "replaceInFile",
+                {
+                    path: "src/sketch.js",
+                    oldText: "p.keyCode === 38",
+                    newText: "p.keyIsDown(p.UP_ARROW)",
+                },
+                "c3",
+            ),
+        ];
+        const client = {
+            chat: {
+                completions: {
+                    create: async (body: Record<string, unknown>) => {
+                        sent.push(body.messages as Record<string, unknown>[]);
+                        const next = apiCalls[Math.min(index, apiCalls.length - 1)];
+                        index += 1;
+                        return next as never;
+                    },
+                },
+            },
+        } as unknown as Parameters<typeof runMigrationAgent>[0]["client"];
+
+        const result = await runMigrationAgent({
+            root,
+            packet: p5Packet,
+            contract: p5Contract,
+            vendor: P5_VENDOR,
+            client,
+        });
+
+        expect(result.filesChanged).toEqual(["src/sketch.js"]);
+
+        const opening = String(sent[0][1].content);
+        const last = sent[sent.length - 1].map((entry) => String(entry.content));
+
+        // The opening message states step 1 and withholds the rest, so the model
+        // is never asked to hold the edit rules and the gate rules before it has
+        // reached the point where they apply.
+        expect(opening).toContain("Step 1");
+        expect(opening).not.toContain("Step 2");
+        expect(opening).not.toContain("Step 3");
+        expect(opening).not.toContain("Step 4");
+
+        // By the time it is editing, step 3 has arrived.
+        expect(last.join("\n")).toContain("Step 3: make the change");
+        expect(last.join("\n")).toContain("Prefer replaceInFile");
     });
 
     test("says so plainly when the repository has no verification command", async () => {

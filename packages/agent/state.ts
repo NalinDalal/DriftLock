@@ -32,6 +32,8 @@ export type AgentState = {
     commandsRun: number;
     maxFilesChanged: number;
     filesChanged: string[];
+    /** Every tool name invoked so far, which is how the next step is decided. */
+    toolsUsed: string[];
     transcript: TranscriptEntry[];
     lastTestResult?: { passed: boolean; output: string };
     /** Vendor symbols the edits introduced that the contract could not resolve. */
@@ -81,12 +83,10 @@ export function createInitialState(
         );
     }
 
-    opening.push(
-        "",
-        facts
-            ? "Migrate this repository. Search for call sites rather than assuming where they are, make the smallest correct change, then verify with the exact commands listed above."
-            : "Migrate this repository. Inspect before editing, make the smallest correct change, then verify with the whitelisted commands.",
-    );
+    // Only the first instruction. The rest arrive as the work actually happens,
+    // so the model is never asked to hold the whole plan and every rule in one
+    // context at once.
+    opening.push("", describeNextStep("locate", facts));
 
     return {
         iteration: 0,
@@ -95,10 +95,88 @@ export function createInitialState(
         commandsRun: 0,
         maxFilesChanged: limits.MAX_FILES_CHANGED,
         filesChanged: [],
+        toolsUsed: [],
         transcript: [{ role: "user", content: opening.join("\n") }],
         done: false,
         outcome: null,
     };
+}
+
+/**
+ * Where the migration currently stands, derived from what has actually happened
+ * rather than from what the model says it intends to do.
+ */
+export type MigrationStage =
+    | "locate"
+    | "read"
+    | "edit"
+    | "verify"
+    | "pr"
+    | "done";
+
+export function stageOf(state: AgentState): MigrationStage {
+    if (state.done) return "done";
+    if (state.lastTestResult?.passed) return "pr";
+    if (state.filesChanged.length > 0) return "verify";
+    if (state.toolsUsed.includes("readFile")) return "edit";
+    if (state.toolsUsed.includes("searchCode")) return "read";
+    return "locate";
+}
+
+/**
+ * The one instruction that matters right now.
+ *
+ * Progressive rather than exhaustive on purpose. A single opening message that
+ * contains the workflow, the edit rules, the gate rules, and the hard rules is a
+ * wall of text in which every constraint competes for attention with every other
+ * one, and a model asked to satisfy all of it at once tends to satisfy the ones
+ * nearest the end. Handing over one step at a time also means the step is
+ * enforced by the harness rather than merely requested by a prompt.
+ */
+export function describeNextStep(stage: MigrationStage, facts?: RepoFacts): string {
+    switch (stage) {
+        case "locate": {
+            const where = facts
+                ? facts.verificationCommands.length > 0
+                    ? `This project can be verified with: ${facts.verificationCommands.join(", ")}.`
+                    : "This project has no verification command, so you will not be able to prove the change works. Report that rather than inventing one."
+                : "";
+            return [
+                "Step 1: find every call site, before changing anything.",
+                "Use searchCode once per deprecated name in the change packet. Do not assume where they are, and do not edit a file you have not read.",
+                where,
+            ]
+                .filter(Boolean)
+                .join("\n");
+        }
+        case "read":
+            return [
+                "Step 2: read each file you found, plus its direct callers.",
+                "You are about to change code. Reading first is what keeps the change minimal and correct.",
+            ].join("\n");
+        case "edit":
+            return [
+                "Step 3: make the change.",
+                "Prefer replaceInFile. Copy oldText verbatim from what you read and include enough surrounding lines to make it unique. Never type line numbers.",
+                "Use editFile only when a single contiguous hunk is clearly the best option. A hunk must be an unbroken slice of the file; skipping a line, a closing brace, or a blank line between context lines makes git reject the whole patch.",
+                "Make the smallest correct change. No drive-by refactors, no formatting churn.",
+            ].join("\n");
+        case "verify":
+            return [
+                "Step 4: verify.",
+                facts?.verificationCommands.length
+                    ? `Run exactly one of: ${facts.verificationCommands.join(", ")}. Copy it exactly.`
+                    : "There is no verification command in this repository, so say that verification is unavailable. Do not invent one.",
+                "A migration is not done until it passes. If it fails, read the output, fix the cause, and run it again.",
+            ].join("\n");
+        case "pr":
+            return [
+                "Step 5: open the pull request.",
+                "Verification passed. Summarise what changed and why, and name the command that passed.",
+            ].join("\n");
+        case "done":
+            return "Stop.";
+    }
 }
 
 export function recordFileChanged(state: AgentState, path: string): void {
