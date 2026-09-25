@@ -317,17 +317,31 @@ export async function createWebhookFixPR(
     const octokit = new Octokit({ auth: input.token });
     const writer = new PRWriter(octokit);
 
-    const result = await writer.writeFixPR({
-        owner: input.owner,
-        repo: input.repo,
-        base: input.base,
-        branch,
-        title,
-        body,
-        commitMessage,
-        files,
-        octokit,
-    });
+    let result: Awaited<ReturnType<PRWriter["writeFixPR"]>>;
+    try {
+        result = await writer.writeFixPR({
+            owner: input.owner,
+            repo: input.repo,
+            base: input.base,
+            branch,
+            title,
+            body,
+            commitMessage,
+            files,
+            octokit,
+        });
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const status = (error as { status?: number })?.status;
+        if (status === 422 && message.includes("already exists")) {
+            return {
+                status: "already_open",
+                branch,
+                filesChanged: files.map((f) => f.path),
+            };
+        }
+        throw error;
+    }
 
     return {
         status: "opened",
