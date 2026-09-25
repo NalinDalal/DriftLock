@@ -36,6 +36,10 @@ import { handleInstallationsSync } from "./routes/installations";
 const AUTH_ROUTES = new Set([
     "/api/auth/github",
     "/api/auth/github/callback",
+    // GitHub redirects the browser here after an App install, so there is no
+    // bearer token to present.
+    "/api/github/setup",
+    "/api/github/setup/callback",
 ]);
 
 async function dispatch(req: Request, url: URL): Promise<Response> {
