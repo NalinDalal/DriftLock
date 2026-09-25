@@ -456,6 +456,50 @@ export function contractFromHar(
     };
 }
 
+/**
+ * A contract assembled from one webhook drift observation: the flattened
+ * baseline schema and the flattened current schema.
+ *
+ * Flat keys are envelope-relative (`data.object.source`), while handler code
+ * reads fields off a receiver (`paymentIntent.source`), so each key
+ * contributes both its full path and its leaf name. The leaf is what the
+ * completeness half of the gate matches on: a read of a removed leaf is a
+ * missed call site wherever it lives. Authority is `sampled` for the same
+ * reason as a HAR recording — one payload is a narrow sample, so only the
+ * explicit `removed` list (leaves of fields the baseline had and the current
+ * payload lacks) counts as evidence of removal.
+ */
+export function contractFromWebhookAlert(input: {
+    provider: string;
+    version?: string;
+    eventType: string;
+    previous: Record<string, string>;
+    current: Record<string, string>;
+}): VendorContract {
+    const leaves = (schema: Record<string, string>): string[] =>
+        Object.keys(schema).flatMap((path) => {
+            const leaf = path.split(".").pop();
+            return leaf ? [path, leaf] : [path];
+        });
+    const removedLeaves = Object.keys(input.previous)
+        .filter((path) => !(path in input.current))
+        .flatMap((path) => {
+            const leaf = path.split(".").pop();
+            return leaf ? [path, leaf] : [path];
+        });
+    return {
+        ...emptyContract(
+            input.provider,
+            input.version ?? "unversioned",
+            "recorded",
+            "sampled",
+            `webhook ${input.eventType} observed payload`,
+        ),
+        members: uniqueSorted(leaves(input.current)),
+        removed: uniqueSorted(removedLeaves),
+    };
+}
+
 function isOpenApiSpec(value: unknown): value is { components?: { schemas?: Record<string, unknown> } } {
     return (
         typeof value === "object" &&

@@ -118,8 +118,8 @@ describe("runMigrationAgent", () => {
 
         const result = await runMigrationAgent({ root, packet, client: fakeClient() });
 
-        // No contract gates this run, so the verified diff is review-only.
-        expect(result.outcome).toBe("review_pr");
+        // No contract gates this run, so the verified diff is a draft.
+        expect(result.outcome).toBe("draft_pr");
         expect(result.filesChanged).toEqual(["src/client.ts"]);
         expect(result.state.commandsRun).toBe(1);
         expect(result.state.lastTestResult?.passed).toBe(true);
@@ -129,7 +129,7 @@ describe("runMigrationAgent", () => {
         expect(updated).toContain("createSurface(1)");
     });
 
-    test("reports draft_pr when the caller prefers drafts and no contract gates the run", async () => {
+    test("reports draft_pr when no contract gates the run", async () => {
         const init = Bun.spawn(["git", "init"], { cwd: root, stdout: "pipe" });
         await init.exited;
         const add = Bun.spawn(["git", "add", "-A"], { cwd: root, stdout: "pipe" });
@@ -161,7 +161,6 @@ describe("runMigrationAgent", () => {
         const result = await runMigrationAgent({
             root,
             packet,
-            prMode: "draft",
             client: fakeClient(),
         });
 

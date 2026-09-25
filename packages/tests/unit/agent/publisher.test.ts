@@ -10,7 +10,9 @@ import {
     runMigrationAgent,
     type ChangePacket,
     type PullRequestPublisher,
+    type VendorContract,
 } from "@driftlock/agent";
+import { P5_VENDOR } from "@driftlock/core";
 import { FixPRRunner } from "@driftlock/git";
 
 let root: string;
@@ -380,9 +382,9 @@ describe("createPullRequest", () => {
             ]),
         });
 
-        // No contract gates this run, so the verified diff is review-only even
-        // though the PR itself opened.
-        expect(result.outcome).toBe("review_pr");
+        // No contract gates this run, so the gate publishes a draft and the
+        // outcome matches it.
+        expect(result.outcome).toBe("draft_pr");
         expect(result.state.pullRequest).toEqual({
             status: "opened",
             url: "https://github.com/acme/widgets/pull/7",
@@ -392,10 +394,44 @@ describe("createPullRequest", () => {
         expect(seen).toHaveLength(1);
         expect(seen[0].target).toEqual(target);
         expect(seen[0].branch).toBe("driftlock/p5-2-3");
+        // Contractless: the gate enforces draft, not the outcome label.
+        expect(seen[0].draft).toBe(true);
         expect(seen[0].commitMessage).toBe("driftlock: migrate p5 1.11 to 2.3");
         expect(seen[0].files).toEqual([
             { path: "src/client.ts", content: "createSurface(1);\n" },
         ]);
+    });
+
+    test("publishes a mergeable PR when a contract gates the run", async () => {
+        const { publisher, seen } = recordingPublisher();
+        const contract: VendorContract = {
+            provider: "p5",
+            version: "2.3.0",
+            source: "spec",
+            authority: "authoritative",
+            origin: "test://contract",
+            capturedAt: new Date().toISOString(),
+            members: ["createSurface"],
+            removed: [],
+        };
+        const result = await runMigrationAgent({
+            root,
+            packet,
+            publisher,
+            target,
+            contract,
+            vendor: P5_VENDOR,
+            client: scriptedClient([
+                editCall(),
+                buildCall("npm run build"),
+                prCall("driftlock/p5-2-3"),
+            ]),
+        });
+
+        expect(result.outcome).toBe("auto_pr");
+        expect(seen).toHaveLength(1);
+        expect(seen[0].draft).toBe(false);
+        expect(result.state.pullRequest?.status).toBe("opened");
     });
 
     test("refuses a branch outside the driftlock namespace", async () => {

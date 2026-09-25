@@ -109,6 +109,16 @@ That's DriftLock.
 
 ---
 
+## Real pain — not hypothetical
+
+- **$2,300/mo leaked for 11 months, dashboard looked normal.** `invoice.payment_failed` returned `200 OK` so Stripe stopped retrying, but the handler never revoked access or updated the DB. 4/6 Stripe audits had a critical webhook gap, avg $340/mo. Growth hid it in noise. [IndieHackers](https://www.indiehackers.com/post/i-found-2-300-leaking-silently-from-a-founders-stripe-account-he-had-no-idea-for-11-months-d54003963d)
+- **Webhooks at scale suck.** Millions of mission-critical events across Shopify / Stripe / Intercom with no good alternative to hand-rolled handlers. [IndieHackers](https://www.indiehackers.com/post/dealing-with-webhooks-sucks-but-there-s-something-you-can-do-about-it-70cd46e170)
+- **Fear when real money is on the line.** Double subscriptions from double Checkout, missed cancel webhooks charging forever, wrong Price ID in `.env`, paid-but-no-service. Founders answer with logging everything + daily reconciliation jobs. [IndieHackers](https://www.indiehackers.com/post/how-do-you-deal-with-the-fear-of-bugs-when-real-money-is-on-the-line-24bcbd5516)
+
+DriftLock exists for exactly this: detect the drift, prove the impact, open the fix PR.
+
+---
+
 ## How it works
 
 DriftLock has two detection modes: **outbound** (APIs you call) and **inbound** (webhooks you receive).

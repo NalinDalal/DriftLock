@@ -11,14 +11,6 @@ export type ChangePacket = {
 
 export type Outcome = "auto_pr" | "review_pr" | "draft_pr" | "no_action";
 
-/**
- * What the caller wants when the migration cannot be fully verified against
- * a vendor contract. `review` reports `review_pr` (a human must review the
- * diff); `draft` reports `draft_pr` (open it as a draft, if the entry point
- * supports drafts, rather than requesting review).
- */
-export type PrMode = "review" | "draft";
-
 export type ToolCall = {
     id: string;
     name: string;
@@ -54,8 +46,6 @@ export type AgentState = {
      * draft-only.
      */
     hasContract: boolean;
-    /** The caller's preference for the contract-absent outcome. */
-    prMode: PrMode;
     pullRequest?: {
         status: "opened" | "already_open" | "merged";
         url: string;
@@ -116,11 +106,9 @@ export function createInitialState(
         transcript: [{ role: "user", content: opening.join("\n") }],
         done: false,
         outcome: null,
-        // The runner sets these from its options after creation: a contract
-        // plus vendor config means the contract gate can run, and prMode
-        // records whether the caller wants review or draft when it cannot.
+        // The runner sets this from its options after creation: a contract
+        // plus vendor config means the contract gate can run.
         hasContract: false,
-        prMode: "review",
     };
 }
 
@@ -218,14 +206,14 @@ export function canRunMoreCommands(state: AgentState): boolean {
  * symbols it could not resolve, the migration is unverified no matter what the
  * build says, so it can never reach `auto_pr`. Likewise, without a vendor
  * contract there is nothing checking the edits against the vendor's real API
- * surface, so the best a verified diff can get is `review_pr` — or `draft_pr`
- * when the caller prefers drafts.
+ * surface: the publish gate opens a draft in that case, and the outcome says
+ * `draft_pr` to match.
  */
 export function decideOutcome(state: AgentState): Outcome {
     const contractClean = !state.symbolFindings || state.symbolFindings.length === 0;
     if (state.lastTestResult?.passed && state.filesChanged.length > 0 && contractClean) {
         if (!state.hasContract) {
-            return state.prMode === "draft" ? "draft_pr" : "review_pr";
+            return "draft_pr";
         }
         return "auto_pr";
     }

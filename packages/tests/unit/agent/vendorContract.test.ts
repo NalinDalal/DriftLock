@@ -4,6 +4,7 @@ import {
     collectBoundNames,
     contractFromHar,
     contractFromSpec,
+    contractFromWebhookAlert,
     describeContract,
     diffContracts,
     discoverVendorReceivers,
@@ -131,6 +132,59 @@ describe("contractFromHar", () => {
         expect(() =>
             contractFromHar("stripe", "x", { log: { entries: [] } }, "empty.har"),
         ).toThrow(/empty/i);
+    });
+});
+
+describe("contractFromWebhookAlert", () => {
+    const previous = {
+        "data.object.id": "string",
+        "data.object.amount": "number",
+        "data.object.source": "string",
+    };
+    const current = {
+        "data.object.id": "string",
+        "data.object.amount": "number",
+        "data.object.payment_method": "string",
+    };
+
+    test("builds members and removed leaves from one baseline/current pair", () => {
+        const built = contractFromWebhookAlert({
+            provider: "stripe",
+            eventType: "payment_intent.succeeded",
+            previous,
+            current,
+        });
+
+        expect(built.source).toBe("recorded");
+        expect(built.authority).toBe("sampled");
+        expect(built.members).toContain("payment_method");
+        expect(built.members).toContain("data.object.payment_method");
+        expect(built.removed).toContain("source");
+        // Unchanged leaves are evidence of nothing.
+        expect(built.removed.some((member) => member === "id")).toBe(false);
+    });
+
+    test("drives the gate's stale check on handler code", () => {
+        const built = contractFromWebhookAlert({
+            provider: "stripe",
+            eventType: "payment_intent.succeeded",
+            previous,
+            current,
+        });
+        const handler = `async function handleWebhook(event) {
+  const paymentIntent = event.data.object;
+  return {
+    source: paymentIntent.source,
+  };
+}
+`;
+        const findings = verifyVendorSymbols(built, new Map([["webhook.js", handler]]), {
+            vendor: STRIPE_VENDOR,
+        });
+
+        expect(findings).toHaveLength(1);
+        expect(findings[0].kind).toBe("stale");
+        expect(findings[0].line).toBe(4);
     });
 });
 

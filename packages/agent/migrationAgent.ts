@@ -18,7 +18,6 @@ import {
     type ChangePacket,
     type MigrationStage,
     type Outcome,
-    type PrMode,
     type ToolCall,
     type TranscriptEntry,
 } from "./state";
@@ -159,12 +158,6 @@ export type RunOptions = {
      */
     contract?: VendorContract;
     vendor?: VendorConfig;
-    /**
-     * What the caller wants when no vendor contract gates the run. Without a
-     * contract the outcome is capped at `review_pr` (`review`, the default) or
-     * `draft_pr` (`draft`), never `auto_pr`.
-     */
-    prMode?: PrMode;
     /**
      * Overrides the repository fingerprint. Normally this is read from disk
      * before the loop starts, because the model cannot be trusted to go looking
@@ -395,6 +388,11 @@ async function openPullRequest(
         return { ok: false, output: "Refusing to open a PR: the working tree is clean" };
     }
 
+    // The policy, enforced where the PR is opened rather than in the outcome
+    // label: without a vendor contract nothing checked the edits against the
+    // vendor's real API surface, so the run may only ever produce a draft.
+    const draft = !contract || !vendor;
+
     if (!publisher || !target) {
         const stat = await collectDiffStat(root);
         return {
@@ -402,7 +400,7 @@ async function openPullRequest(
             output: [
                 `PREVIEW ONLY, no pull request was opened.`,
                 `A publisher and target were not supplied to the agent.`,
-                `Would open on branch ${branch} against ${target?.base ?? "<base>"}`,
+                `Would open${draft ? " as a draft (no vendor contract)" : ""} on branch ${branch} against ${target?.base ?? "<base>"}`,
                 `Title: ${title}`,
                 `Body: ${body}`,
                 `Diff stat: ${stat || "(no changes)"}`,
@@ -428,6 +426,7 @@ async function openPullRequest(
                 fromVersion: packet.fromVersion,
                 toVersion: packet.toVersion,
             }),
+            draft,
         });
     } catch (error) {
         return {
@@ -440,7 +439,7 @@ async function openPullRequest(
     return {
         ok: true,
         output: [
-            `Pull request ${result.status}: ${result.url}`,
+            `Pull request ${result.status}${draft ? " (draft)" : ""}: ${result.url}`,
             `Branch: ${result.branch}`,
             `Files published: ${files.length}`,
         ].join("\n"),
@@ -465,7 +464,6 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
     // The contract gate needs both halves: the API surface and the config
     // that says which receivers it applies to. Anything less is ungated.
     state.hasContract = Boolean(options.contract && options.vendor);
-    if (options.prMode) state.prMode = options.prMode;
     const model = options.model ?? "gpt-4o-mini";
     let lastStage: MigrationStage | null = null;
 

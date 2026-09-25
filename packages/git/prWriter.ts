@@ -16,6 +16,12 @@ export interface WriteFixPRInput {
     commitMessage: string;
     files: WriteFile[];
     octokit: Octokit;
+    /**
+     * Open as a draft: not mergeable until marked ready. The agent sets this
+     * when no vendor contract gates the run, so an unverified-against-the-
+     * vendor diff can never land as a mergeable PR by accident.
+     */
+    draft?: boolean;
 }
 
 export interface WordlessPRResult {
@@ -89,6 +95,7 @@ export class PRWriter {
             body: input.body,
             head: branch,
             base,
+            draft: input.draft ?? false,
         });
 
         return {

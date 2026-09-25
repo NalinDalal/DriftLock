@@ -28,3 +28,8 @@ export {
     isValidAIFix,
 } from "./prCreator";
 export { harToConsumerContract, type HarCaptureOptions, type HarEntry } from "./harCapture";
+export {
+    createAgentFixPR,
+    type AgentFixInput,
+    type AgentFixResult,
+} from "./agentFix";

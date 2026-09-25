@@ -276,6 +276,7 @@
       "name": "@driftlock/webhookCapture",
       "version": "0.1.0",
       "dependencies": {
+        "@driftlock/agent": "workspace:*",
         "@driftlock/aiFix": "workspace:*",
         "@driftlock/core": "workspace:*",
         "@driftlock/db": "workspace:*",
@@ -283,6 +284,7 @@
         "@driftlock/git": "workspace:*",
         "drizzle-orm": "^0.45.2",
         "octokit": "^4.1.0",
+        "openai": "^4.73.0",
       },
       "devDependencies": {
         "@types/bun": "latest",
