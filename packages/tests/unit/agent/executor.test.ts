@@ -10,6 +10,7 @@ import {
     isAllowedCommand,
     patchTargets,
     readFile,
+    replaceInFile,
     resolveInsideRoot,
     runCommand,
     searchCode,
@@ -253,6 +254,66 @@ describe("editFile", () => {
         expect(updated).toContain("response.id");
     });
 
+    test("applies a patch that already ends with a newline", async () => {
+        const proc = Bun.spawn(["git", "init"], { cwd: root, stdout: "pipe" });
+        await proc.exited;
+        await writeFile(
+            join(root, "payment.js"),
+            [
+                "async function createPayment(amount, currency) {",
+                "  const paymentIntent = {",
+                "    amount,",
+                "    currency,",
+                "  };",
+                "",
+                "  return {",
+                "    id: paymentIntent.id,",
+                "    amount: paymentIntent.amount,",
+                "    currency: paymentIntent.currency,",
+                "    status: paymentIntent.status,",
+                "    source: paymentIntent.source,",
+                "    client_secret: paymentIntent.client_secret,",
+                "  };",
+                "}",
+                "",
+            ].join("\n"),
+        );
+        const patch = [
+            "--- payment.js",
+            "+++ payment.js",
+            "@@ -15,7 +15,7 @@",
+            "     status: paymentIntent.status,",
+            "-    source: paymentIntent.source,",
+            "+    payment_method: paymentIntent.payment_method,",
+            "     client_secret: paymentIntent.client_secret,",
+            "",
+        ].join("\n");
+
+        const result = await editFile(root, "payment.js", patch);
+        expect(result.ok).toBe(true);
+        const updated = await Bun.file(join(root, "payment.js")).text();
+        expect(updated).toContain("payment_method: paymentIntent.payment_method");
+        expect(updated).toContain("client_secret: paymentIntent.client_secret");
+        expect(updated.endsWith("}\n")).toBe(true);
+    });
+
+    test("reports the real git error, not a misleading missing-file error", async () => {
+        const proc = Bun.spawn(["git", "init"], { cwd: root, stdout: "pipe" });
+        await proc.exited;
+        const patch = [
+            "--- src/client.ts",
+            "+++ src/client.ts",
+            "@@ -1,7 +1,7 @@",
+            " export const id = response.legacy_id;",
+            "-export const legacy = true;",
+            "+export const migrated = true;",
+        ].join("\n");
+
+        const result = await editFile(root, "src/client.ts", patch);
+        expect(result.ok).toBe(false);
+        expect(result.output).not.toContain("No such file or directory");
+    });
+
     test("rejects a patch without hunk headers", async () => {
         const result = await editFile(root, "src/client.ts", "just write this file");
         expect(result.ok).toBe(false);
@@ -323,6 +384,83 @@ describe("editFile", () => {
             ].join("\n"),
         );
         expect(result.ok).toBe(false);
+    });
+});
+
+describe("replaceInFile", () => {
+    test("replaces a unique snippet", async () => {
+        await writeFile(
+            join(root, "payment.js"),
+            "    status: pi.status,\n    source: pi.source,\n    client_secret: pi.client_secret,\n",
+        );
+
+        const result = await replaceInFile(
+            root,
+            "payment.js",
+            "    source: pi.source,\n",
+            "    payment_method: pi.payment_method,\n",
+        );
+
+        expect(result.ok).toBe(true);
+        const updated = await Bun.file(join(root, "payment.js")).text();
+        expect(updated).toContain("payment_method: pi.payment_method");
+        expect(updated).not.toContain("pi.source");
+        expect(updated).toContain("client_secret: pi.client_secret");
+    });
+
+    test("rejects an oldText that appears more than once", async () => {
+        await writeFile(join(root, "a.js"), "x();\nx();\n");
+
+        const result = await replaceInFile(root, "a.js", "x();", "y();");
+
+        expect(result.ok).toBe(false);
+        expect(result.output).toContain("2 matches");
+        expect(await Bun.file(join(root, "a.js")).text()).toBe("x();\nx();\n");
+    });
+
+    test("rejects an oldText that is not present", async () => {
+        await writeFile(join(root, "a.js"), "x();\n");
+
+        const result = await replaceInFile(root, "a.js", "nope();", "y();");
+
+        expect(result.ok).toBe(false);
+        expect(result.output).toContain("no match");
+        expect(await Bun.file(join(root, "a.js")).text()).toBe("x();\n");
+    });
+
+    test("refuses protected paths", async () => {
+        const result = await replaceInFile(root, ".env", "SECRET=should-not-be-readable\n", "x");
+        expect(result.ok).toBe(false);
+    });
+
+    test("refuses to escape the root", async () => {
+        const result = await replaceInFile(root, "../outside.js", "a", "b");
+        expect(result.ok).toBe(false);
+    });
+
+    test("reports a missing file", async () => {
+        const result = await replaceInFile(root, "nope.js", "a", "b");
+        expect(result.ok).toBe(false);
+        expect(result.output).toContain("cannot find");
+    });
+
+    test("rejects empty oldText", async () => {
+        await writeFile(join(root, "a.js"), "x();\n");
+        const result = await replaceInFile(root, "a.js", "", "y();");
+        expect(result.ok).toBe(false);
+    });
+
+    test("rejects a no-op replacement", async () => {
+        await writeFile(join(root, "a.js"), "x();\n");
+        const result = await replaceInFile(root, "a.js", "x();", "x();");
+        expect(result.ok).toBe(false);
+    });
+
+    test("can delete text with an empty newText", async () => {
+        await writeFile(join(root, "a.js"), "keep();\ndrop();\n");
+        const result = await replaceInFile(root, "a.js", "drop();\n", "");
+        expect(result.ok).toBe(true);
+        expect(await Bun.file(join(root, "a.js")).text()).toBe("keep();\n");
     });
 });
 

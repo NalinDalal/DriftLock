@@ -3,6 +3,7 @@ export type ToolName =
     | "searchCode"
     | "readFile"
     | "editFile"
+    | "replaceInFile"
     | "runCommand"
     | "createPullRequest";
 
@@ -69,6 +70,27 @@ export const tools: ToolDefinition[] = [
                 },
             },
             required: ["path", "patch"],
+        },
+    },
+    {
+        name: "replaceInFile",
+        description:
+            "Replace one exact snippet in a file. Prefer this over editFile for small changes: copy oldText verbatim from a readFile result, include enough surrounding lines to be unique, and do not include line numbers. oldText must appear exactly once.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                path: { type: "string", description: "File path from repo root" },
+                oldText: {
+                    type: "string",
+                    description:
+                        "Exact existing text to replace, copied from the file. Must match byte for byte including indentation, and must appear exactly once.",
+                },
+                newText: {
+                    type: "string",
+                    description: "Replacement text. Use an empty string to delete.",
+                },
+            },
+            required: ["path", "oldText", "newText"],
         },
     },
     {

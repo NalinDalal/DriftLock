@@ -225,6 +225,33 @@ export function patchTargets(patch: string): (string | null)[] {
     return targets;
 }
 
+/**
+ * Rewrites the --- and +++ header lines to the canonical a/<path> and b/<path>
+ * form so `git apply` can always run at -p1. Models emit `src/foo.ts`,
+ * `a/src/foo.ts`, and other spellings interchangeably, and the wrong strip level
+ * makes git report "No such file or directory" for a file that plainly exists.
+ * The path has already been validated against the patch targets by the caller,
+ * so the declared path is authoritative here.
+ */
+export function canonicalizePatchHeaders(patch: string, filePath: string): string {
+    const lines = patch.split("\n");
+    let minusSeen = false;
+    let plusSeen = false;
+    for (let i = 0; i < lines.length; i += 1) {
+        if (!minusSeen && /^---\s/.test(lines[i])) {
+            lines[i] = `--- a/${filePath}`;
+            minusSeen = true;
+            continue;
+        }
+        if (minusSeen && !plusSeen && /^\+\+\+\s/.test(lines[i])) {
+            lines[i] = `+++ b/${filePath}`;
+            plusSeen = true;
+            break;
+        }
+    }
+    return lines.join("\n");
+}
+
 export async function editFile(
     root: string,
     filePath: string,
@@ -262,39 +289,80 @@ export async function editFile(
         );
     }
 
-    const attempts = patch.startsWith("a/") || patch.startsWith("b/") ? ["-p1", "-p0"] : ["-p0", "-p1"];
-    let lastError = "";
-    let applied = false;
+    const proc = Bun.spawn(
+        ["git", "apply", "--whitespace=nowarn", "--recount", "-p1", "-"],
+        {
+            cwd: root,
+            stdin: "pipe",
+            stdout: "pipe",
+            stderr: "pipe",
+        },
+    );
+    const normalized = canonicalizePatchHeaders(patch, filePath);
+    proc.stdin.write(normalized.endsWith("\n") ? normalized : `${normalized}\n`);
+    proc.stdin.end();
+    const stdout = await new Response(proc.stdout).text();
+    const stderr = await new Response(proc.stderr).text();
+    await proc.exited;
 
-    for (const strip of attempts) {
-        const proc = Bun.spawn(
-            ["git", "apply", "--whitespace=nowarn", "--recount", strip, "-"],
-            {
-                cwd: root,
-                stdin: "pipe",
-                stdout: "pipe",
-                stderr: "pipe",
-            },
-        );
-        proc.stdin.write(patch.endsWith("\n") ? patch : `${patch}\n`);
-        proc.stdin.end();
-        const stdout = await new Response(proc.stdout).text();
-        const stderr = await new Response(proc.stderr).text();
-        await proc.exited;
-
-        if (proc.exitCode === 0) {
-            applied = true;
-            break;
-        }
-        lastError = stderr || stdout;
-    }
-
-    if (!applied) {
+    if (proc.exitCode !== 0) {
         return fail(
-            `editFile failed to apply patch to ${filePath}: ${truncate(lastError, 2000)}`,
+            `editFile failed to apply patch to ${filePath}: ${truncate(stderr || stdout, 2000)}`,
         );
     }
     return { ok: true, output: `Applied patch to ${filePath}` };
+}
+
+/**
+ * Replaces one exact snippet. Models are far more reliable at copying text they
+ * just read than at emitting line numbers and contiguous hunk bodies, and a
+ * hunk with a skipped line is rejected by git no matter which flags are used.
+ * Requiring exactly one occurrence means the edit is unambiguous, so a wrong
+ * guess fails loudly instead of rewriting the wrong site.
+ */
+export async function replaceInFile(
+    root: string,
+    filePath: string,
+    oldText: string,
+    newText: string,
+): Promise<ToolResult> {
+    const absolute = resolveInsideRoot(root, filePath);
+    if (!absolute) return fail(`Refused to edit: ${filePath}`);
+    if (isProtectedPath(filePath)) {
+        return fail(`Refused to edit: protected path ${filePath}`);
+    }
+    if (oldText.length === 0) {
+        return fail("replaceInFile needs a non-empty oldText to search for");
+    }
+    if (oldText === newText) {
+        return fail("replaceInFile oldText and newText are identical");
+    }
+
+    const file = Bun.file(absolute);
+    if (!(await file.exists())) {
+        return fail(`replaceInFile cannot find ${filePath}`);
+    }
+    const original = await file.text();
+    const occurrences = original.split(oldText).length - 1;
+    if (occurrences === 0) {
+        return fail(
+            `replaceInFile found no match in ${filePath}. Copy oldText exactly from a readFile result, including indentation.`,
+        );
+    }
+    if (occurrences > 1) {
+        return fail(
+            `replaceInFile found ${occurrences} matches in ${filePath}. Include more surrounding lines in oldText so it is unique.`,
+        );
+    }
+
+    const updated = original.replace(oldText, newText);
+    await Bun.write(absolute, updated);
+    const removed = oldText.split("\n").length;
+    const added = newText.split("\n").length;
+    return {
+        ok: true,
+        output: `Replaced ${removed} line(s) with ${added} line(s) in ${filePath}`,
+    };
 }
 
 const DENIED_ENV_KEY = /KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|PRIVATE|SESSION|COOKIE|AUTH/i;

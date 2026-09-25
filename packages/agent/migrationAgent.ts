@@ -22,6 +22,7 @@ import {
     inspectRepo,
     isGitRepository,
     readFile,
+    replaceInFile,
     runCommand,
     searchCode,
     type ToolResult,
@@ -143,6 +144,22 @@ async function execute(
                 };
             }
             const result = await editFile(root, readString(args, "path"), readString(args, "patch"));
+            if (result.ok) recordFileChanged(state, readString(args, "path"));
+            return result;
+        }
+        case "replaceInFile": {
+            if (!canChangeMoreFiles(state)) {
+                return {
+                    ok: false,
+                    output: `Refusing edit: MAX_FILES_CHANGED (${state.maxFilesChanged}) reached`,
+                };
+            }
+            const result = await replaceInFile(
+                root,
+                readString(args, "path"),
+                readString(args, "oldText"),
+                readString(args, "newText"),
+            );
             if (result.ok) recordFileChanged(state, readString(args, "path"));
             return result;
         }

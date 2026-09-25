@@ -20,7 +20,7 @@ verification command, and reports one of three outcomes:
 
 ## Files
 
-- `tools.ts`: the six tools the model can call, with their JSON schemas.
+- `tools.ts`: the seven tools the model can call, with their JSON schemas.
 - `state.ts`: `ChangePacket`, `AgentState`, budgets, and the outcome rules.
 - `executor.ts`: the sandbox. Every tool call lands here.
 - `publisher.ts`: the pull request path, and the branch guard in front of it.
@@ -36,6 +36,7 @@ verification command, and reports one of three outcomes:
 | `searchCode`       | Literal string search, returns `file:line` |
 | `readFile`         | File contents with 1-indexed line numbers  |
 | `editFile`         | Applies one unified diff                  |
+| `replaceInFile`    | Replaces one exact snippet               |
 | `runCommand`       | Runs an allowed verification command      |
 | `createPullRequest`| Summarises the diff and targets a branch   |
 
@@ -62,13 +63,34 @@ The agent edits a real repository, so the executor is the boundary.
 - `editFile` reads the `+++` headers out of the patch and refuses any patch
   that targets a different file, a protected path, or a path outside the root.
   A declared path the patch does not honour is a refusal, not a silent retarget.
-- `editFile` applies with `git apply --recount` and falls back between `-p0` and
-  `-p1`, so a diff works whether the model writes `src/foo.ts` or
-  `a/src/foo.ts`, and a miscounted hunk header is recomputed rather than
-  rejected.
+- `editFile` canonicalises the `---`/`+++` header lines to `a/<path>` and
+  `b/<path>` and applies with `git apply --recount -p1`, so a diff works
+  whether the model writes `src/foo.ts` or `a/src/foo.ts`, and a miscounted
+  hunk header is recomputed rather than rejected. One attempt, no silent
+  fallbacks, so the error the model sees is always the error git produced.
+- `replaceInFile` requires `oldText` to match exactly once. Zero matches and
+  multiple matches are separate, explicit errors, so a wrong guess fails loudly
+  instead of rewriting the wrong site.
 - Search skips `node_modules`, `.git`, `dist`, `build`, `.next`, `coverage`,
   and `.turbo`.
 - Outputs are truncated before they enter the transcript.
+
+## [shipped] Why `replaceInFile` exists
+
+Measured against real repositories, the model produces a valid unified diff far
+less often than it produces a valid single-line change. The failure mode is
+specific: a hunk header that skips a line, a closing brace, or a blank line
+between two context lines. That hunk is not a contiguous slice of the file, so
+`git apply` rejects it and no combination of flags can rescue it. On a retry
+the model commonly re-emits the same shape, or invents a replacement value.
+
+`replaceInFile` removes the part the model gets wrong. It supplies no line
+numbers and no hunk body, only text copied from a `readFile` result, and it
+refuses anything that is not unique. The diff-based `editFile` is kept for the
+case where one contiguous hunk really is the clearest option.
+
+Measured result: on two throwaway repositories, `replaceInFile` took a
+migration the diff tool could not complete from 0/2 files edited to 3/3.
 
 ## [shipped] Budgets
 
@@ -183,12 +205,58 @@ example a local `CommandRunner` that skips Docker entirely.
 - No confidence signal beyond pass/fail. A richer verdict would feed the
   `auto_pr` threshold rather than hardcode "tests passed".
 - The loop has only been proven against Cloudflare Workers AI
-  (`@cf/meta/llama-3.3-70b-instruct-fp8-fast`), on a single trivial rename.
-  A harder real migration is untested, and weaker models will struggle to emit
-  a patch that applies.
+  (`@cf/meta/llama-3.3-70b-instruct-fp8-fast`). A representative run against two
+  throwaway repositories is recorded in [Real repository runs](#real-repository-runs);
+  a wider model sweep is not done.
 - The sandbox uses `SandboxRunner`'s proxy allowlist model, but the agent always
   disables the network. A migration that must reach a registry mid-run is not
   supported yet.
+- After a failed edit the model sometimes moves on to verification instead of
+  fixing the edit. The prompt tells it to retry; nothing enforces it.
+
+## Real repository runs
+
+Two throwaway repositories, real model, real Docker, no fixtures. Both were
+clean on `main` before the run. Drive them with:
+
+```bash
+bun --env-file=.env run run-real-migration.ts stripe ../some-repo
+bun --env-file=.env run run-real-migration.ts p5 ../some-repo
+```
+
+Results, `@cf/meta/llama-3.3-70b-instruct-fp8-fast`:
+
+| Packet | Repo | Edits | Verification | PR |
+| ------ | ---- | ----- | ------------ | -- |
+| stripe `source` to `payment_method` | two small files | 2/2 files, 3/4 sites | impossible | refused |
+| p5 1.x to 2.x keyboard input | one sketch | 1/1 file, 1/2 sites | impossible | refused |
+
+Both runs ended `review_pr` with no pull request, and both refusals were
+correct. The two repos have no `node_modules` and the sandbox has no network, so
+`npm run build` exits 127 and the verification gate can never be satisfied. The
+gate refusing to publish is the designed behaviour, not a defect.
+
+The interesting part is what the gate caught. The p5 edit was syntactically
+plausible and semantically wrong: the model wrote
+
+```js
+if (p.keyIsDown(UP_ARROW)) {
+```
+
+inside an instance-mode sketch where every other line uses the `p.` prefix. In
+instance mode constants are only reachable through the instance, so that throws
+`ReferenceError: UP_ARROW is not defined` on the first frame. Nothing but
+running the code would have caught it, and the PR gate is what kept it from
+being published. Two further defects showed up here:
+
+- The model migrated `p.keyCode === 38` but left `p.key === " "` alone, so the
+  migration is incomplete without the diff showing it as such.
+- On stripe it edited the first of two `paymentIntent.source` sites, then moved
+  on. The remaining site is visible in `git diff`, but nothing told the model.
+
+Read together: the tool boundary is solid, and the model's API knowledge and
+completeness are the weak links. The verification gate is currently the only
+thing standing between a wrong migration and a merged one.
 
 ## Tests
 
