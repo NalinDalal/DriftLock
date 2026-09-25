@@ -7,6 +7,7 @@ export * from "./tools";
 export * from "./state";
 export * from "./prompt";
 export * from "./executor";
+export * from "./publisher";
 export * from "./migrationAgent";
 
 export interface VendorConfigHints {

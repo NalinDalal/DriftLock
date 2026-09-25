@@ -16,14 +16,23 @@ import {
     type TranscriptEntry,
 } from "./state";
 import {
-    createPullRequest,
+    collectDiffStat,
     editFile,
+    hasUncommittedChanges,
     inspectRepo,
+    isGitRepository,
     readFile,
     runCommand,
     searchCode,
     type ToolResult,
 } from "./executor";
+import {
+    commitMessageFor,
+    isAllowedBranch,
+    readChangedFiles,
+    type PullRequestPublisher,
+    type PullRequestTarget,
+} from "./publisher";
 
 export type RunOptions = {
     root: string;
@@ -31,6 +40,8 @@ export type RunOptions = {
     apiKey?: string;
     model?: string;
     client?: OpenAI;
+    publisher?: PullRequestPublisher;
+    target?: PullRequestTarget;
 };
 
 export type RunResult = {
@@ -110,9 +121,10 @@ function readString(args: Record<string, unknown>, key: string): string {
 async function execute(
     name: ToolCall["name"],
     args: Record<string, unknown>,
-    root: string,
+    options: RunOptions,
     state: AgentState,
 ): Promise<ToolResult> {
+    const root = options.root;
     switch (name) {
         case "inspectRepo":
             return inspectRepo(root);
@@ -144,15 +156,97 @@ async function execute(
             return result;
         }
         case "createPullRequest":
-            return createPullRequest(
+            return openPullRequest(
+                args,
+                options.packet,
+                options.publisher,
+                options.target,
+                state,
                 root,
-                readString(args, "title"),
-                readString(args, "body"),
-                readString(args, "branch"),
             );
         default:
             return { ok: false, output: `Unknown tool: ${String(name)}` };
     }
+}
+
+async function openPullRequest(
+    args: Record<string, unknown>,
+    packet: ChangePacket,
+    publisher: PullRequestPublisher | undefined,
+    target: PullRequestTarget | undefined,
+    state: AgentState,
+    root: string,
+): Promise<ToolResult> {
+    const title = readString(args, "title").trim();
+    const body = readString(args, "body").trim();
+    const branch = readString(args, "branch").trim();
+
+    if (!title) return { ok: false, output: "createPullRequest requires a title" };
+    if (!isAllowedBranch(branch)) {
+        return {
+            ok: false,
+            output: `Refusing branch "${branch}": must start with "driftlock/" and use only letters, digits, . _ - /`,
+        };
+    }
+    if (state.filesChanged.length === 0) {
+        return { ok: false, output: "Refusing to open a PR with no changed files" };
+    }
+    if (state.lastTestResult?.passed !== true) {
+        return {
+            ok: false,
+            output:
+                "Refusing to open a PR: no passing verification command. Run an allowed command and fix failures first.",
+        };
+    }
+    if (!(await isGitRepository(root))) {
+        return { ok: false, output: `${root} is not a git repository` };
+    }
+    if (!(await hasUncommittedChanges(root))) {
+        return { ok: false, output: "Refusing to open a PR: the working tree is clean" };
+    }
+
+    if (!publisher || !target) {
+        const stat = await collectDiffStat(root);
+        return {
+            ok: true,
+            output: [
+                `PREVIEW ONLY, no pull request was opened.`,
+                `A publisher and target were not supplied to the agent.`,
+                `Would open on branch ${branch} against ${target?.base ?? "<base>"}`,
+                `Title: ${title}`,
+                `Body: ${body}`,
+                `Diff stat: ${stat || "(no changes)"}`,
+            ].join("\n"),
+        };
+    }
+
+    const files = await readChangedFiles(root, state.filesChanged);
+    if (files.length === 0) {
+        return { ok: false, output: "No changed files could be read from disk" };
+    }
+
+    const result = await publisher.publish({
+        target,
+        title,
+        body,
+        branch,
+        files,
+        commitMessage: commitMessageFor({
+            provider: packet.provider,
+            fromVersion: packet.fromVersion,
+            toVersion: packet.toVersion,
+        }),
+    });
+
+    state.pullRequest = result;
+    return {
+        ok: true,
+        output: [
+            `Pull request ${result.status}: ${result.url}`,
+            `Branch: ${result.branch}`,
+            `Files published: ${files.length}`,
+        ].join("\n"),
+    };
 }
 
 export async function runMigrationAgent(options: RunOptions): Promise<RunResult> {
@@ -201,7 +295,7 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
         });
 
         for (const call of toolCalls) {
-            const result = await execute(call.name, call.args, options.root, state);
+            const result = await execute(call.name, call.args, options, state);
             state.transcript.push({
                 role: "tool",
                 toolCallId: call.id,

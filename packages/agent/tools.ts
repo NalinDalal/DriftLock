@@ -89,7 +89,7 @@ export const tools: ToolDefinition[] = [
     {
         name: "createPullRequest",
         description:
-            "Finalize the migration: summarize the validated diff and open a pull request from the working branch.",
+            "Open a pull request from the working diff. Only call this after a verification command has passed. The branch must start with 'driftlock/'. Branch names that do not are refused.",
         inputSchema: {
             type: "object",
             properties: {
@@ -99,7 +99,11 @@ export const tools: ToolDefinition[] = [
                     description:
                         "PR body: what changed, why, and which commands passed",
                 },
-                branch: { type: "string", description: "Branch name for the PR" },
+                branch: {
+                    type: "string",
+                    description:
+                        "Branch name, must start with 'driftlock/', e.g. driftlock/p5-2-3",
+                },
             },
             required: ["title", "body", "branch"],
         },

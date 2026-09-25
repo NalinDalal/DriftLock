@@ -31,6 +31,12 @@ export type AgentState = {
     filesChanged: string[];
     transcript: TranscriptEntry[];
     lastTestResult?: { passed: boolean; output: string };
+    pullRequest?: {
+        status: "opened" | "already_open" | "merged";
+        url: string;
+        number: number;
+        branch: string;
+    };
     done: boolean;
     outcome: Outcome | null;
 };

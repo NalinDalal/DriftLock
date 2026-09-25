@@ -351,28 +351,35 @@ export async function runCommand(
     };
 }
 
-export async function createPullRequest(
-    root: string,
-    title: string,
-    body: string,
-    branch: string,
-): Promise<ToolResult> {
-    const stat = Bun.spawn(["git", "diff", "--stat"], {
+export async function collectDiffStat(root: string): Promise<string> {
+    const proc = Bun.spawn(["git", "diff", "--stat"], {
         cwd: root,
         stdout: "pipe",
         stderr: "pipe",
     });
-    const statOut = await new Response(stat.stdout).text();
-    await stat.exited;
-    return {
-        ok: true,
-        output: [
-            `Prepared pull request on branch ${branch}`,
-            `Title: ${title}`,
-            "Body:",
-            body,
-            "Diff stat:",
-            statOut.trim() || "(no changes)",
-        ].join("\n"),
-    };
+    const stdout = await new Response(proc.stdout).text();
+    await proc.exited;
+    return stdout.trim();
+}
+
+export async function hasUncommittedChanges(root: string): Promise<boolean> {
+    const proc = Bun.spawn(["git", "status", "--porcelain"], {
+        cwd: root,
+        stdout: "pipe",
+        stderr: "pipe",
+    });
+    const stdout = await new Response(proc.stdout).text();
+    await proc.exited;
+    return stdout.trim().length > 0;
+}
+
+export async function isGitRepository(root: string): Promise<boolean> {
+    const proc = Bun.spawn(["git", "rev-parse", "--is-inside-work-tree"], {
+        cwd: root,
+        stdout: "pipe",
+        stderr: "pipe",
+    });
+    const stdout = await new Response(proc.stdout).text();
+    await proc.exited;
+    return proc.exitCode === 0 && stdout.trim() === "true";
 }

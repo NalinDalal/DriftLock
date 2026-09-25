@@ -23,6 +23,7 @@ verification command, and reports one of three outcomes:
 - `tools.ts`: the six tools the model can call, with their JSON schemas.
 - `state.ts`: `ChangePacket`, `AgentState`, budgets, and the outcome rules.
 - `executor.ts`: the sandbox. Every tool call lands here.
+- `publisher.ts`: the pull request path, and the branch guard in front of it.
 - `migrationAgent.ts`: the loop. Calls OpenAI, runs tools, applies ceilings.
 - `prompt.ts`: the system prompt, including when to stop and report.
 - `docsToConfig.ts`: vendor doc to `VendorConfig`, for the parser pipeline.
@@ -51,6 +52,13 @@ The agent edits a real repository, so the executor is the boundary.
 - `runCommand` is an exact string match against a fixed whitelist (`npm test`,
   `npm run build`, `npm run typecheck`, and pnpm/bun equivalents). Shell
   operators are not accepted, so `npm test && rm -rf /` is refused.
+- The environment handed to a command is an allowlist. Anything matching
+  `KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `CREDENTIAL`, `PRIVATE`, `SESSION`,
+  `COOKIE`, or `AUTH` is dropped, so a customer build script cannot read
+  `OPENAI_API_KEY` or `GITHUB_TOKEN` out of the DriftLock process.
+- `editFile` reads the `+++` headers out of the patch and refuses any patch
+  that targets a different file, a protected path, or a path outside the root.
+  A declared path the patch does not honour is a refusal, not a silent retarget.
 - Search skips `node_modules`, `.git`, `dist`, `build`, `.next`, `coverage`,
   and `.turbo`.
 - Outputs are truncated before they enter the transcript.
@@ -70,7 +78,7 @@ result rather than swallowed.
 ## Usage
 
 ```ts
-import { runMigrationAgent } from "@driftlock/agent";
+import { createGitHubPublisher, runMigrationAgent } from "@driftlock/agent";
 
 const result = await runMigrationAgent({
     root: "/path/to/checked-out-repo",
@@ -82,25 +90,50 @@ const result = await runMigrationAgent({
         migrationDocs: ["https://example.test/p5-2.3"],
     },
     apiKey: process.env.OPENAI_API_KEY,
+    publisher: createGitHubPublisher(process.env.GITHUB_TOKEN),
+    target: { owner: "acme", repo: "widgets", base: "main" },
 });
 
-result.outcome;      // "auto_pr" | "review_pr" | "no_action"
-result.filesChanged; // ["src/client.ts"]
-result.state.transcript; // full tool conversation
+result.outcome;         // "auto_pr" | "review_pr" | "no_action"
+result.filesChanged;    // ["src/client.ts"]
+result.state.pullRequest; // { status, url, number, branch } when a PR exists
+result.state.transcript;  // full tool conversation
 ```
 
-Pass `client` to supply your own OpenAI-compatible client. Pass `model` to
-override the default `gpt-4o-mini`.
+Pass `client` to supply your own OpenAI-compatible client, `model` to override
+the default `gpt-4o-mini`, and `publisher` plus `target` to actually open a pull
+request. With no publisher, `createPullRequest` returns a preview and says so.
+
+## Opening a pull request
+
+`createPullRequest` goes through `@driftlock/git`, so the commit is a pure delta
+on the base branch: blobs, then a tree on top of `base_tree`, then a commit, a
+ref, and the PR. No checkout, no push, no clone.
+
+It is refused when any of these hold:
+
+- The branch does not start with `driftlock/`. `PRWriter` force-updates whatever
+  ref it is handed, so an unvalidated branch name would let the agent rewrite
+  `main`. The prefix is enforced here, and traversal and shell characters are
+  rejected.
+- A verification command has not passed.
+- No file changed, or the working tree is clean.
+- The title is blank, or `root` is not a git repository.
+
+`FixPRRunner` keeps one open PR per branch, so re-running the same migration
+reports `already_open` rather than opening a second one. A merged PR reports
+`merged`, which is the signal to rebaseline the snapshot.
 
 ## [planned] Not done yet
 
-- `createPullRequest` previews the diff. It does not push or open a PR. The
-  real implementation should go through `@driftlock/git`.
 - Commands run directly in the working tree. Sandboxed execution through
-  `@driftlock/sandbox` is not wired in.
+  `@driftlock/sandbox` is not wired in, so a customer build script still runs
+  with the developer's own privileges and network access.
 - The agent does not create the temporary branch yet. It assumes one exists.
 - No confidence signal beyond pass/fail. A richer verdict would feed the
   `auto_pr` threshold rather than hardcode "tests passed".
+- The loop has never run against the live OpenAI API. Tests inject a fake
+  client, so the wire format is type-checked but not proven.
 
 ## Tests
 

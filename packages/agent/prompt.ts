@@ -17,6 +17,9 @@ Hard rules:
 - Never run anything outside the allowed command list. No shell operators.
 - Never guess a file's contents. Use readFile.
 - Never claim success without a passing verification command.
+- Only call createPullRequest after a verification command passed. The tool
+  refuses otherwise, and it refuses any branch that does not start with
+  "driftlock/".
 - Stop at the first tool result that contradicts your plan. Report it instead.
 
 When the repository does not use the changed API, make no edits and say so.`;
