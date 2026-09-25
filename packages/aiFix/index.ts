@@ -79,7 +79,7 @@ ${ctx.sourceCode}
  5. Keep the code style consistent and do not add explanatory comments
  6. Preserve original formatting and final newline
 
-Return ONLY the fixed code inside a \`\`\`typescript block. After the code block, add a brief explanation of what you changed and a confidence score (0-100) for the fix.`;
+Return ONLY the fixed code inside a \`\`\`typescript block. After the code block, add a brief explanation of what you changed and then on its own new line exactly: Confidence: <0-100>. The Confidence line is required.`;
 }
 
 function parseResponse(response: string): {
@@ -92,7 +92,7 @@ function parseResponse(response: string): {
     // Preserve formatting: don't trim content, just ensure final newline
     if (code && !code.endsWith("\n")) code += "\n";
 
-    const confMatch = response.match(/confidence[:\s]*(\d+)/i);
+    const confMatch = response.match(/confid\w*[^\d]{0,10}(\d{1,3})/i);
     const explanationMatch = response.match(/```\s*\n([\s\S]*?)$/);
     const explanation = explanationMatch ? explanationMatch[1].trim() : "AI-generated fix";
     if (!confMatch) {
