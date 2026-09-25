@@ -57,7 +57,7 @@ export const tools: ToolDefinition[] = [
     {
         name: "editFile",
         description:
-            "Apply a unified diff to one file. The patch must apply cleanly. Make the smallest correct change.",
+            "Apply a unified diff to one file. The patch must apply cleanly. Make the smallest correct change. Never edit test files to make verification pass.",
         inputSchema: {
             type: "object",
             properties: {
@@ -65,7 +65,7 @@ export const tools: ToolDefinition[] = [
                 patch: {
                     type: "string",
                     description:
-                        "Unified diff including ---/+++ headers and @@ hunks",
+                        "Unified diff. Format exactly:\n--- src/foo.ts\n+++ src/foo.ts\n@@ -1,3 +1,3 @@\n context line\n-removed line\n+added line\n\nRules: paths are relative to the repo root and must match `path`; every context line starts with a space, a removal with -, an addition with +; the hunk body must contain the real surrounding lines copied from the file you read.",
                 },
             },
             required: ["path", "patch"],

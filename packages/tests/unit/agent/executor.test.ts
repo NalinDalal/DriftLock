@@ -201,6 +201,58 @@ describe("editFile", () => {
         expect(updated).toContain("response.id");
     });
 
+    test("applies a diff with bare repo-relative paths", async () => {
+        const proc = Bun.spawn(["git", "init"], { cwd: root, stdout: "pipe" });
+        await proc.exited;
+        const patch = [
+            "--- src/client.ts",
+            "+++ src/client.ts",
+            "@@ -1 +1 @@",
+            "-export const id = response.legacy_id;",
+            "+export const id = response.id;",
+        ].join("\n");
+
+        const result = await editFile(root, "src/client.ts", patch);
+        expect(result.ok).toBe(true);
+        const updated = await Bun.file(join(root, "src/client.ts")).text();
+        expect(updated).toContain("response.id");
+    });
+
+    test("applies a diff whose hunk line count is wrong", async () => {
+        const proc = Bun.spawn(["git", "init"], { cwd: root, stdout: "pipe" });
+        await proc.exited;
+        const patch = [
+            "--- src/client.ts",
+            "+++ src/client.ts",
+            "@@ -1,1 +1,1 @@",
+            " export const id = response.legacy_id;",
+            "+export const name = response.name;",
+        ].join("\n");
+
+        const result = await editFile(root, "src/client.ts", patch);
+        expect(result.ok).toBe(true);
+        const updated = await Bun.file(join(root, "src/client.ts")).text();
+        expect(updated).toContain("response.name");
+        expect(updated).toContain("response.legacy_id");
+    });
+
+    test("applies an a/ and b/ prefixed diff", async () => {
+        const proc = Bun.spawn(["git", "init"], { cwd: root, stdout: "pipe" });
+        await proc.exited;
+        const patch = [
+            "--- a/src/client.ts",
+            "+++ b/src/client.ts",
+            "@@ -1,1 +1,1 @@",
+            "-export const id = response.legacy_id;",
+            "+export const id = response.id;",
+        ].join("\n");
+
+        const result = await editFile(root, "src/client.ts", patch);
+        expect(result.ok).toBe(true);
+        const updated = await Bun.file(join(root, "src/client.ts")).text();
+        expect(updated).toContain("response.id");
+    });
+
     test("rejects a patch without hunk headers", async () => {
         const result = await editFile(root, "src/client.ts", "just write this file");
         expect(result.ok).toBe(false);

@@ -62,6 +62,10 @@ The agent edits a real repository, so the executor is the boundary.
 - `editFile` reads the `+++` headers out of the patch and refuses any patch
   that targets a different file, a protected path, or a path outside the root.
   A declared path the patch does not honour is a refusal, not a silent retarget.
+- `editFile` applies with `git apply --recount` and falls back between `-p0` and
+  `-p1`, so a diff works whether the model writes `src/foo.ts` or
+  `a/src/foo.ts`, and a miscounted hunk header is recomputed rather than
+  rejected.
 - Search skips `node_modules`, `.git`, `dist`, `build`, `.next`, `coverage`,
   and `.turbo`.
 - Outputs are truncated before they enter the transcript.
@@ -106,6 +110,30 @@ result.state.transcript;  // full tool conversation
 Pass `client` to supply your own OpenAI-compatible client, `model` to override
 the default `gpt-4o-mini`, and `publisher` plus `target` to actually open a pull
 request. With no publisher, `createPullRequest` returns a preview and says so.
+
+## Running against a non-OpenAI provider
+
+Pass `baseURL` to point the loop at any OpenAI-compatible endpoint. Cloudflare
+Workers AI is the one this repo ships credentials for:
+
+```ts
+const result = await runMigrationAgent({
+    root,
+    packet,
+    apiKey: process.env.CLOUDFLARE_API_TOKEN,
+    baseURL: `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/ai/v1`,
+    model: process.env.CLOUDFLARE_AI_MODEL,
+});
+```
+
+Two wire-format details this proved the hard way, both worth knowing for any
+compatible endpoint:
+
+- An assistant message that carries `tool_calls` must send `content` as a
+  **string**. OpenAI tolerates `null`; Cloudflare rejects the whole request with
+  a 400. The agent sends `""`.
+- Cloudflare's native `/ai/run/{model}` endpoint has no tool calling at all. Only
+  the OpenAI-compatible `/ai/v1` path works for this loop.
 
 ## Opening a pull request
 
@@ -154,8 +182,10 @@ example a local `CommandRunner` that skips Docker entirely.
 - The agent does not create the temporary branch yet. It assumes one exists.
 - No confidence signal beyond pass/fail. A richer verdict would feed the
   `auto_pr` threshold rather than hardcode "tests passed".
-- The loop has never run against the live OpenAI API. Tests inject a fake
-  client, so the wire format is type-checked but not proven.
+- The loop has only been proven against Cloudflare Workers AI
+  (`@cf/meta/llama-3.3-70b-instruct-fp8-fast`), on a single trivial rename.
+  A harder real migration is untested, and weaker models will struggle to emit
+  a patch that applies.
 - The sandbox uses `SandboxRunner`'s proxy allowlist model, but the agent always
   disables the network. A migration that must reach a registry mid-run is not
   supported yet.
@@ -171,9 +201,34 @@ bun test --cwd packages/tests integration/agent/
 the full inspect to PR walk against a real temp git repo, and each outcome
 branch.
 
-`integration/agent` is the one that proves the isolation claims. It needs a
-running Docker daemon and it skips itself with a loud failing prerequisite test
-when there is not one. It asserts against a real `node:22-alpine` container that
-a build cannot write to the real checkout, cannot resolve DNS, cannot see
-`.git`, and cannot read `OPENAI_API_KEY` out of the host environment.
+`integration/agent/sandboxIsolation.test.ts` is the one that proves the
+isolation claims. It needs a running Docker daemon and it skips itself with a
+loud failing prerequisite test when there is not one. It asserts against a real
+`node:22-alpine` container that a build cannot write to the real checkout, cannot
+resolve DNS, cannot see `.git`, and cannot read `OPENAI_API_KEY` out of the host
+environment.
+
+`integration/agent/liveModel.test.ts` runs the whole loop against a real model
+and is skipped unless Cloudflare credentials are present. It needs the env file
+loaded explicitly, because the test runs from `packages/tests`:
+
+```bash
+bun test --env-file=../../.env integration/agent/liveModel.test.ts
+```
+
+It asserts the wire contract rather than the migration succeeding: every
+`tool_call` must get a matching `tool` result, every message must carry a string
+`content`, and the outcome must be one of the three. A representative run
+against `@cf/meta/llama-3.3-70b-instruct-fp8-fast`:
+
+```
+outcome: auto_pr
+iterations: 7 / 15
+tool calls: inspectRepo -> searchCode -> readFile -> editFile -> runCommand -> runCommand -> createPullRequest
+files changed: src/client.ts
+verification passed: true
+```
+
+The PR publisher is a stub in that test, so no real pull request is opened.
+
 

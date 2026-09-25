@@ -262,21 +262,36 @@ export async function editFile(
         );
     }
 
-    const proc = Bun.spawn(["git", "apply", "--whitespace=nowarn", "-"], {
-        cwd: root,
-        stdin: "pipe",
-        stdout: "pipe",
-        stderr: "pipe",
-    });
-    proc.stdin.write(patch.endsWith("\n") ? patch : `${patch}\n`);
-    proc.stdin.end();
-    const stdout = await new Response(proc.stdout).text();
-    const stderr = await new Response(proc.stderr).text();
-    await proc.exited;
+    const attempts = patch.startsWith("a/") || patch.startsWith("b/") ? ["-p1", "-p0"] : ["-p0", "-p1"];
+    let lastError = "";
+    let applied = false;
 
-    if (proc.exitCode !== 0) {
+    for (const strip of attempts) {
+        const proc = Bun.spawn(
+            ["git", "apply", "--whitespace=nowarn", "--recount", strip, "-"],
+            {
+                cwd: root,
+                stdin: "pipe",
+                stdout: "pipe",
+                stderr: "pipe",
+            },
+        );
+        proc.stdin.write(patch.endsWith("\n") ? patch : `${patch}\n`);
+        proc.stdin.end();
+        const stdout = await new Response(proc.stdout).text();
+        const stderr = await new Response(proc.stderr).text();
+        await proc.exited;
+
+        if (proc.exitCode === 0) {
+            applied = true;
+            break;
+        }
+        lastError = stderr || stdout;
+    }
+
+    if (!applied) {
         return fail(
-            `editFile failed to apply patch to ${filePath}: ${truncate(stderr || stdout, 2000)}`,
+            `editFile failed to apply patch to ${filePath}: ${truncate(lastError, 2000)}`,
         );
     }
     return { ok: true, output: `Applied patch to ${filePath}` };

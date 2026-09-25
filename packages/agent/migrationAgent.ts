@@ -40,6 +40,7 @@ export type RunOptions = {
     packet: ChangePacket;
     apiKey?: string;
     model?: string;
+    baseURL?: string;
     client?: OpenAI;
     publisher?: PullRequestPublisher;
     target?: PullRequestTarget;
@@ -74,7 +75,7 @@ function toWireMessages(
         if (entry.role === "assistant" && entry.toolCalls?.length) {
             messages.push({
                 role: "assistant",
-                content: entry.content || null,
+                content: entry.content || "",
                 tool_calls: entry.toolCalls.map((call) => ({
                     id: call.id,
                     type: "function" as const,
@@ -204,7 +205,7 @@ async function openPullRequest(
         };
     }
     if (!(await isGitRepository(root))) {
-        return { ok: false, output: `${root} is not a git repository` };
+        return { ok: false, output: "The repository root is not a git repository" };
     }
     if (!(await hasUncommittedChanges(root))) {
         return { ok: false, output: "Refusing to open a PR: the working tree is clean" };
@@ -259,6 +260,7 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
         options.client ??
         new OpenAI({
             apiKey: options.apiKey ?? process.env.OPENAI_API_KEY,
+            ...(options.baseURL ? { baseURL: options.baseURL } : {}),
         });
     const deps: RunnerDeps = { create: client.chat.completions.create.bind(client.chat.completions) };
     const state = createInitialState(options.packet);

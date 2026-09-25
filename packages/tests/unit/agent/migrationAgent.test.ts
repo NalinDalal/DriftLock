@@ -128,6 +128,100 @@ describe("runMigrationAgent", () => {
         expect(updated).toContain("createSurface(1)");
     });
 
+    test("sends assistant tool-call messages with string content, never null", async () => {
+        const sent: Record<string, unknown>[][] = [];
+        let index = 0;
+        apiCalls = [
+            toolCall("inspectRepo", {}, "c1"),
+            toolCall("searchCode", { query: "createCanvas" }, "c2"),
+            finalText("done"),
+        ];
+
+        const client = {
+            chat: {
+                completions: {
+                    create: async (body: Record<string, unknown>) => {
+                        sent.push(body.messages as Record<string, unknown>[]);
+                        const next = apiCalls[Math.min(index, apiCalls.length - 1)];
+                        index += 1;
+                        return next as never;
+                    },
+                },
+            },
+        } as unknown as Parameters<typeof runMigrationAgent>[0]["client"];
+
+        await runMigrationAgent({ root, packet, client });
+
+        expect(sent.length).toBe(3);
+        for (const messages of sent) {
+            for (const message of messages) {
+                expect(
+                    message.content,
+                    `role=${message.role} must carry a string content`,
+                ).toBeTypeOf("string");
+            }
+        }
+        const assistantWithToolCall = sent[1].find(
+            (m) => m.role === "assistant" && Array.isArray(m.tool_calls),
+        );
+        expect(assistantWithToolCall).toBeDefined();
+        expect(assistantWithToolCall?.content).toBe("");
+    });
+
+    test("answers every tool call in a parallel batch", async () => {
+        const sent: Record<string, unknown>[][] = [];
+        let index = 0;
+        apiCalls = [
+            {
+                choices: [
+                    {
+                        message: {
+                            content: null,
+                            tool_calls: [
+                                { id: "b1", function: { name: "inspectRepo", arguments: "{}" } },
+                                {
+                                    id: "b2",
+                                    function: {
+                                        name: "searchCode",
+                                        arguments: JSON.stringify({ query: "createCanvas" }),
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                ],
+            },
+            finalText("done"),
+        ];
+
+        const client = {
+            chat: {
+                completions: {
+                    create: async (body: Record<string, unknown>) => {
+                        sent.push(body.messages as Record<string, unknown>[]);
+                        const next = apiCalls[Math.min(index, apiCalls.length - 1)];
+                        index += 1;
+                        return next as never;
+                    },
+                },
+            },
+        } as unknown as Parameters<typeof runMigrationAgent>[0]["client"];
+
+        const result = await runMigrationAgent({ root, packet, client });
+
+        const asked = result.state.transcript.flatMap((e) => e.toolCalls ?? []);
+        const answered = result.state.transcript.filter((e) => e.role === "tool");
+        expect(asked.map((c) => c.id).sort()).toEqual(["b1", "b2"]);
+        expect(answered.map((e) => e.toolCallId).sort()).toEqual(["b1", "b2"]);
+
+        const toolMessages = sent[1].filter((m) => m.role === "tool");
+        expect(toolMessages).toHaveLength(2);
+        for (const message of toolMessages) {
+            expect(message.tool_call_id).toBeTypeOf("string");
+            expect(message.content).toBeTypeOf("string");
+        }
+    });
+
     test("returns no_action when the model never touches a file", async () => {
         apiCalls = [
             toolCall("inspectRepo", {}, "c1"),
