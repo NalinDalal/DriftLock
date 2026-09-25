@@ -3,12 +3,115 @@
 The migration agent. Takes a vendor API change, edits a customer repository to
 match, verifies the result, and stops with a verdict.
 
+## [shipped] Checking edits against the real vendor
+
+A passing test suite does not mean a migration is correct. It means the code
+still compiles. The gap that matters is between "the build is green" and "this
+references APIs that exist".
+
+The agent closes that gap with a `VendorContract`: ground truth about what the
+vendor actually exposes, and a gate that refuses a pull request when the edited
+code references something the contract cannot place.
+
+### Where a contract comes from
+
+| Source      | How                                    | Absence means                                    |
+| ----------- | -------------------------------------- | ------------------------------------------------ |
+| `live`      | one real GET to the vendor, right now  | the field is gone, for that endpoint              |
+| `spec`      | the vendor's own published declarations| the member does not exist, anywhere              |
+| `recorded`  | a union of previously observed traffic | probably just not in the sample, so mostly ignored |
+
+A contract is `{ provider, version, source, authority, origin, capturedAt,
+members[], removed[] }`. `members` are dotted paths (`payment_method`,
+`charges.data[].id`), and `removed` is what a diff against a baseline showed the
+vendor dropped.
+
+`authority` is the whole point. A `live` or `spec` contract is authoritative, so
+a missing member is a real finding. A `recorded` contract is sampled, so the
+gate only reports something it can prove, namely an explicit entry in `removed`.
+That asymmetry is deliberate: treating a narrow sample as proof of removal is how
+you ship a confident, completely wrong migration.
+
+### What the gate catches
+
+| Finding           | Means                                                    | Real example                                    |
+| ----------------- | -------------------------------------------------------- | ----------------------------------------------- |
+| `unresolved`      | reads a member the vendor does not have                   | `paymentIntent.payment_methods`                 |
+| `stale`           | still reads a field the vendor removed                    | one `paymentIntent.source` left behind           |
+| `unbound-constant`| uses a vendor constant as a free identifier                | `keyIsDown(UP_ARROW)` in instance mode           |
+
+`stale` is the completeness check, and it is why the gate sweeps files the agent
+never touched. A migration that edits two of three call sites produces a diff
+that looks finished and a green build, and the third file is never opened. A
+stale read is a missed call site wherever it lives. Untouched files are scanned
+for `stale` only, since pre-existing use of some other field is not this
+migration's problem.
+
+The gate runs inside `createPullRequest`, after the command check, and
+`decideOutcome` will not return `auto_pr` while any finding stands. A green test
+suite with an unresolved vendor symbol is `review_pr` at best.
+
+### Why receiver discovery matters
+
+`VendorConfig.clientNames` names the SDK client, and real code almost never
+reads fields off the client. It reads them off whatever a call returned, named
+anything: `pi`, `paymentIntent`, `intent`. Checking only `stripe.something`
+would pass on code that is entirely wrong, because it would never look at the
+line that matters.
+
+`discoverVendorReceivers` finds a variable assigned from a vendor client call or
+from a webhook payload chain. It is a heuristic and not exhaustive, so
+`VerifyOptions.clientNames` takes explicit receivers when the heuristic misses.
+`VendorConfig.contractSubject` separates the two cases: `resources` (Stripe, a
+captured response says nothing about the client's own resource accessors) versus
+`client` (p5, where the instance passed to the sketch *is* the API surface).
+
+### Why this is not a typechecker
+
+It checks that symbols **exist**, not that they are used correctly. It catches
+`UP_ARROW` and it catches the missed `source` site. It does **not** catch
+`keyIsDown("Space")`, where a real p5 member is called with a plausible but wrong
+argument, and it cannot catch an SDK version skew where a member exists in 2.3
+but the repo pins 2.1. Only executing against the vendor catches those. This is
+a floor under the migration, not a ceiling.
+
+## [shipped] Live vendor vs recorded vendor
+
+Both produce the same `VendorContract`, so the gate has one code path. The
+difference is freshness, cost, and what an absence proves.
+
+|                     | Live                          | Recorded                        |
+| ------------------- | ----------------------------- | ------------------------------- |
+| Freshness           | right now                     | as old as the recording         |
+| Cost                | a request, possibly a metered one | free, replayable            |
+| Side effects        | none, GET only                | none                            |
+| Determinism         | the vendor can change under you | identical every run          |
+| Needs credentials   | usually yes, for anything useful | no                          |
+| Catches             | fields the vendor added *yesterday* | nothing newer than the capture |
+| Proves absence      | yes, for the probed endpoint  | no, only via an explicit `removed` |
+| Works offline       | no                            | yes                             |
+
+The practical split: a **live** probe is how you find out what changed since the
+last recording, and a **recorded** contract is what you can rely on in CI, where
+a network call to a third party on every build is a liability rather than a
+feature. DriftLock's own shape already reflects this, with
+`packages/pipeline` and `packages/webhookCapture` producing recorded contracts
+from observed traffic, and `VendorConfig.docs.specUrl` pointing at published
+declarations for the vendors that have them.
+
+Neither substitutes for the other. A recorded contract cannot tell you the vendor
+shipped a breaking change this morning, and a live probe cannot tell you whether
+your migration is correct for the traffic you actually receive.
+
 ## [shipped] What this does
 
 You hand it a `ChangePacket` (provider, from version, to version, summary,
-migration docs) and a path to a git repository. It inspects the repo, finds the
-affected call sites, reads them, applies minimal diffs, runs a whitelisted
-verification command, and reports one of three outcomes:
+migration docs) and a path to a git repository. You can also hand it a
+`VendorContract`, in which case the vendor's real API surface is injected into
+the opening message and enforced before any pull request. It inspects the repo,
+finds the affected call sites, reads them, applies minimal edits, runs a
+whitelisted verification command, checks those edits against the contract, and
+reports one of three outcomes:
 
 | Outcome      | Meaning                                              |
 | ------------ | ---------------------------------------------------- |
@@ -37,8 +140,7 @@ verification command, and reports one of three outcomes:
 | `readFile`         | File contents with 1-indexed line numbers  |
 | `editFile`         | Applies one unified diff                  |
 | `replaceInFile`    | Replaces one exact snippet               |
-| `runCommand`       | Runs an allowed verification command      |
-| `createPullRequest`| Summarises the diff and targets a branch   |
+| `runCommand`       | Runs an allowed verification command      || `createPullRequest`| Summarises the diff and targets a branch   |
 
 ## [shipped] Safety
 
@@ -213,6 +315,16 @@ example a local `CommandRunner` that skips Docker entirely.
   supported yet.
 - After a failed edit the model sometimes moves on to verification instead of
   fixing the edit. The prompt tells it to retry; nothing enforces it.
+- `discoverVendorReceivers` is a regex heuristic. It catches a value assigned
+  from a vendor client call or a webhook payload chain, and misses anything
+  routed through a factory, a class field, or a rename. Pass
+  `VerifyOptions.clientNames` when it does, and expect to.
+- The contract gate is not wired to the pipeline's captured traffic yet. Nothing
+  converts a `DriftResult` or `DriftAlert` into a contract, so
+  `changePacketFromDrift` is written but not yet fed by a live detector.
+- `probeLiveContract` is not called from inside `runMigrationAgent`. A caller
+  builds the contract and passes it in. That keeps credentials out of the model
+  loop, but it also means nobody is probing on a schedule.
 
 ## Real repository runs
 
@@ -255,8 +367,32 @@ being published. Two further defects showed up here:
   on. The remaining site is visible in `git diff`, but nothing told the model.
 
 Read together: the tool boundary is solid, and the model's API knowledge and
-completeness are the weak links. The verification gate is currently the only
-thing standing between a wrong migration and a merged one.
+completeness are the weak links. The verification gate was the only thing
+standing between a wrong migration and a merged one.
+
+### What the contract gate does with those exact bugs
+
+Both defects above are now caught deterministically, offline, with no model in
+the loop. `integration/agent/vendorContractLive.test.ts` fetches p5's real
+published reference (866 classitems, 243 constants) and runs the gate against
+the verbatim sketch the model wrote:
+
+```
+1 pass  findings: 1
+  kind:    unbound-constant
+  symbol:  UP_ARROW
+  detail:  UP_ARROW is a member of the p5 instance, not a global. Write p.UP_ARROW.
+```
+
+The same test also runs a realistic instance-mode sketch, including `p.setup =`
+and `p.draw =` lifecycle assignments, and asserts zero findings. A gate that
+fires on correct code is worse than no gate, so the quiet case is tested as
+seriously as the loud one.
+
+The stripe case is the `stale` path. `integration/agent/contractGate.test.ts`
+migrates one of two `paymentIntent.source` sites, leaves a second file untouched,
+and asserts the PR is refused with the finding pointing at the file the model
+never opened.
 
 ## Tests
 
@@ -264,6 +400,17 @@ thing standing between a wrong migration and a merged one.
 bun test --cwd packages/tests unit/agent/
 bun test --cwd packages/tests integration/agent/
 ```
+
+`unit/agent/vendorContract.test.ts` covers the contract machinery, including the
+two real bugs as fixtures. `integration/agent/contractGate.test.ts` drives the
+whole agent with a stub model and asserts the gate refuses the PR. Neither needs
+credentials or a network.
+
+`integration/agent/vendorContractLive.test.ts` is the one that talks to real
+vendors: it fetches p5's reference dump, probes a live JSON API, and reads
+Stripe's published OpenAPI. It is not mocked, because the whole claim is that the
+contract reflects the vendor rather than our idea of the vendor. Each test skips
+loudly if the network is unavailable.
 
 `unit/agent` covers path guards, patch validation, command whitelist rejection,
 the full inspect to PR walk against a real temp git repo, and each outcome

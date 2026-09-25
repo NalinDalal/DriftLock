@@ -1,4 +1,7 @@
 import OpenAI from "openai";
+import { readdir } from "node:fs/promises";
+import type { Dirent } from "node:fs";
+import { join } from "node:path";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { isToolName, toOpenAITools } from "./tools";
 import { SYSTEM_PROMPT } from "./prompt";
@@ -23,6 +26,7 @@ import {
     isGitRepository,
     readFile,
     replaceInFile,
+    resolveInsideRoot,
     runCommand,
     searchCode,
     type ToolResult,
@@ -35,6 +39,104 @@ import {
     type PullRequestTarget,
 } from "./publisher";
 import type { CommandRunner } from "./commandRunner";
+import {
+    verifyVendorSymbols,
+    type SymbolFinding,
+    type VendorContract,
+} from "./vendorContract";
+import type { VendorConfig } from "@driftlock/core";
+
+/**
+ * Reads the changed files off disk and runs the contract check over them.
+ *
+ * Changed files get the full check, because that is where the agent introduced
+ * something and it has to answer for it.
+ */
+async function checkChangedFiles(
+    root: string,
+    files: string[],
+    contract: VendorContract,
+    vendor: VendorConfig,
+): Promise<SymbolFinding[]> {
+    const sources = new Map<string, string>();
+    for (const file of files) {
+        const absolute = resolveInsideRoot(root, file);
+        if (!absolute) continue;
+        const handle = Bun.file(absolute);
+        if (await handle.exists()) sources.set(file, await handle.text());
+    }
+    if (sources.size === 0) return [];
+    return verifyVendorSymbols(contract, sources, { vendor });
+}
+
+const CONTRACT_SCAN_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"];
+const CONTRACT_SKIP_DIRS = new Set([
+    ".git",
+    "node_modules",
+    "dist",
+    "build",
+    ".next",
+    "coverage",
+    ".turbo",
+]);
+const MAX_CONTRACT_FILES = 500;
+
+/**
+ * Sweeps the whole repository for reads of fields the vendor removed.
+ *
+ * This is the completeness half of the check, and it deliberately reaches past
+ * the files the agent touched. The failure it exists for is a migration that
+ * edits two of three call sites: the diff looks finished, the tests pass, and
+ * the third file is never opened. A stale read is a missed call site wherever
+ * it is, so untouched files are scanned too.
+ *
+ * Only `stale` is reported from these files. Pre-existing use of some other
+ * field is not this migration's problem, and reporting it would bury the one
+ * finding that matters.
+ */
+async function sweepStaleReferences(
+    root: string,
+    changed: Set<string>,
+    contract: VendorContract,
+    vendor: VendorConfig,
+): Promise<SymbolFinding[]> {
+    if (contract.removed.length === 0) return [];
+
+    const sources = new Map<string, string>();
+    const queue: string[] = [root];
+    let seen = 0;
+
+    while (queue.length > 0 && seen < MAX_CONTRACT_FILES) {
+        const dir = queue.pop();
+        if (!dir) break;
+        let entries: Dirent[];
+        try {
+            entries = await readdir(dir, { withFileTypes: true });
+        } catch {
+            continue;
+        }
+        for (const entry of entries) {
+            if (entry.name.startsWith(".") && entry.name !== ".env") continue;
+            const full = join(dir, entry.name);
+            if (entry.isDirectory()) {
+                if (!CONTRACT_SKIP_DIRS.has(entry.name)) queue.push(full);
+                continue;
+            }
+            if (!CONTRACT_SCAN_EXTENSIONS.some((ext) => entry.name.endsWith(ext))) continue;
+            if (changed.has(full.slice(root.length + 1))) continue;
+            if (seen >= MAX_CONTRACT_FILES) break;
+            seen += 1;
+            try {
+                sources.set(full.slice(root.length + 1), await Bun.file(full).text());
+            } catch {
+                continue;
+            }
+        }
+    }
+
+    if (sources.size === 0) return [];
+    return verifyVendorSymbols(contract, sources, { vendor, reportOnlyStale: true });
+}
 
 export type RunOptions = {
     root: string;
@@ -46,6 +148,12 @@ export type RunOptions = {
     publisher?: PullRequestPublisher;
     target?: PullRequestTarget;
     commandRunner?: CommandRunner;
+    /**
+     * Ground truth about the vendor's API surface. When present it is injected
+     * into the opening message and enforced before any pull request is opened.
+     */
+    contract?: VendorContract;
+    vendor?: VendorConfig;
 };
 
 export type RunResult = {
@@ -186,6 +294,8 @@ async function execute(
                 options.target,
                 state,
                 root,
+                options.contract,
+                options.vendor,
             );
         default:
             return { ok: false, output: `Unknown tool: ${String(name)}` };
@@ -199,6 +309,8 @@ async function openPullRequest(
     target: PullRequestTarget | undefined,
     state: AgentState,
     root: string,
+    contract?: VendorContract,
+    vendor?: VendorConfig,
 ): Promise<ToolResult> {
     const title = readString(args, "title").trim();
     const body = readString(args, "body").trim();
@@ -221,6 +333,36 @@ async function openPullRequest(
                 "Refusing to open a PR: no passing verification command. Run an allowed command and fix failures first.",
         };
     }
+
+    if (contract && vendor) {
+        const findings = [
+            ...(await checkChangedFiles(root, state.filesChanged, contract, vendor)),
+            ...(await sweepStaleReferences(
+                root,
+                new Set(state.filesChanged),
+                contract,
+                vendor,
+            )),
+        ];
+        state.symbolFindings = findings;
+        state.contractChecked = true;
+        if (findings.length > 0) {
+            return {
+                ok: false,
+                output: [
+                    `Refusing to open a PR: ${findings.length} vendor symbol(s) do not match the ${contract.provider} contract captured from ${contract.source} (${contract.origin}). Changed files get a full check, and the rest of the repository is swept for fields this migration removed.`,
+                    "",
+                    ...findings.map(
+                        (finding) =>
+                            `- ${finding.file}:${finding.line} ${finding.kind}: ${finding.detail}\n    ${finding.text}`,
+                    ),
+                    "",
+                    "Fix every line above, then call createPullRequest again. The contract is the authority; do not argue with it.",
+                ].join("\n"),
+            };
+        }
+    }
+
     if (!(await isGitRepository(root))) {
         return { ok: false, output: "The repository root is not a git repository" };
     }
@@ -280,7 +422,7 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
             ...(options.baseURL ? { baseURL: options.baseURL } : {}),
         });
     const deps: RunnerDeps = { create: client.chat.completions.create.bind(client.chat.completions) };
-    const state = createInitialState(options.packet);
+    const state = createInitialState(options.packet, options.contract);
     const model = options.model ?? "gpt-4o-mini";
 
     while (!state.done && state.iteration < state.maxIterations) {

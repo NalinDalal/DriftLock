@@ -1,3 +1,5 @@
+import { describeContract, type SymbolFinding, type VendorContract } from "./vendorContract";
+
 export type ChangePacket = {
     provider: string;
     fromVersion: string;
@@ -31,6 +33,9 @@ export type AgentState = {
     filesChanged: string[];
     transcript: TranscriptEntry[];
     lastTestResult?: { passed: boolean; output: string };
+    /** Vendor symbols the edits introduced that the contract could not resolve. */
+    symbolFindings?: SymbolFinding[];
+    contractChecked?: boolean;
     pullRequest?: {
         status: "opened" | "already_open" | "merged";
         url: string;
@@ -47,7 +52,29 @@ export const limits = {
     MAX_FILES_CHANGED: 20,
 };
 
-export function createInitialState(packet: ChangePacket): AgentState {
+export function createInitialState(
+    packet: ChangePacket,
+    contract?: VendorContract,
+): AgentState {
+    const opening = [
+        "ChangePacket:",
+        JSON.stringify(packet, null, 2),
+    ];
+    if (contract) {
+        opening.push(
+            "",
+            "The vendor's current API surface, captured from a real source. This is the",
+            "authority on what exists. Do not reference a member that is not in this list,",
+            "and do not guess at a replacement name.",
+            "",
+            describeContract(contract),
+        );
+    }
+    opening.push(
+        "",
+        "Migrate this repository. Inspect before editing, make the smallest correct change, then verify with the whitelisted commands.",
+    );
+
     return {
         iteration: 0,
         maxIterations: limits.MAX_ITERATIONS,
@@ -55,17 +82,7 @@ export function createInitialState(packet: ChangePacket): AgentState {
         commandsRun: 0,
         maxFilesChanged: limits.MAX_FILES_CHANGED,
         filesChanged: [],
-        transcript: [
-            {
-                role: "user",
-                content: [
-                    "ChangePacket:",
-                    JSON.stringify(packet, null, 2),
-                    "",
-                    "Migrate this repository. Inspect before editing, make the smallest correct change, then verify with the whitelisted commands.",
-                ].join("\n"),
-            },
-        ],
+        transcript: [{ role: "user", content: opening.join("\n") }],
         done: false,
         outcome: null,
     };
@@ -83,8 +100,14 @@ export function canRunMoreCommands(state: AgentState): boolean {
     return state.commandsRun < state.maxCommands;
 }
 
+/**
+ * A passing test suite is not sufficient on its own. If the contract check found
+ * symbols it could not resolve, the migration is unverified no matter what the
+ * build says, so it can never reach `auto_pr`.
+ */
 export function decideOutcome(state: AgentState): Outcome {
-    if (state.lastTestResult?.passed && state.filesChanged.length > 0) {
+    const contractClean = !state.symbolFindings || state.symbolFindings.length === 0;
+    if (state.lastTestResult?.passed && state.filesChanged.length > 0 && contractClean) {
         return "auto_pr";
     }
     if (state.filesChanged.length > 0 || state.lastTestResult) return "review_pr";
