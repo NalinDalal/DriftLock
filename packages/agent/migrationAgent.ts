@@ -262,7 +262,11 @@ async function execute(
                 };
             }
             const result = await editFile(root, readString(args, "path"), readString(args, "patch"));
-            if (result.ok) recordFileChanged(state, readString(args, "path"));
+            if (result.ok) {
+                recordFileChanged(state, readString(args, "path"));
+                // A passing verification no longer describes the tree once it is edited.
+                state.lastTestResult = undefined;
+            }
             return result;
         }
         case "replaceInFile": {
@@ -278,7 +282,11 @@ async function execute(
                 readString(args, "oldText"),
                 readString(args, "newText"),
             );
-            if (result.ok) recordFileChanged(state, readString(args, "path"));
+            if (result.ok) {
+                recordFileChanged(state, readString(args, "path"));
+                // A passing verification no longer describes the tree once it is edited.
+                state.lastTestResult = undefined;
+            }
             return result;
         }
         case "runCommand": {
@@ -400,18 +408,26 @@ async function openPullRequest(
         return { ok: false, output: "No changed files could be read from disk" };
     }
 
-    const result = await publisher.publish({
-        target,
-        title,
-        body,
-        branch,
-        files,
-        commitMessage: commitMessageFor({
-            provider: packet.provider,
-            fromVersion: packet.fromVersion,
-            toVersion: packet.toVersion,
-        }),
-    });
+    let result: Awaited<ReturnType<PullRequestPublisher["publish"]>>;
+    try {
+        result = await publisher.publish({
+            target,
+            title,
+            body,
+            branch,
+            files,
+            commitMessage: commitMessageFor({
+                provider: packet.provider,
+                fromVersion: packet.fromVersion,
+                toVersion: packet.toVersion,
+            }),
+        });
+    } catch (error) {
+        return {
+            ok: false,
+            output: `Pull request could not be opened (${error instanceof Error ? error.message : String(error)}). Edits are kept locally; fix the cause and call createPullRequest again.`,
+        };
+    }
 
     state.pullRequest = result;
     return {

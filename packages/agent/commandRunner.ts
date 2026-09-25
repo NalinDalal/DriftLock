@@ -22,12 +22,17 @@ export type SandboxCommandRunnerOptions = {
 export const DEFAULT_SANDBOX_IMAGE = "node:22-alpine";
 const EXCLUDED = new Set([".git"]);
 
-export async function copyWorkspace(root: string): Promise<string> {
+export async function copyWorkspace(root: string, options: { excludeNodeModules?: boolean } = {}): Promise<string> {
     const workspace = await mkdtemp(join(tmpdir(), "driftlock-sandbox-"));
     await cp(root, workspace, {
         recursive: true,
         filter: (source) => {
             const name = source.split("/").pop() ?? "";
+            if (name === "node_modules" && source !== root && options.excludeNodeModules) {
+                // Skipped: it will be bind-mounted read-only instead (see below),
+                // so copying it only burns disk I/O on every run.
+                return false;
+            }
             return !(EXCLUDED.has(name) && source !== root);
         },
     });
@@ -69,10 +74,14 @@ export function createSandboxCommandRunner(
 
             let workspace: string | null = null;
             try {
-                workspace = await copyWorkspace(root);
+                const willBindNodeModules =
+                    shareNodeModules && (await isDirectory(join(root, "node_modules")));
+                workspace = await copyWorkspace(root, {
+                    excludeNodeModules: willBindNodeModules,
+                });
 
                 const extraBinds: string[] = [];
-                if (shareNodeModules && (await isDirectory(join(root, "node_modules")))) {
+                if (willBindNodeModules) {
                     extraBinds.push(`${join(root, "node_modules")}:/workspace/node_modules:ro`);
                 }
 
