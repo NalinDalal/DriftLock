@@ -1,5 +1,7 @@
 import type { ShapeDiffResult } from "@driftlock/diff";
 import type { MigrationPlan, MigrationStep } from "@driftlock/migrations";
+import { defineRule, type RuleDefinition } from "./ruleDefinition";
+import { rulesForVendor } from "./vendorRules";
 
 export interface RuleContext {
     endpointId: string;
@@ -31,112 +33,45 @@ export interface RuleResult {
     plan: MigrationPlan;
 }
 
-const builtInRules: Rule[] = [
-    {
-        id: "stripe-source-to-payment-method",
-        name: "Stripe source to payment_method",
-        description: "When Stripe renames source to payment_method, add billing_details",
-        vendor: "stripe",
-        eventPattern: /charge\.(created|updated)/,
-        condition: (ctx) =>
-            ctx.diff.changes.some(
-                (c) =>
-                    c.kind === "request_renamed" &&
-                    c.from === "source" &&
-                    c.to === "payment_method",
-            ),
-        action: (ctx) => ({
-            type: "add_step",
-            payload: {
-                id: "add-billing-details",
-                order: ctx.plan.steps.length + 1,
-                description: "Add billing_details for payment_method",
-                type: "add_field" as const,
-                field: "billing_details",
-                dependencies: [],
-                status: "pending" as const,
-            },
-        }),
-        priority: 10,
-    },
-    {
-        id: "stripe-amount-to-cents",
-        name: "Stripe amount to cents",
-        description: "When Stripe changes amount from dollars to cents, add conversion",
-        vendor: "stripe",
-        eventPattern: /payment_intent\.(created|updated)/,
-        condition: (ctx) =>
-            ctx.diff.changes.some(
-                (c) =>
-                    c.kind === "type_changed" &&
-                    c.field.includes("amount") &&
-                    c.oldType === "number" &&
-                    c.newType === "integer",
-            ),
-        action: (ctx) => ({
-            type: "transform",
-            payload: {
-                description: "Convert amount from dollars to cents (multiply by 100)",
-                template: "Math.round({field} * 100)",
-            },
-        }),
-        priority: 20,
-    },
-    {
-        id: "twilio-sid-prefix",
-        name: "Twilio SID prefix",
-        description: "When Twilio changes SID format, validate prefix",
-        vendor: "twilio",
-        eventPattern: /message\.(sent|received)/,
-        condition: (ctx) =>
-            ctx.diff.changes.some(
-                (c) =>
-                    c.kind === "type_changed" &&
-                    c.field.includes("sid"),
-            ),
-        action: (ctx) => ({
-            type: "custom",
-            payload: {
-                description: "Validate Twilio SID prefix (AC, SM, MM, etc.)",
-                validation: "startsWith",
-                validPrefixes: ["AC", "SM", "MM", "CA", "PN"],
-            },
-        }),
-        priority: 15,
-    },
+/**
+ * The only rules the engine ships with. They are vendor-neutral on purpose:
+ * anything naming a vendor lives in a `vendorRules` pack and is loaded per
+ * run, so onboarding a vendor never edits this file. Each entry is a plain
+ * `RuleDefinition` to prove the declarative schema covers everything the
+ * engine needs — including the two patterns below.
+ */
+const genericRuleDefinitions: RuleDefinition[] = [
     {
         id: "generic-deprecated-field",
         name: "Generic deprecated field",
         description: "Add deprecation warning when field is removed",
-        condition: (ctx) =>
-            ctx.diff.changes.some((c) => c.kind === "field_removed"),
-        action: (ctx) => ({
+        priority: 5,
+        whenChange: { kind: "field_removed" },
+        then: {
             type: "custom",
             payload: {
                 description: "Add console.warn for deprecated field usage",
                 template: "console.warn('{field} is deprecated, use {replacement} instead')",
             },
-        }),
-        priority: 5,
+        },
     },
     {
         id: "generic-nullable-field",
         name: "Generic nullable field",
         description: "Add null check when field becomes nullable",
-        condition: (ctx) =>
-            ctx.diff.optionalityChanges.some(
-                (c) => c.wasRequired && !c.nowRequired,
-            ),
-        action: (ctx) => ({
+        priority: 5,
+        whenOptionality: { wasRequired: true, nowRequired: false },
+        then: {
             type: "transform",
             payload: {
                 description: "Add null check for nullable field",
                 template: "{field} ?? {default}",
             },
-        }),
-        priority: 5,
+        },
     },
 ];
+
+const builtInRules: Rule[] = genericRuleDefinitions.map(defineRule);
 
 export class RulesEngine {
     private rules: Rule[] = [...builtInRules];
@@ -239,6 +174,41 @@ export function createRulesEngine(customRules?: Rule[]): RulesEngine {
     return engine;
 }
 
+/**
+ * An engine with the generic built-ins plus the data packs for the given
+ * vendors. This is the call every entry point should reach for: the vendor
+ * list is an argument, so supporting a new vendor never touches this file.
+ */
+export function createRulesEngineFor(vendors: string[], customRules?: Rule[]): RulesEngine {
+    const engine = new RulesEngine();
+    for (const vendor of vendors) {
+        for (const rule of rulesForVendor(vendor)) {
+            engine.addRule(rule);
+        }
+    }
+    if (customRules) {
+        for (const rule of customRules) {
+            engine.addRule(rule);
+        }
+    }
+    return engine;
+}
+
 // Barrel for policy config — keeps imports clean: from "@driftlock/rulesEngine"
 export type { PolicyRule, DriftlockPolicy } from "./policyTypes";
 export { loadDriftlockPolicies, policyRuleToRule, integratePoliciesWithEngine } from "./policyLoader";
+
+// Declarative rules: vendor packs as data, compiled to live rules on load.
+export type {
+    ChangeMatcher,
+    OptionalityMatcher,
+    RuleDefinition,
+} from "./ruleDefinition";
+export { defineRule } from "./ruleDefinition";
+export {
+    registerVendorRules,
+    rulesForVendor,
+    stripeRules,
+    twilioRules,
+    vendorRuleDefinitions,
+} from "./vendorRules";

@@ -1,5 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { RulesEngine, createRulesEngine, type Rule, type RuleContext } from "../index";
+import {
+    createRulesEngine,
+    createRulesEngineFor,
+    defineRule,
+    registerVendorRules,
+    RulesEngine,
+    rulesForVendor,
+    type Rule,
+    type RuleContext,
+} from "../index";
 import type { ShapeDiffResult } from "@driftlock/diff";
 import type { MigrationPlan } from "@driftlock/migrations";
 
@@ -39,15 +48,27 @@ function makeContext(overrides: Partial<RuleContext> = {}): RuleContext {
     };
 }
 
+function stripeEngine(): RulesEngine {
+    return createRulesEngine(rulesForVendor("stripe"));
+}
+
 describe("RulesEngine", () => {
-    test("has built-in rules", () => {
+    test("ships only vendor-neutral built-ins", () => {
         const engine = new RulesEngine();
         const rules = engine.getRules();
         expect(rules.length).toBeGreaterThan(0);
+        // The generalization proof: no built-in names a vendor. Vendor
+        // behaviour arrives per run via vendor packs, never with the engine.
+        for (const rule of rules) {
+            expect(rule.vendor).toBeUndefined();
+        }
+        expect(rules.map((rule) => rule.id).sort()).toEqual([
+            "generic-deprecated-field",
+            "generic-nullable-field",
+        ]);
     });
 
-    test("matches vendor-specific rules", () => {
-        const engine = new RulesEngine();
+    test("matches vendor pack rules loaded as data", () => {
         const ctx = makeContext({
             endpointId: "stripe",
             eventType: "charge.created",
@@ -63,13 +84,11 @@ describe("RulesEngine", () => {
             }),
         });
 
-        const matched = engine.matchRules(ctx);
-        expect(matched.length).toBeGreaterThan(0);
+        const matched = stripeEngine().matchRules(ctx);
         expect(matched.some((r) => r.id === "stripe-source-to-payment-method")).toBe(true);
     });
 
     test("does not match wrong vendor", () => {
-        const engine = new RulesEngine();
         const ctx = makeContext({
             endpointId: "twilio",
             eventType: "charge.created",
@@ -85,12 +104,11 @@ describe("RulesEngine", () => {
             }),
         });
 
-        const matched = engine.matchRules(ctx);
+        const matched = stripeEngine().matchRules(ctx);
         expect(matched.some((r) => r.id === "stripe-source-to-payment-method")).toBe(false);
     });
 
     test("matches event pattern", () => {
-        const engine = new RulesEngine();
         const ctx = makeContext({
             endpointId: "stripe",
             eventType: "payment_intent.created",
@@ -106,12 +124,11 @@ describe("RulesEngine", () => {
             }),
         });
 
-        const matched = engine.matchRules(ctx);
+        const matched = stripeEngine().matchRules(ctx);
         expect(matched.some((r) => r.id === "stripe-amount-to-cents")).toBe(true);
     });
 
     test("adds step via rule action", () => {
-        const engine = new RulesEngine();
         const ctx = makeContext({
             endpointId: "stripe",
             eventType: "charge.created",
@@ -124,17 +141,35 @@ describe("RulesEngine", () => {
                         to: "payment_method",
                     },
                 ],
+            }),
+        });
+
+        const result = stripeEngine().applyRules(ctx);
+        expect(result.applied.length).toBeGreaterThan(0);
+        expect(result.plan.steps.length).toBeGreaterThan(0);
+        const step = result.plan.steps.find((s) => s.field === "billing_details");
+        expect(step).toBeDefined();
+        expect(step?.order).toBe(1);
+    });
+
+    test("interpolates the matched field into action templates", () => {
+        const engine = new RulesEngine();
+        const ctx = makeContext({
+            diff: makeDiff({
+                changes: [{ kind: "field_removed", field: "source", breaking: true }],
             }),
         });
 
         const result = engine.applyRules(ctx);
-        expect(result.applied.length).toBeGreaterThan(0);
-        expect(result.plan.steps.length).toBeGreaterThan(0);
-        expect(result.plan.steps.some((s) => s.field === "billing_details")).toBe(true);
+        const deprecated = result.applied.find((r) => r.id === "generic-deprecated-field");
+        expect(deprecated).toBeDefined();
+        const payload = deprecated
+            ? (deprecated.action(ctx).payload as { template: string })
+            : { template: "" };
+        expect(payload.template).toContain("source");
     });
 
     test("sorts rules by priority", () => {
-        const engine = new RulesEngine();
         const ctx = makeContext({
             endpointId: "stripe",
             eventType: "charge.created",
@@ -150,12 +185,65 @@ describe("RulesEngine", () => {
             }),
         });
 
-        const matched = engine.matchRules(ctx);
+        const matched = stripeEngine().matchRules(ctx);
         for (let i = 1; i < matched.length; i++) {
             const prev = matched[i - 1].priority ?? 0;
             const curr = matched[i].priority ?? 0;
             expect(prev).toBeGreaterThanOrEqual(curr);
         }
+    });
+});
+
+describe("vendor packs are data, not engine code", () => {
+    test("onboards a brand-new vendor without touching the engine", () => {
+        registerVendorRules("acme", [
+            {
+                id: "acme-widget-renamed",
+                name: "Acme widget renamed",
+                description: "When Acme renames widget to gadget, note it",
+                vendor: "acme",
+                eventPattern: "widget\\.(updated)",
+                priority: 10,
+                whenChange: { kind: "request_renamed", from: "widget", to: "gadget" },
+                then: { type: "custom", payload: { note: "rename {from} to {to}" } },
+            },
+        ]);
+
+        const engine = createRulesEngineFor(["acme"]);
+        const ctx = makeContext({
+            endpointId: "acme",
+            eventType: "widget.updated",
+            diff: makeDiff({
+                changes: [
+                    {
+                        kind: "request_renamed",
+                        field: "widget",
+                        from: "widget",
+                        to: "gadget",
+                        breaking: true,
+                    },
+                ],
+            }),
+        });
+
+        const matched = engine.matchRules(ctx);
+        expect(matched.some((r) => r.id === "acme-widget-renamed")).toBe(true);
+    });
+
+    test("unknown vendors resolve to no rules", () => {
+        expect(rulesForVendor("no-such-vendor")).toEqual([]);
+    });
+
+    test("defineRule compiles the event pattern once", () => {
+        const rule = defineRule({
+            id: "x",
+            name: "x",
+            description: "x",
+            eventPattern: "charge\\.(created)",
+            whenChange: { kind: "field_removed" },
+            then: { type: "skip" },
+        });
+        expect(rule.eventPattern).toBeInstanceOf(RegExp);
     });
 });
 
