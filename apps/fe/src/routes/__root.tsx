@@ -51,7 +51,10 @@ export default function AppShell() {
                 .then((data) => {
                     if (data?.user)
                         setUser({
-                            name: data.user.name,
+                            // GitHub returns null for `name` when a user has not
+                            // set one, and the avatar initials below call
+                            // .split() on it, so fall back to the login.
+                            name: data.user.name ?? data.user.login ?? "",
                             handle: data.user.login,
                         });
                 })
@@ -82,8 +85,9 @@ export default function AppShell() {
         return () => onToast(() => undefined);
     }, []);
 
+    // The landing page at "/" is not the accounts dashboard, so it must not
+    // highlight the Accounts nav item.
     const onAccounts =
-        location.pathname === "/" ||
         location.pathname.startsWith("/accounts") ||
         location.pathname.startsWith("/repos");
     const onWebhooks = location.pathname.startsWith("/webhooks");

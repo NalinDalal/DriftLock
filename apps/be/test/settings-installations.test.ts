@@ -66,4 +66,36 @@ describe("provider credentials", () => {
         await handleUpdateSettings(request({ webhookConfig: { aiModel: "model" } }));
         expect(settings.get("webhookConfig")).toEqual({ aiProvider: "gemini", aiApiKey: "saved-key", aiModel: "model" });
     });
+
+    for (const patch of [{ aiProvider: "cloudflare" }, { aiProvider: "cloudflare", aiModel: "" }]) {
+        test(`clears the previous provider model for ${JSON.stringify(patch)}`, async () => {
+            const { settings } = installStore({
+                aiProvider: "gemini",
+                aiApiKey: "old-key",
+                aiModel: "gemini-2.5-flash",
+            });
+            await handleUpdateSettings(request({ webhookConfig: patch }));
+            expect(settings.get("webhookConfig")).toEqual({ aiProvider: "cloudflare", aiApiKey: "", aiModel: "" });
+        });
+    }
+
+    test("keeps a model explicitly supplied for the new provider", async () => {
+        const { settings } = installStore({
+            aiProvider: "gemini",
+            aiApiKey: "old-key",
+            aiModel: "gemini-2.5-flash",
+        });
+        await handleUpdateSettings(request({ webhookConfig: { aiProvider: "cloudflare", aiModel: "@cf/google/gemma-4-26b-a4b-it" } }));
+        expect(settings.get("webhookConfig")).toEqual({
+            aiProvider: "cloudflare",
+            aiApiKey: "",
+            aiModel: "@cf/google/gemma-4-26b-a4b-it",
+        });
+    });
+
+    test("keeps the model when the provider is unchanged", async () => {
+        const { settings } = installStore({ aiProvider: "gemini", aiModel: "gemini-2.5-flash" });
+        await handleUpdateSettings(request({ webhookConfig: { aiModel: "gemini-2.0-flash" } }));
+        expect(settings.get("webhookConfig")).toEqual({ aiProvider: "gemini", aiModel: "gemini-2.0-flash" });
+    });
 });

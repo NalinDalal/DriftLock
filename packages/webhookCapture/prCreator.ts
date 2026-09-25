@@ -128,6 +128,40 @@ function applyFixesToSource(
     return changed === source ? null : changed;
 }
 
+// A key's value that means this is a label or a type rather than a real field.
+// `outer: for (...)` is a label, and `({ payment }: { payment: any })` is a
+// parameter type: TypeScript type literals are indistinguishable from object
+// literals to a regex, and treating one as an invented field rejected valid TSX.
+const NOT_A_VALUE = /^(?:for|while|do|switch|if|try|return|throw|function|class|const|let|var|any|unknown|never|string|number|boolean|object|symbol|bigint|void|null|undefined)\b/;
+// `default` is a switch label that happens to follow a `{`.
+const NOT_A_KEY = new Set([
+    "default", "case", "else", "do", "try", "catch", "finally",
+    "new", "typeof", "void", "delete", "in", "instanceof", "of", "this",
+]);
+
+/**
+ * Keys written explicitly as `key:` inside an object literal, ignoring comments.
+ * Shorthand properties are deliberately not matched: `{ payment_method }` is a
+ * reference to an existing binding, not an invented field.
+ */
+function objectLiteralKeys(code: string): Set<string> {
+    const masked = code
+        .replace(/\/\*[\s\S]*?\*\//g, " ")
+        .replace(/\/\/[^\n]*/g, " ");
+    const keys = new Set<string>();
+    const keyRe =
+        /(?<=[{,])[ \t\r\n]*(?:"([^"\n]*)"|'([^'\n]*)'|([A-Za-z_$][\w$]*))[ \t\r\n]*:(?!:)([ \t\r\n]*)(\S{0,6})/g;
+    let match: RegExpExecArray | null;
+    while ((match = keyRe.exec(masked)) !== null) {
+        const key = match[1] ?? match[2] ?? match[3];
+        if (!key || NOT_A_KEY.has(key)) continue;
+        // `outer: for (...)` is a label, and `{ payment: any }` is a type.
+        if (NOT_A_VALUE.test(match[5] ?? "")) continue;
+        keys.add(key);
+    }
+    return keys;
+}
+
 export function isValidAIFix(
     fixedCode: string,
     works: FixWork[],
@@ -178,6 +212,15 @@ export function isValidAIFix(
                 const originalAccesses = accesses(originalCode);
                 for (const access of accesses(fixedCode)) {
                     if (!originalAccesses.has(access)) return false;
+                }
+                // The access check only sees `a.b` and `a["b"]`, so a bare
+                // object-literal key is invisible to it. Without this, a fix can
+                // add `{ paymentMethod: "..." }` next to a correct rename and
+                // sail through on the strength of the one legitimate key.
+                const originalKeys = objectLiteralKeys(originalCode);
+                const allowedKeys = new Set([work.to.split(".").pop()!]);
+                for (const key of objectLiteralKeys(fixedCode)) {
+                    if (!originalKeys.has(key) && !allowedKeys.has(key)) return false;
                 }
             }
         }

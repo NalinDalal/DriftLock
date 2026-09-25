@@ -19,6 +19,17 @@ const ALLOWED_COMMANDS = new Set([
     "bun run build",
     "bun run typecheck",
     "bun run lint",
+    // Rust and Go. `deriveVerificationCommands` filters the fingerprint's
+    // suggested commands through this same list, so omitting these silently
+    // gave every cargo and go repository an empty verification set: the model
+    // was told to verify nothing, and the executor would have refused them
+    // anyway. The entries are the exact strings `readCargoFacts` and
+    // `readGoFacts` produce, because the match is exact, not a prefix.
+    "cargo check",
+    "cargo build",
+    "cargo test",
+    "go build ./...",
+    "go test ./...",
 ]);
 
 export function isAllowedCommand(command: string): boolean {

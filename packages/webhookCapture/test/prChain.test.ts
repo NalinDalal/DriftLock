@@ -56,6 +56,61 @@ describe("AI fix syntax validation", () => {
     });
 });
 
+describe("AI fix invented object-literal keys", () => {
+    const rename = {
+        kind: "field_rename" as const,
+        field: "source",
+        from: "source",
+        to: "payment_method",
+        description: "Rename source to payment_method",
+        template: "rename",
+        confidence: "high" as const,
+    };
+    const original = 'const c = await stripe.charges.create({ amount: 100, source: "tok_visa" });';
+
+    // The access check only sees `a.b` and `a["b"]`, so a bare key next to a
+    // correct rename used to be accepted. The comment sniff at the top of
+    // isValidAIFix was the only other guard, and it is bypassed by not commenting.
+    for (const [name, fixed] of [
+        ["identifier key", 'const c = await stripe.charges.create({ amount: 100, payment_method: "pm", paymentMethod: "pm" });'],
+        ["quoted key", 'const c = await stripe.charges.create({ amount: 100, payment_method: "pm", "paymentMethod": "pm" });'],
+        ["unrelated key", 'const c = await stripe.charges.create({ amount: 100, payment_method: "pm", customer_email: "a@b.c" });'],
+    ] as const) {
+        test(`rejects an invented ${name}`, () => {
+            expect(isValidAIFix(fixed, [rename], original, "handler.ts")).toBe(false);
+        });
+    }
+
+    for (const [name, code] of [
+        ["clean rename", 'const c = await stripe.charges.create({ amount: 100, payment_method: "pm" });'],
+        ["shorthand reference", 'const payment_method = "pm"; const c = await stripe.charges.create({ amount: 1, payment_method });'],
+        ["switch default and label", 'switch (1) { default: { payment_method: "pm" } } out: for (;;) { break out; }'],
+        ["method shorthand and computed key", 'const c = await stripe.charges.create({ amount: 1, get amt() { return 1 }, ["payment_method"]: "pm" });'],
+        ["commented-out key", '// paymentMethod: "invented"\nconst c = await stripe.charges.create({ amount: 1, payment_method: "pm" });'],
+    ] as const) {
+        test(`accepts ${name}`, () => {
+            expect(isValidAIFix(code, [rename], original, "handler.ts")).toBe(true);
+        });
+    }
+
+    test("accepts a ternary value", () => {
+        const before = 'const c = await stripe.charges.create({ amount: 1, source: "s", flag: x ? 1 : 2 });';
+        const after = 'const c = await stripe.charges.create({ amount: 1, flag: x ? 1 : 2, payment_method: "pm" });';
+        expect(isValidAIFix(after, [rename], before, "handler.ts")).toBe(true);
+    });
+
+    test("accepts a type literal, which is not an invented field", () => {
+        const code = 'export const View = ({ payment }: { payment: any }) => <div>{payment.payment_method}</div>;';
+        expect(isValidAIFix(code, [rename], "const id = payment.source;", "handler.tsx")).toBe(true);
+    });
+
+    test("accepts a rename that preserves existing nested keys", () => {
+        const before = 'const c = await stripe.charges.create({ amount: 100, source: "s", metadata: { order_id: "9" } });';
+        const after = 'const c = await stripe.charges.create({ amount: 100, metadata: { order_id: "9" }, payment_method: "pm" });';
+        expect(isValidAIFix(after, [rename], before, "handler.ts")).toBe(true);
+    });
+});
+
 describe("AI fix validator regressions", () => {
     function makeContext(
         sourceCode = "export const id = payment.source;\n",

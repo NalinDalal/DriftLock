@@ -7,10 +7,12 @@ import {
     describeRepoFacts,
     extensionOf,
     fingerprintRepo,
+    isAllowedCommand,
     listRepoFiles,
     searchCode,
     versionOf,
 } from "@driftlock/agent";
+import type { RepoFacts } from "@driftlock/agent";
 
 let root: string;
 
@@ -242,10 +244,13 @@ describe("fingerprintRepo, cargo", () => {
         expect(facts.dependencies.tokio).toBe("1.35");
         expect(facts.dependencies.criterion).toBe("0.5");
         expect(facts.resolvedVersions.serde).toBe("1.0.195");
-        // Cargo commands are real but runCommand cannot execute them (its
-        // allowlist is npm/pnpm/bun only), so they are filtered out rather
-        // than handed to the model as runnable commands.
-        expect(facts.verificationCommands).toEqual([]);
+        // Cargo commands are on the executor allowlist, so they survive the
+        // filter and stay both runnable and suggested.
+        expect(facts.verificationCommands).toEqual([
+            "cargo check",
+            "cargo build",
+            "cargo test",
+        ]);
     });
 });
 
@@ -272,9 +277,12 @@ describe("fingerprintRepo, python and go", () => {
         const facts = await fingerprintRepo(root);
         expect(facts.ecosystem).toBe("go");
         expect(facts.dependencies["github.com/gin-gonic/gin"]).toBe("v1.9.1");
-        // Same allowlist filtering as cargo above: `go test ./...` is real
-        // but not runnable via runCommand, so it is not suggested.
-        expect(facts.verificationCommands).toEqual([]);
+        // Same allowlist filtering as cargo above: the go commands are on the
+        // allowlist, so they are suggested and `runCommand` will accept them.
+        expect(facts.verificationCommands).toEqual([
+            "go build ./...",
+            "go test ./...",
+        ]);
     });
 });
 
@@ -500,5 +508,33 @@ describe("deriveVerificationCommands", () => {
     test("produces an empty list rather than a guess", async () => {
         const facts = await fingerprintRepo(root);
         expect(deriveVerificationCommands(facts)).toEqual([]);
+    });
+
+    // The suggested commands are filtered through the same allowlist the
+    // executor enforces. A non-JS ecosystem absent from that allowlist does not
+    // fail loudly: it simply verifies nothing, and the migration looks clean.
+    test("every ecosystem's derived commands are ones the executor can run", () => {
+        const byEcosystem = [
+            { ecosystem: "rust", packageManager: "cargo", scripts: { check: "cargo check", build: "cargo build", test: "cargo test" } },
+            { ecosystem: "go", packageManager: "go", scripts: { build: "go build ./...", test: "go test ./..." } },
+        ] as unknown as RepoFacts[];
+
+        for (const facts of byEcosystem) {
+            const commands = deriveVerificationCommands(facts);
+            expect(commands.length).toBeGreaterThan(0);
+            for (const command of commands) {
+                expect(isAllowedCommand(command)).toBe(true);
+            }
+        }
+    });
+
+    test("still refuses a command no ecosystem declares", () => {
+        const facts = {
+            ecosystem: "rust",
+            packageManager: "cargo",
+            scripts: { test: "cargo publish --dry-run" },
+        } as unknown as RepoFacts;
+        expect(deriveVerificationCommands(facts)).toEqual([]);
+        expect(isAllowedCommand("npm run validate")).toBe(false);
     });
 });

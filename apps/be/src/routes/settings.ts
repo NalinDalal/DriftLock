@@ -75,9 +75,21 @@ export async function handleUpdateSettings(req: Request): Promise<Response> {
     }
     if (typeof patch.webhookConfig === "object" && patch.webhookConfig !== null) {
         const existing = await store.getSetting<AppSettings["webhookConfig"]>(WEBHOOK_CONFIG) ?? {};
-        const updated = { ...existing, ...patch.webhookConfig };
-        if (updated.aiProvider !== existing.aiProvider && updated.aiApiKey === existing.aiApiKey) {
-            updated.aiApiKey = "";
+        const incoming = patch.webhookConfig as Record<string, unknown>;
+        const updated = { ...existing, ...incoming };
+        if (updated.aiProvider !== existing.aiProvider) {
+            // Model names are provider-specific, so a model saved for the old
+            // provider is not a valid default for the new one.
+            if (updated.aiApiKey === existing.aiApiKey) {
+                updated.aiApiKey = "";
+            }
+            if (typeof incoming.aiModel !== "string" || incoming.aiModel === "") {
+                // Only clear a model that was actually saved, so a provider
+                // change does not add a field the config never had.
+                if ("aiModel" in updated) {
+                    updated.aiModel = "";
+                }
+            }
         }
         await store.setSetting(WEBHOOK_CONFIG, updated);
     }

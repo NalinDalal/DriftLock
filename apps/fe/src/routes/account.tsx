@@ -60,7 +60,7 @@ export default function AccountPage({ owner }: { owner: string }) {
 
     return (
         <div>
-            <Link to="/" className="mb-4 inline-flex items-center gap-1 text-xs font-medium text-[var(--color-muted)] hover:text-[var(--color-ink)]">
+            <Link to="/accounts" className="mb-4 inline-flex items-center gap-1 text-xs font-medium text-[var(--color-muted)] hover:text-[var(--color-ink)]">
                 ← Accounts
             </Link>
             <PageHeader

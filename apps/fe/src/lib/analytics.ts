@@ -21,7 +21,11 @@ function emit(name: EventName, props?: EventProps) {
         // Future: fetch(`${BASE}/api/analytics`, { method: "POST", body: JSON.stringify({ name, props }) })
         try {
             window.dispatchEvent(new CustomEvent("driftlock:analytics", { detail: { name, props } }));
-        } catch {}
+        } catch {
+            // Instrumentation must never affect the product: a listener that
+            // throws, or a CustomEvent constructor unavailable in this runtime,
+            // should not break the interaction that emitted the event.
+        }
     }
 }
 
