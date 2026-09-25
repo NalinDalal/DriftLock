@@ -208,17 +208,16 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
                 toolName: call.name,
                 content: result.ok ? result.output : `FAILED: ${result.output}`,
             });
-
-            if (call.name === "createPullRequest") {
-                state.done = true;
-                state.outcome = decideOutcome(state);
-                break;
-            }
+            if (call.name === "createPullRequest") state.done = true;
         }
 
         if (state.filesChanged.length >= limits.MAX_FILES_CHANGED) {
             state.done = true;
             state.outcome = "review_pr";
+        }
+
+        if (state.done) {
+            state.outcome = decideOutcome(state);
         }
     }
 

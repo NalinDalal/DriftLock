@@ -1,3 +1,5 @@
+import { stat } from "node:fs/promises";
+
 export type ToolResult = { ok: boolean; output: string };
 
 const ALLOWED_COMMANDS = new Set([
@@ -149,17 +151,27 @@ export async function searchCode(
     path?: string,
 ): Promise<ToolResult> {
     if (!query.trim()) return fail("searchCode requires a non-empty query");
-    const scopeRoot = path ? resolveInsideRoot(root, path) : root;
-    if (!scopeRoot) return fail(`Invalid search path: ${path}`);
+    const target = path ? resolveInsideRoot(root, path) : root;
+    if (!target) return fail(`Invalid search path: ${path}`);
+
+    let targetInfo;
+    try {
+        targetInfo = await stat(target);
+    } catch {
+        return fail(`Search path not found: ${path}`);
+    }
+    if (!targetInfo.isDirectory()) {
+        return fail(`Search path is not a directory: ${path}`);
+    }
 
     try {
-        const files = await collectSourceFiles(scopeRoot);
+        const files = await collectSourceFiles(target);
         const hits: string[] = [];
         const needle = query.toLowerCase();
 
         for (const relative of files) {
             if (hits.length >= MAX_SEARCH_HITS) break;
-            const absolute = `${scopeRoot}/${relative}`;
+            const absolute = `${target}/${relative}`;
             const content = await Bun.file(absolute).text();
             const lines = content.split("\n");
             for (let i = 0; i < lines.length; i++) {
@@ -197,6 +209,22 @@ export async function readFile(
     }
 }
 
+function stripDiffPrefix(filePath: string): string | null {
+    if (filePath === "/dev/null") return null;
+    const match = /^[ab]\/(.+)$/.exec(filePath);
+    return match ? match[1] : filePath;
+}
+
+export function patchTargets(patch: string): (string | null)[] {
+    const targets: (string | null)[] = [];
+    for (const line of patch.split("\n")) {
+        if (line.startsWith("+++ ")) {
+            targets.push(stripDiffPrefix(line.slice(4).trim()));
+        }
+    }
+    return targets;
+}
+
 export async function editFile(
     root: string,
     filePath: string,
@@ -209,6 +237,29 @@ export async function editFile(
     }
     if (!/^---\s/m.test(patch) || !/^\+\+\+\s/m.test(patch)) {
         return fail("editFile requires --- and +++ file headers in the diff");
+    }
+
+    const targets = patchTargets(patch).filter((target): target is string => target !== null);
+    if (patchTargets(patch).length === 0) {
+        return fail("editFile could not read a target path from the diff");
+    }
+    if (targets.length === 0) {
+        return fail("editFile cannot target /dev/null as the new file");
+    }
+    if (targets.some((target) => isProtectedPath(target))) {
+        return fail(
+            `Refused to edit: patch targets protected path ${targets.filter(isProtectedPath).join(", ")}`,
+        );
+    }
+    const escapes = targets.filter((target) => !resolveInsideRoot(root, target));
+    if (escapes.length > 0) {
+        return fail(`Refused to edit: patch targets ${escapes.join(", ")}`);
+    }
+    const unexpected = targets.filter((target) => target !== filePath);
+    if (unexpected.length > 0) {
+        return fail(
+            `editFile path mismatch: declared ${filePath} but the patch targets ${unexpected.join(", ")}`,
+        );
     }
 
     const proc = Bun.spawn(["git", "apply", "--whitespace=nowarn", "-"], {
@@ -229,6 +280,39 @@ export async function editFile(
         );
     }
     return { ok: true, output: `Applied patch to ${filePath}` };
+}
+
+const DENIED_ENV_KEY = /KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|PRIVATE|SESSION|COOKIE|AUTH/i;
+const PASSTHROUGH_ENV = new Set([
+    "PATH",
+    "HOME",
+    "LANG",
+    "LC_ALL",
+    "TMPDIR",
+    "SHELL",
+    "TERM",
+    "NODE_OPTIONS",
+    "NPM_CONFIG_USERCONFIG",
+    "npm_config_userconfig",
+    "XDG_CONFIG_HOME",
+    "XDG_CACHE_HOME",
+    "BUN_INSTALL",
+]);
+
+export function buildSandboxEnv(
+    source: Record<string, string | undefined>,
+): Record<string, string> {
+    const env: Record<string, string> = { CI: "1" };
+    for (const [key, value] of Object.entries(source)) {
+        if (value === undefined) continue;
+        if (PASSTHROUGH_ENV.has(key)) {
+            env[key] = value;
+            continue;
+        }
+        if (DENIED_ENV_KEY.test(key)) continue;
+        env[key] = value;
+    }
+    return env;
 }
 
 export function isAllowedCommand(command: string): boolean {
@@ -252,7 +336,7 @@ export async function runCommand(
         cwd: root,
         stdout: "pipe",
         stderr: "pipe",
-        env: { ...process.env, CI: "1" },
+        env: buildSandboxEnv(process.env),
     });
     const stdout = await new Response(proc.stdout).text();
     const stderr = await new Response(proc.stderr).text();

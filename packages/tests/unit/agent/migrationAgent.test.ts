@@ -226,6 +226,73 @@ describe("runMigrationAgent", () => {
         expect(result.state.transcript.some((entry) => entry.role === "tool")).toBe(false);
     });
 
+    test("answers every tool call in a parallel batch before stopping", async () => {
+        const init = Bun.spawn(["git", "init"], { cwd: root, stdout: "pipe" });
+        await init.exited;
+        const add = Bun.spawn(["git", "add", "-A"], { cwd: root, stdout: "pipe" });
+        await add.exited;
+
+        let turn = 0;
+        const client = {
+            chat: {
+                completions: {
+                    create: async () => {
+                        turn += 1;
+                        if (turn === 1) {
+                            return {
+                                choices: [
+                                    {
+                                        message: {
+                                            content: null,
+                                            tool_calls: [
+                                                {
+                                                    id: "pr",
+                                                    function: {
+                                                        name: "createPullRequest",
+                                                        arguments: JSON.stringify({
+                                                            title: "t",
+                                                            body: "b",
+                                                            branch: "br",
+                                                        }),
+                                                    },
+                                                },
+                                                {
+                                                    id: "read",
+                                                    function: {
+                                                        name: "readFile",
+                                                        arguments: JSON.stringify({
+                                                            path: "src/client.ts",
+                                                        }),
+                                                    },
+                                                },
+                                            ],
+                                        },
+                                    },
+                                ],
+                            };
+                        }
+                        return finalText("should not be reached");
+                    },
+                },
+            },
+        } as unknown as Parameters<typeof runMigrationAgent>[0]["client"];
+
+        const result = await runMigrationAgent({ root, packet, client });
+
+        const requested = result.state.transcript
+            .filter((entry) => entry.role === "assistant" && entry.toolCalls)
+            .flatMap((entry) => entry.toolCalls ?? [])
+            .map((call) => call.id);
+        const answered = result.state.transcript
+            .filter((entry) => entry.role === "tool")
+            .map((entry) => entry.toolCallId);
+
+        for (const id of requested) {
+            expect(answered).toContain(id);
+        }
+        expect(result.state.iteration).toBe(1);
+    });
+
     test("sends the system prompt and the ChangePacket to the model", async () => {
         let seen: unknown;
         apiCalls = [finalText("No changes needed.")];

@@ -4,9 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
     allowedCommands,
+    buildSandboxEnv,
     editFile,
     inspectRepo,
     isAllowedCommand,
+    patchTargets,
     readFile,
     resolveInsideRoot,
     runCommand,
@@ -145,6 +147,18 @@ describe("searchCode", () => {
         const result = await searchCode(root, "legacy_id", "..");
         expect(result.ok).toBe(false);
     });
+
+    test("reports a missing scope path clearly", async () => {
+        const result = await searchCode(root, "legacy_id", "nope");
+        expect(result.ok).toBe(false);
+        expect(result.output).toContain("Search path not found");
+    });
+
+    test("refuses a file as a scope path", async () => {
+        const result = await searchCode(root, "legacy_id", "src/client.ts");
+        expect(result.ok).toBe(false);
+        expect(result.output).toContain("not a directory");
+    });
 });
 
 describe("inspectRepo", () => {
@@ -211,6 +225,109 @@ describe("editFile", () => {
         );
         expect(result.ok).toBe(false);
     });
+
+    test("refuses a patch that targets a different file", async () => {
+        const proc = Bun.spawn(["git", "init"], { cwd: root, stdout: "pipe" });
+        await proc.exited;
+        const result = await editFile(
+            root,
+            "src/client.ts",
+            [
+                "--- a/src/other.ts",
+                "+++ b/src/other.ts",
+                "@@ -1 +1 @@",
+                "-a",
+                "+b",
+            ].join("\n"),
+        );
+        expect(result.ok).toBe(false);
+        expect(result.output).toContain("path mismatch");
+    });
+
+    test("refuses a patch that targets a protected file", async () => {
+        const proc = Bun.spawn(["git", "init"], { cwd: root, stdout: "pipe" });
+        await proc.exited;
+        const result = await editFile(
+            root,
+            "src/client.ts",
+            ["--- a/.env", "+++ b/.env", "@@ -1 +1 @@", "-A", "+B"].join("\n"),
+        );
+        expect(result.ok).toBe(false);
+        expect(result.output).toContain("Refused to edit");
+    });
+
+    test("refuses a patch that escapes the root", async () => {
+        const proc = Bun.spawn(["git", "init"], { cwd: root, stdout: "pipe" });
+        await proc.exited;
+        const result = await editFile(
+            root,
+            "src/client.ts",
+            [
+                "--- a/../../etc/passwd",
+                "+++ b/../../etc/passwd",
+                "@@ -1 +1 @@",
+                "-a",
+                "+b",
+            ].join("\n"),
+        );
+        expect(result.ok).toBe(false);
+    });
+});
+
+describe("patchTargets", () => {
+    test("reads a/ and b/ prefixes", () => {
+        expect(
+            patchTargets(["--- a/src/a.ts", "+++ b/src/a.ts"].join("\n")),
+        ).toEqual(["src/a.ts"]);
+    });
+
+    test("reads an unprefixed target", () => {
+        expect(patchTargets(["--- src/a.ts", "+++ src/a.ts"].join("\n"))).toEqual([
+            "src/a.ts",
+        ]);
+    });
+
+    test("reads a /dev/null deletion target as no new path", () => {
+        expect(patchTargets(["--- a/src/a.ts", "+++ /dev/null"].join("\n"))).toEqual([
+            null,
+        ]);
+    });
+});
+
+describe("buildSandboxEnv", () => {
+    test("keeps PATH and HOME", () => {
+        const env = buildSandboxEnv({ PATH: "/bin", HOME: "/home/u" });
+        expect(env.PATH).toBe("/bin");
+        expect(env.HOME).toBe("/home/u");
+    });
+
+    test("drops secrets, tokens, and private keys", () => {
+        const env = buildSandboxEnv({
+            PATH: "/bin",
+            OPENAI_API_KEY: "sk-real",
+            GITHUB_TOKEN: "ghp_real",
+            AWS_SECRET_ACCESS_KEY: "real",
+            GITHUB_PRIVATE_KEY_PATH: "/key.pem",
+            SESSION_SECRET: "real",
+            DB_PASSWORD: "real",
+        });
+        expect(env.OPENAI_API_KEY).toBeUndefined();
+        expect(env.GITHUB_TOKEN).toBeUndefined();
+        expect(env.AWS_SECRET_ACCESS_KEY).toBeUndefined();
+        expect(env.GITHUB_PRIVATE_KEY_PATH).toBeUndefined();
+        expect(env.SESSION_SECRET).toBeUndefined();
+        expect(env.DB_PASSWORD).toBeUndefined();
+        expect(env.PATH).toBe("/bin");
+    });
+
+    test("always sets CI", () => {
+        expect(buildSandboxEnv({}).CI).toBe("1");
+    });
+
+    test("keeps benign vars", () => {
+        const env = buildSandboxEnv({ PATH: "/bin", NODE_ENV: "test" });
+        expect(env.NODE_ENV).toBe("test");
+    });
 });
 
 describe("runCommand", () => {
@@ -241,5 +358,26 @@ describe("runCommand", () => {
         expect(allowedCommands()).toContain("npm run typecheck");
         expect(isAllowedCommand("npm test")).toBe(true);
         expect(isAllowedCommand("git push")).toBe(false);
+    });
+
+    test("does not hand secrets to a customer build script", async () => {
+        await writeFile(
+            join(root, "package.json"),
+            JSON.stringify({
+                name: "hostile",
+                scripts: {
+                    build: 'node -e "console.log(JSON.stringify(Object.keys(process.env).filter(k=>/KEY|TOKEN|SECRET|PASSWORD/.test(k))))"',
+                },
+            }),
+        );
+        const previous = process.env.OPENAI_API_KEY;
+        process.env.OPENAI_API_KEY = "sk-probe-not-real";
+        try {
+            const result = await runCommand(root, "npm run build");
+            expect(result.output).toContain("[]");
+        } finally {
+            if (previous === undefined) delete process.env.OPENAI_API_KEY;
+            else process.env.OPENAI_API_KEY = previous;
+        }
     });
 });
