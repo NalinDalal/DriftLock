@@ -6,6 +6,7 @@ import type { ChatCompletionMessageParam } from "openai/resources/chat/completio
 import { isToolName, toOpenAITools } from "./tools";
 import { SYSTEM_PROMPT } from "./prompt";
 import {
+    buildReceipt,
     canChangeMoreFiles,
     canRunMoreCommands,
     createInitialState,
@@ -18,6 +19,7 @@ import {
     type ChangePacket,
     type MigrationStage,
     type Outcome,
+    type RunReceipt,
     type ToolCall,
     type TranscriptEntry,
 } from "./state";
@@ -164,17 +166,78 @@ export type RunOptions = {
      * for it, but a caller that already knows the facts can supply them.
      */
     repoFacts?: RepoFacts;
+    /**
+     * Model-call resilience (timeouts and transient failures are the common
+     * way a long run dies). Defaults: 120s timeout, 2 retries, 1s base delay.
+     */
+    modelTimeoutMs?: number;
+    modelMaxRetries?: number;
+    modelRetryBaseMs?: number;
 };
 
 export type RunResult = {
     outcome: Outcome;
     state: AgentState;
     filesChanged: string[];
+    /** Structured audit line for this run: what changed, what proved it. */
+    receipt: RunReceipt;
 };
 
 type RunnerDeps = {
     create: OpenAI["chat"]["completions"]["create"];
 };
+
+/**
+ * Which model-call failures are worth retrying. Rate limits, overloaded
+ * servers, timeouts, and dropped connections are transient; anything else
+ * (auth, bad request, bad key) will fail identically on retry.
+ */
+export function isRetryableModelError(error: unknown): boolean {
+    if (error instanceof DOMException && error.name === "AbortError") return true;
+    const status = (error as { status?: unknown } | null)?.status;
+    if (typeof status === "number") return status === 429 || status >= 500;
+    if (error instanceof TypeError) return true;
+    return false;
+}
+
+function modelErrorMessage(error: unknown): string {
+    if (error instanceof DOMException && error.name === "AbortError") {
+        return "model request timed out";
+    }
+    return error instanceof Error ? error.message : String(error);
+}
+
+async function createWithRetry(
+    create: RunnerDeps["create"],
+    body: Parameters<RunnerDeps["create"]>[0],
+    options: { timeoutMs: number; maxRetries: number; baseDelayMs: number },
+): Promise<
+    Extract<Awaited<ReturnType<RunnerDeps["create"]>>, { choices: unknown }>
+> {
+    let attempt = 0;
+    while (true) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), options.timeoutMs);
+        try {
+            // The request body never sets `stream`, so the SDK resolves to a
+            // full completion; the cast recovers the overload the union hides.
+            const response = (await create(body, { signal: controller.signal })) as Extract<
+                Awaited<ReturnType<RunnerDeps["create"]>>,
+                { choices: unknown }
+            >;
+            clearTimeout(timer);
+            return response;
+        } catch (error) {
+            clearTimeout(timer);
+            if (attempt >= options.maxRetries || !isRetryableModelError(error)) {
+                throw error;
+            }
+            const delay = Math.min(options.baseDelayMs * 2 ** attempt, 10_000);
+            await Bun.sleep(delay * (0.5 + Math.random() * 0.5));
+            attempt += 1;
+        }
+    }
+}
 
 function toWireMessages(
     transcript: TranscriptEntry[],
@@ -465,6 +528,11 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
     // that says which receivers it applies to. Anything less is ungated.
     state.hasContract = Boolean(options.contract && options.vendor);
     const model = options.model ?? "gpt-4o-mini";
+    const modelResilience = {
+        timeoutMs: options.modelTimeoutMs ?? 120_000,
+        maxRetries: options.modelMaxRetries ?? 2,
+        baseDelayMs: options.modelRetryBaseMs ?? 1000,
+    };
     let lastStage: MigrationStage | null = null;
 
     while (!state.done && state.iteration < state.maxIterations) {
@@ -486,16 +554,33 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
             lastStage = stage;
         }
 
-        const response = await deps.create({
-            model,
-            temperature: 0.1,
-            messages: [
-                { role: "system", content: SYSTEM_PROMPT },
-                ...toWireMessages(state.transcript),
-            ],
-            tools: toOpenAITools(),
-            tool_choice: "auto",
-        });
+        // A dead model endpoint must degrade to an outcome, never throw: the
+        // edits on disk are real work worth reporting as review_pr.
+        let response: Awaited<ReturnType<typeof createWithRetry>>;
+        try {
+            response = await createWithRetry(
+                deps.create,
+                {
+                    model,
+                    temperature: 0.1,
+                    messages: [
+                        { role: "system", content: SYSTEM_PROMPT },
+                        ...toWireMessages(state.transcript),
+                    ],
+                    tools: toOpenAITools(),
+                    tool_choice: "auto",
+                },
+                modelResilience,
+            );
+        } catch (error) {
+            state.transcript.push({
+                role: "assistant",
+                content: `Model call failed (${modelErrorMessage(error)}). Stopping with what is on disk.`,
+            });
+            state.done = true;
+            state.outcome = decideOutcome(state);
+            break;
+        }
 
         const message = response.choices[0]?.message;
         const toolCalls = parseToolCalls(
@@ -528,6 +613,23 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
                 content: result.ok ? result.output : `FAILED: ${result.output}`,
             });
             if (call.name === "createPullRequest" && result.ok) state.done = true;
+            // Failure threshold: that many tool failures in a row means the
+            // strategy is stuck. Escalate to a human (review/draft) instead of
+            // burning the remaining iterations proving it again.
+            if (result.ok) {
+                state.consecutiveFailures = 0;
+            } else {
+                state.consecutiveFailures += 1;
+                if (state.consecutiveFailures >= limits.MAX_CONSECUTIVE_FAILURES) {
+                    state.transcript.push({
+                        role: "assistant",
+                        content: `Stopping: ${state.consecutiveFailures} tool calls failed in a row. The failures above describe what to look at.`,
+                    });
+                    state.done = true;
+                    state.outcome = decideOutcome(state);
+                    break;
+                }
+            }
         }
 
         if (state.filesChanged.length >= limits.MAX_FILES_CHANGED) {
@@ -548,9 +650,11 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
                 : decideOutcome(state);
     }
 
+    const outcome = state.outcome ?? decideOutcome(state);
     return {
-        outcome: state.outcome ?? decideOutcome(state),
+        outcome,
         state,
         filesChanged: state.filesChanged,
+        receipt: buildReceipt(state, options.packet, model, outcome),
     };
 }

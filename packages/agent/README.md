@@ -356,11 +356,22 @@ result.outcome;         // "auto_pr" | "review_pr" | "draft_pr" | "no_action"
 result.filesChanged;    // ["src/client.ts"]
 result.state.pullRequest; // { status, url, number, branch } when a PR exists
 result.state.transcript;  // full tool conversation
+result.receipt;         // one audit line: runId, outcome, files, proof, PR
 ```
 
 Pass `client` to supply your own OpenAI-compatible client, `model` to override
 the default `gpt-4o-mini`, and `publisher` plus `target` to actually open a pull
 request. With no publisher, `createPullRequest` returns a preview and says so.
+
+## Resilience
+
+Model calls have a 120s timeout and 2 retries with backoff on transient
+failures (429, 5xx, timeouts, dropped connections); override with
+`modelTimeoutMs`, `modelMaxRetries`, `modelRetryBaseMs`. Anything else —
+a dead endpoint, an exhausted budget, five tool failures in a row — ends the
+run with an outcome (`review_pr`/`draft_pr`/`no_action`) instead of throwing,
+so edits on disk are always reported rather than lost. Every run carries a
+`runId` echoed in its receipt for log correlation.
 
 ## Running against a non-OpenAI provider
 

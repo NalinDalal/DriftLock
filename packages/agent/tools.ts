@@ -27,7 +27,7 @@ export const tools: ToolDefinition[] = [
     {
         name: "searchCode",
         description:
-            "Search the repository for a literal string. Returns matching file paths with line numbers.",
+            "Search the repository for a literal string (not a regex), case-insensitively. Returns matching file paths with line numbers, e.g. src/client.ts:12. Refuses empty queries and paths that are not directories. Ignored trees (node_modules, dist, build) are never searched: a scope inside one returns no matches.",
         inputSchema: {
             type: "object",
             properties: {
@@ -37,7 +37,8 @@ export const tools: ToolDefinition[] = [
                 },
                 path: {
                     type: "string",
-                    description: "Optional repo-relative directory to limit the search, e.g. src/",
+                    description:
+                        "Optional repo-relative directory to limit the search, e.g. src/",
                 },
             },
             required: ["query"],
@@ -46,11 +47,14 @@ export const tools: ToolDefinition[] = [
     {
         name: "readFile",
         description:
-            "Read a repo-relative file. Returns content with 1-indexed line numbers.",
+            "Read a repo-relative file. Returns content with 1-indexed line numbers. Output is truncated past 8000 characters: read again is pointless, search within what you got. Protected paths (.env, keys, .git/config) are refused.",
         inputSchema: {
             type: "object",
             properties: {
-                path: { type: "string", description: "File path from repo root" },
+                path: {
+                    type: "string",
+                    description: "File path from repo root",
+                },
             },
             required: ["path"],
         },
@@ -58,11 +62,14 @@ export const tools: ToolDefinition[] = [
     {
         name: "editFile",
         description:
-            "Apply a unified diff to one file. The patch must apply cleanly. Make the smallest correct change. Never edit test files to make verification pass.",
+            "Apply a unified diff to one file. Prefer replaceInFile for small changes: it cannot fail on hunk offsets. Use editFile only for multi-line restructures. The patch must apply cleanly: contiguous hunk, real context lines copied from readFile, headers matching `path`. A FAILED result names the cause; fix the hunk and retry, do not switch files. Never edit test files to make verification pass.",
         inputSchema: {
             type: "object",
             properties: {
-                path: { type: "string", description: "File path from repo root" },
+                path: {
+                    type: "string",
+                    description: "File path from repo root",
+                },
                 patch: {
                     type: "string",
                     description:
@@ -75,11 +82,14 @@ export const tools: ToolDefinition[] = [
     {
         name: "replaceInFile",
         description:
-            "Replace one exact snippet in a file. Prefer this over editFile for small changes: copy oldText verbatim from a readFile result, include enough surrounding lines to be unique, and do not include line numbers. oldText must appear exactly once.",
+            "Replace one exact snippet in a file. This is the default edit tool: copy oldText verbatim from a readFile result, include enough surrounding lines to be unique, and do not include line numbers. oldText must appear exactly once (0 matches means you miscopied; 2+ means add context). Use an empty newText to delete. Any successful edit invalidates the last verification: run the command again before opening a PR.",
         inputSchema: {
             type: "object",
             properties: {
-                path: { type: "string", description: "File path from repo root" },
+                path: {
+                    type: "string",
+                    description: "File path from repo root",
+                },
                 oldText: {
                     type: "string",
                     description:
@@ -87,7 +97,8 @@ export const tools: ToolDefinition[] = [
                 },
                 newText: {
                     type: "string",
-                    description: "Replacement text. Use an empty string to delete.",
+                    description:
+                        "Replacement text. Use an empty string to delete.",
                 },
             },
             required: ["path", "oldText", "newText"],
@@ -96,7 +107,7 @@ export const tools: ToolDefinition[] = [
     {
         name: "runCommand",
         description:
-            "Run a whitelisted verification command in the repository. Only the commands listed in your opening message will be accepted, and only if that script actually exists.",
+            "Run a whitelisted verification command in the repository, e.g. npm run typecheck. Only the commands listed in your opening message are accepted, copied exactly: anything else, including shell operators (&&, |, ;) or flags you invented, is refused. The budget is 30 commands per run. A nonzero exit is a result, not an error: read the output, fix the cause, run again.",
         inputSchema: {
             type: "object",
             properties: {
@@ -111,7 +122,7 @@ export const tools: ToolDefinition[] = [
     {
         name: "createPullRequest",
         description:
-            "Open a pull request from the working diff. Only call this after a verification command has passed. The branch must start with 'driftlock/'. Branch names that do not are refused.",
+            "Open a pull request from the working diff. Call only after a verification command has passed on the current tree. The branch must start with 'driftlock/', e.g. driftlock/p5-2-3. Refusals are guidance, not dead ends: no passing command means verify first; contract findings list exact file:line items to fix; a bad branch or title means rename and retry. A refused call never ends the run. Without a vendor contract the PR opens as a draft.",
         inputSchema: {
             type: "object",
             properties: {

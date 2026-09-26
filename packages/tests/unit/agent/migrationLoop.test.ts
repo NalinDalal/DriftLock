@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
+    buildReceipt,
     canChangeMoreFiles,
     canRunMoreCommands,
     createInitialState,
     decideOutcome,
+    isRetryableModelError,
     isToolName,
     limits,
     recordFileChanged,
@@ -86,6 +88,19 @@ describe("createInitialState", () => {
         expect(initial.done).toBe(false);
         expect(initial.outcome).toBeNull();
         expect(initial.filesChanged).toEqual([]);
+    });
+
+    test("seeds a unique run id and a zeroed failure count", () => {
+        const first = createInitialState(packet());
+        const second = createInitialState(packet());
+        expect(first.runId).toBeTruthy();
+        expect(second.runId).toBeTruthy();
+        expect(first.runId).not.toBe(second.runId);
+        expect(first.consecutiveFailures).toBe(0);
+    });
+
+    test("caps consecutive failures below the iteration ceiling", () => {
+        expect(limits.MAX_CONSECUTIVE_FAILURES).toBeLessThan(limits.MAX_ITERATIONS);
     });
 
     test("embeds the ChangePacket in the first user message", () => {
@@ -172,5 +187,82 @@ describe("decideOutcome", () => {
     test("not auto_pr when tests pass but nothing changed", () => {
         const current = state({ lastTestResult: { passed: true, output: "ok" } });
         expect(decideOutcome(current)).toBe("review_pr");
+    });
+});
+
+describe("isRetryableModelError", () => {
+    test("retries rate limits, server errors, timeouts, and dropped connections", () => {
+        expect(isRetryableModelError(Object.assign(new Error("slow down"), { status: 429 }))).toBe(
+            true,
+        );
+        expect(isRetryableModelError(Object.assign(new Error("overloaded"), { status: 503 }))).toBe(
+            true,
+        );
+        expect(isRetryableModelError(new DOMException("aborted", "AbortError"))).toBe(true);
+        expect(isRetryableModelError(new TypeError("fetch failed"))).toBe(true);
+    });
+
+    test("does not retry auth, bad requests, or plain failures", () => {
+        expect(isRetryableModelError(Object.assign(new Error("nope"), { status: 401 }))).toBe(
+            false,
+        );
+        expect(isRetryableModelError(Object.assign(new Error("bad"), { status: 400 }))).toBe(false);
+        expect(isRetryableModelError(new Error("invalid key"))).toBe(false);
+        expect(isRetryableModelError("string failure")).toBe(false);
+    });
+});
+
+describe("buildReceipt", () => {
+    test("summarises the run for audit without the transcript", () => {
+        const current = state({
+            filesChanged: ["src/client.ts"],
+            lastTestResult: { passed: true, output: "exit code: 0" },
+            hasContract: true,
+            commandsRun: 1,
+            iteration: 4,
+            contractChecked: true,
+            pullRequest: {
+                status: "opened",
+                url: "https://github.com/acme/widgets/pull/7",
+                number: 7,
+                branch: "driftlock/p5-2-3",
+            },
+        });
+        const receipt = buildReceipt(current, packet(), "gpt-4o-mini", "auto_pr");
+
+        expect(receipt.runId).toBe(current.runId);
+        expect(receipt.provider).toBe("p5");
+        expect(receipt.outcome).toBe("auto_pr");
+        expect(receipt.filesChanged).toEqual(["src/client.ts"]);
+        expect(receipt.verificationPassed).toBe(true);
+        expect(receipt.findingCount).toBe(0);
+        expect(receipt.prNumber).toBe(7);
+        expect(receipt.draft).toBe(false);
+    });
+
+    test("marks the PR as a draft when no contract gated the run", () => {
+        const current = state({
+            filesChanged: ["src/client.ts"],
+            lastTestResult: { passed: true, output: "exit code: 0" },
+            pullRequest: {
+                status: "opened",
+                url: "https://github.com/acme/widgets/pull/7",
+                number: 7,
+                branch: "driftlock/p5-2-3",
+            },
+        });
+        expect(buildReceipt(current, packet(), "gpt-4o-mini", "draft_pr").draft).toBe(true);
+    });
+});
+
+describe("tool ACI", () => {
+    test("refusal paths tell the model how to recover", () => {
+        const pr = tools.find((tool) => tool.name === "createPullRequest")!;
+        expect(pr.description).toContain("never ends the run");
+        expect(pr.description).toContain("draft");
+        const run = tools.find((tool) => tool.name === "runCommand")!;
+        expect(run.description).toContain("&&");
+        const replace = tools.find((tool) => tool.name === "replaceInFile")!;
+        expect(replace.description).toContain("default edit tool");
     });
 });

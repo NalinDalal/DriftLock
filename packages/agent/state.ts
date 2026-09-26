@@ -26,6 +26,8 @@ export type TranscriptEntry = {
 };
 
 export type AgentState = {
+    /** Correlation id for logs and run receipts (pguso: never debug without one). */
+    runId: string;
     iteration: number;
     maxIterations: number;
     maxCommands: number;
@@ -36,6 +38,9 @@ export type AgentState = {
     toolsUsed: string[];
     transcript: TranscriptEntry[];
     lastTestResult?: { passed: boolean; output: string };
+    /** Consecutive tool failures. Resets on any success; hit the limit and the
+     * run stops early instead of looping on a stuck strategy. */
+    consecutiveFailures: number;
     /** Vendor symbols the edits introduced that the contract could not resolve. */
     symbolFindings?: SymbolFinding[];
     contractChecked?: boolean;
@@ -60,6 +65,12 @@ export const limits = {
     MAX_ITERATIONS: 15,
     MAX_COMMANDS: 30,
     MAX_FILES_CHANGED: 20,
+    /**
+     * Failure threshold (OpenAI: escalate to a human instead of looping).
+     * That many tool failures in a row ends the run as `review_pr`/`draft_pr`
+     * rather than burning the remaining iterations on a stuck strategy.
+     */
+    MAX_CONSECUTIVE_FAILURES: 5,
 };
 
 export function createInitialState(
@@ -96,6 +107,7 @@ export function createInitialState(
     opening.push("", describeNextStep("locate", facts));
 
     return {
+        runId: crypto.randomUUID(),
         iteration: 0,
         maxIterations: limits.MAX_ITERATIONS,
         maxCommands: limits.MAX_COMMANDS,
@@ -103,6 +115,8 @@ export function createInitialState(
         maxFilesChanged: limits.MAX_FILES_CHANGED,
         filesChanged: [],
         toolsUsed: [],
+        lastTestResult: undefined,
+        consecutiveFailures: 0,
         transcript: [{ role: "user", content: opening.join("\n") }],
         done: false,
         outcome: null,
@@ -219,4 +233,54 @@ export function decideOutcome(state: AgentState): Outcome {
     }
     if (state.filesChanged.length > 0 || state.lastTestResult) return "review_pr";
     return "no_action";
+}
+
+/**
+ * One structured line per run (API-Drift-Sentinel: append-only audit trail).
+ * Everything a human needs to answer "what changed, what proved it, where is
+ * the PR" without replaying the transcript. Callers persist these; the agent
+ * itself stays side-effect free.
+ */
+export type RunReceipt = {
+    runId: string;
+    provider: string;
+    fromVersion: string;
+    toVersion: string;
+    model: string;
+    outcome: Outcome;
+    iterations: number;
+    commandsRun: number;
+    filesChanged: string[];
+    verificationPassed?: boolean;
+    contractChecked: boolean;
+    findingCount: number;
+    prUrl?: string;
+    prNumber?: number;
+    /** True when the published PR is a draft (no contract gated the run). */
+    draft?: boolean;
+};
+
+export function buildReceipt(
+    state: AgentState,
+    packet: ChangePacket,
+    model: string,
+    outcome: Outcome,
+): RunReceipt {
+    return {
+        runId: state.runId,
+        provider: packet.provider,
+        fromVersion: packet.fromVersion,
+        toVersion: packet.toVersion,
+        model,
+        outcome,
+        iterations: state.iteration,
+        commandsRun: state.commandsRun,
+        filesChanged: [...state.filesChanged],
+        verificationPassed: state.lastTestResult?.passed,
+        contractChecked: state.contractChecked ?? false,
+        findingCount: state.symbolFindings?.length ?? 0,
+        prUrl: state.pullRequest?.url,
+        prNumber: state.pullRequest?.number,
+        draft: state.pullRequest ? !state.hasContract : undefined,
+    };
 }

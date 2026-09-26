@@ -344,7 +344,11 @@ describe("runMigrationAgent", () => {
             }),
         );
 
-        const result = await runMigrationAgent({ root, packet, client: fakeClient() });
+        const result = await runMigrationAgent({
+            root,
+            packet,
+            client: fakeClient(),
+        });
         expect(result.outcome).toBe("review_pr");
         expect(result.state.lastTestResult?.passed).toBe(false);
     });
@@ -355,26 +359,39 @@ describe("runMigrationAgent", () => {
         const add = Bun.spawn(["git", "add", "-A"], { cwd: root, stdout: "pipe" });
         await add.exited;
 
-        apiCalls = [
-            toolCall(
-                "editFile",
-                {
-                    path: "src/client.ts",
-                    patch: [
-                        "--- a/src/client.ts",
-                        "+++ b/src/client.ts",
-                        "@@ -1 +1 @@",
-                        "-createCanvas(1);",
-                        "+createSurface(1);",
-                    ].join("\n"),
-                },
-                "c1",
-            ),
-        ];
+        // A call that always succeeds, so only the ceiling can stop the run
+        // (repeated failures stop earlier via the consecutive-failure limit).
+        apiCalls = [toolCall("readFile", { path: "src/client.ts" }, "c1")];
 
         const result = await runMigrationAgent({ root, packet, client: fakeClient() });
         expect(result.state.iteration).toBe(15);
-        expect(result.outcome).toBe("review_pr");
+        expect(result.outcome).toBe("no_action");
+    });
+
+    test("stops early on consecutive tool failures instead of looping", async () => {
+        apiCalls = [toolCall("readFile", { path: "src/missing.ts" }, "c1")];
+
+        const result = await runMigrationAgent({ root, packet, client: fakeClient() });
+        expect(result.state.iteration).toBe(5);
+        expect(result.outcome).toBe("no_action");
+        expect(
+            result.state.transcript.some((entry) => entry.content.includes("in a row")),
+        ).toBe(true);
+    });
+
+    test("a success resets the consecutive failure count", async () => {
+        apiCalls = [
+            toolCall("readFile", { path: "src/missing.ts" }, "c1"),
+            toolCall("readFile", { path: "src/missing.ts" }, "c2"),
+            toolCall("readFile", { path: "src/missing.ts" }, "c3"),
+            toolCall("readFile", { path: "src/missing.ts" }, "c4"),
+            toolCall("readFile", { path: "src/client.ts" }, "c5"),
+            finalText("recovered"),
+        ];
+
+        const result = await runMigrationAgent({ root, packet, client: fakeClient() });
+        expect(result.state.iteration).toBe(6);
+        expect(result.outcome).toBe("no_action");
     });
 
     test("refuses to edit a protected path", async () => {
@@ -495,5 +512,95 @@ describe("runMigrationAgent", () => {
         expect(params.messages[0].content).toContain("DriftLock");
         expect(params.messages[1].content).toContain("createCanvas renamed to createSurface");
         expect(params.tools.map((tool) => tool.function.name)).toContain("readFile");
+    });
+
+    test("retries a transient model failure and continues the run", async () => {
+        let calls = 0;
+        const client = {
+            chat: {
+                completions: {
+                    create: async () => {
+                        calls += 1;
+                        if (calls <= 2) {
+                            throw Object.assign(new Error("overloaded"), { status: 503 });
+                        }
+                        return finalText("recovered after retry");
+                    },
+                },
+            },
+        } as unknown as Parameters<typeof runMigrationAgent>[0]["client"];
+
+        const result = await runMigrationAgent({
+            root,
+            packet,
+            client,
+            modelRetryBaseMs: 5,
+        });
+
+        expect(calls).toBe(3);
+        expect(result.outcome).toBe("no_action");
+    });
+
+    test("a dead model degrades to an outcome instead of throwing", async () => {
+        const client = {
+            chat: {
+                completions: {
+                    create: async () => {
+                        throw new Error("invalid api key");
+                    },
+                },
+            },
+        } as unknown as Parameters<typeof runMigrationAgent>[0]["client"];
+
+        const result = await runMigrationAgent({ root, packet, client });
+
+        expect(result.outcome).toBe("no_action");
+        expect(
+            result.state.transcript.some((entry) => entry.content.includes("Model call failed")),
+        ).toBe(true);
+    });
+
+    test("a hung model call times out and stops the run", async () => {
+        const client = {
+            chat: {
+                completions: {
+                    create: (_body: unknown, opts?: { signal?: AbortSignal }) =>
+                        new Promise((_, reject) => {
+                            if (opts?.signal?.aborted) {
+                                reject(new DOMException("aborted", "AbortError"));
+                                return;
+                            }
+                            opts?.signal?.addEventListener("abort", () => {
+                                reject(new DOMException("aborted", "AbortError"));
+                            });
+                        }),
+                },
+            },
+        } as unknown as Parameters<typeof runMigrationAgent>[0]["client"];
+
+        const result = await runMigrationAgent({
+            root,
+            packet,
+            client,
+            modelTimeoutMs: 30,
+            modelMaxRetries: 0,
+        });
+
+        expect(result.outcome).toBe("no_action");
+        expect(result.state.iteration).toBe(1);
+    });
+
+    test("every run carries a unique id echoed in its receipt", async () => {
+        apiCalls = [finalText("Nothing in this repo uses the renamed API.")];
+
+        const first = await runMigrationAgent({ root, packet, client: fakeClient() });
+        const second = await runMigrationAgent({ root, packet, client: fakeClient() });
+
+        expect(first.state.runId).toBeTruthy();
+        expect(first.state.runId).not.toBe(second.state.runId);
+        expect(first.receipt.runId).toBe(first.state.runId);
+        expect(first.receipt.provider).toBe("p5");
+        expect(first.receipt.outcome).toBe("no_action");
+        expect(first.receipt.model).toBe("gpt-4o-mini");
     });
 });

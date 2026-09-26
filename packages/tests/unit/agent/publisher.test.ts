@@ -396,6 +396,9 @@ describe("createPullRequest", () => {
         expect(seen[0].branch).toBe("driftlock/p5-2-3");
         // Contractless: the gate enforces draft, not the outcome label.
         expect(seen[0].draft).toBe(true);
+        expect(result.receipt.draft).toBe(true);
+        expect(result.receipt.prNumber).toBe(7);
+        expect(result.receipt.verificationPassed).toBe(true);
         expect(seen[0].commitMessage).toBe("driftlock: migrate p5 1.11 to 2.3");
         expect(seen[0].files).toEqual([
             { path: "src/client.ts", content: "createSurface(1);\n" },
@@ -431,6 +434,7 @@ describe("createPullRequest", () => {
         expect(result.outcome).toBe("auto_pr");
         expect(seen).toHaveLength(1);
         expect(seen[0].draft).toBe(false);
+        expect(result.receipt.draft).toBe(false);
         expect(result.state.pullRequest?.status).toBe("opened");
     });
 
