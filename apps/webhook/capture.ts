@@ -1,4 +1,4 @@
-import { InMemorySchemaStore, DriftDetector, createWebhookFixPR, createAgentFixPR, resolveAgentFixDeps } from "@driftlock/webhookCapture";
+import { InMemorySchemaStore, DriftDetector, createWebhookFixPR, createAgentFixPR, resolveAgentFixDeps, severityForSchemaDiff, routeBySeverity } from "@driftlock/webhookCapture";
 import type { DriftAlert, RollbackAlert } from "@driftlock/webhookCapture";
 import { getDb } from "@driftlock/db";
 import { settings } from "@driftlock/db/schema";
@@ -174,11 +174,23 @@ function setupDetectorCallbacks(det: DriftDetector) {
         }
 
         try {
+            // Severity routes to the cheapest sufficient path: breaking drift
+            // gets the agent (deterministic fallback), warnings take the
+            // deterministic fixer without a model loop, and pure additions
+            // open nothing.
+            const severity = severityForSchemaDiff(alert.diff);
+            const deps = resolveAgentFixDeps(ai, alert.endpointId);
+            const route = routeBySeverity(severity, deps !== null);
+            if (route === "none") {
+                console.log(
+                    `  [SKIP] info-only drift (${severity}), no reader can break; no PR opened`,
+                );
+                return;
+            }
             // Agent path when a model client and a vendor config both resolve;
             // otherwise the deterministic fixer below. The agent edits,
             // verifies, clears the contract gate, and publishes.
-            const deps = resolveAgentFixDeps(ai, alert.endpointId);
-            if (deps) {
+            if (route === "agent" && deps) {
                 const result = await createAgentFixPR({
                     owner: repoOwner,
                     repo: repoName,

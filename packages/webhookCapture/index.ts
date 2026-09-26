@@ -2,7 +2,9 @@ export { flattenPayload, type FlatSchema } from "./schemaFlattener";
 export {
     diffSchemas,
     isSchemaDiffEmpty,
+    severityForSchemaDiff,
     type SchemaDiff,
+    type DriftSeverity,
 } from "./schemaDiff";
 export {
     InMemorySchemaStore,
@@ -36,7 +38,9 @@ export {
 export {
     buildAgentClient,
     resolveAgentFixDeps,
+    routeBySeverity,
     vendorForEndpoint,
     type AgentAIConfig,
     type AgentClient,
+    type FixRoute,
 } from "./agentRoute";

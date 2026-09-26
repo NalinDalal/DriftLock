@@ -3,6 +3,7 @@ import { STRIPE_VENDOR, TWILIO_VENDOR } from "@driftlock/core";
 import {
     buildAgentClient,
     resolveAgentFixDeps,
+    routeBySeverity,
     vendorForEndpoint,
 } from "../agentRoute";
 
@@ -75,5 +76,25 @@ describe("resolveAgentFixDeps gates the agent path on client and vendor", () => 
             resolveAgentFixDeps({ provider: "anthropic", apiKey: "sk-ant" }, "stripe"),
         ).toBeNull();
         expect(resolveAgentFixDeps(undefined, "stripe")).toBeNull();
+    });
+});
+
+describe("routeBySeverity sends each drift class to its cheapest sufficient path", () => {
+    test("should use the agent for breaking drift when deps resolve", () => {
+        expect(routeBySeverity("breaking", true)).toBe("agent");
+    });
+
+    test("should fall back to deterministic fixes for breaking drift without deps", () => {
+        expect(routeBySeverity("breaking", false)).toBe("deterministic");
+    });
+
+    test("should use deterministic fixes for warnings even with deps", () => {
+        expect(routeBySeverity("warning", true)).toBe("deterministic");
+        expect(routeBySeverity("warning", false)).toBe("deterministic");
+    });
+
+    test("should open nothing for info-only drift", () => {
+        expect(routeBySeverity("info", true)).toBe("none");
+        expect(routeBySeverity("info", false)).toBe("none");
     });
 });

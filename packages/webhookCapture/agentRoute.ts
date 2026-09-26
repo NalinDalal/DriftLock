@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { STRIPE_VENDOR, TWILIO_VENDOR, type VendorConfig } from "@driftlock/core";
+import type { DriftSeverity } from "./schemaDiff";
 
 export interface AgentAIConfig {
     provider: string;
@@ -78,4 +79,21 @@ export function resolveAgentFixDeps(
     const vendor = vendorForEndpoint(endpointId);
     if (!built || !vendor) return null;
     return { ...built, vendor };
+}
+
+export type FixRoute = "agent" | "deterministic" | "none";
+
+/**
+ * Cheapest sufficient path per severity: breaking drift gets the agent when
+ * its deps resolve (deterministic fallback otherwise), warnings take the
+ * deterministic fixer without spending a model loop, and pure additions open
+ * nothing — no reader can break on a field that did not exist before.
+ */
+export function routeBySeverity(
+    severity: DriftSeverity,
+    agentDepsResolve: boolean,
+): FixRoute {
+    if (severity === "info") return "none";
+    if (severity === "breaking" && agentDepsResolve) return "agent";
+    return "deterministic";
 }

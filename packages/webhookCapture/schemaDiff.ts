@@ -46,3 +46,16 @@ export function isSchemaDiffEmpty(diff: SchemaDiff): boolean {
         diff.typeChanged.length === 0
     );
 }
+
+export type DriftSeverity = "breaking" | "warning" | "info";
+
+/**
+ * Severity of a webhook payload drift, response-side semantics: a removed
+ * field breaks every reader of it, a changed type may break some, and a pure
+ * addition breaks nothing. Drives fix routing, not alert text.
+ */
+export function severityForSchemaDiff(diff: SchemaDiff): DriftSeverity {
+    if (diff.removed.length > 0) return "breaking";
+    if (diff.typeChanged.length > 0) return "warning";
+    return "info";
+}

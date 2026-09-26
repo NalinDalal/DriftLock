@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { diffSchemas, isSchemaDiffEmpty } from "../schemaDiff";
+import { diffSchemas, isSchemaDiffEmpty, severityForSchemaDiff } from "../schemaDiff";
 
 describe("diffSchemas", () => {
     test("detects added fields", () => {
@@ -116,5 +116,43 @@ describe("isSchemaDiffEmpty", () => {
                 ],
             }),
         ).toBe(false);
+    });
+});
+
+describe("severityForSchemaDiff ranks webhook payload drift", () => {
+    test("should be breaking when fields were removed", () => {
+        expect(
+            severityForSchemaDiff({
+                added: ["data.object.payment_method"],
+                removed: ["data.object.source"],
+                typeChanged: [],
+            }),
+        ).toBe("breaking");
+    });
+
+    test("should be warning when only types changed", () => {
+        expect(
+            severityForSchemaDiff({
+                added: [],
+                removed: [],
+                typeChanged: [{ field: "data.object.amount", from: "number", to: "string" }],
+            }),
+        ).toBe("warning");
+    });
+
+    test("should be info when only fields were added", () => {
+        expect(
+            severityForSchemaDiff({
+                added: ["data.object.payment_method"],
+                removed: [],
+                typeChanged: [],
+            }),
+        ).toBe("info");
+    });
+
+    test("should be info when nothing changed", () => {
+        expect(
+            severityForSchemaDiff({ added: [], removed: [], typeChanged: [] }),
+        ).toBe("info");
     });
 });
