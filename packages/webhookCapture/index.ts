@@ -33,3 +33,10 @@ export {
     type AgentFixInput,
     type AgentFixResult,
 } from "./agentFix";
+export {
+    buildAgentClient,
+    resolveAgentFixDeps,
+    vendorForEndpoint,
+    type AgentAIConfig,
+    type AgentClient,
+} from "./agentRoute";

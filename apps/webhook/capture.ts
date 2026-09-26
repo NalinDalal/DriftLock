@@ -1,4 +1,4 @@
-import { InMemorySchemaStore, DriftDetector, createWebhookFixPR } from "@driftlock/webhookCapture";
+import { InMemorySchemaStore, DriftDetector, createWebhookFixPR, createAgentFixPR, resolveAgentFixDeps } from "@driftlock/webhookCapture";
 import type { DriftAlert, RollbackAlert } from "@driftlock/webhookCapture";
 import { getDb } from "@driftlock/db";
 import { settings } from "@driftlock/db/schema";
@@ -174,6 +174,33 @@ function setupDetectorCallbacks(det: DriftDetector) {
         }
 
         try {
+            // Agent path when a model client and a vendor config both resolve;
+            // otherwise the deterministic fixer below. The agent edits,
+            // verifies, clears the contract gate, and publishes.
+            const deps = resolveAgentFixDeps(ai, alert.endpointId);
+            if (deps) {
+                const result = await createAgentFixPR({
+                    owner: repoOwner,
+                    repo: repoName,
+                    base,
+                    repoPath,
+                    alert,
+                    token: githubToken,
+                    vendor: deps.vendor,
+                    client: deps.client,
+                    model: deps.model,
+                });
+
+                if (result.status === "opened") {
+                    console.log(`  [PR] Created: ${result.url}`);
+                } else if (result.status === "already_open") {
+                    console.log(`  [PR] Already open: ${result.url}`);
+                } else {
+                    console.log(`  [PR] ${result.status} (outcome: ${result.outcome})`);
+                }
+                return;
+            }
+
             const result = await createWebhookFixPR({
                 owner: repoOwner,
                 repo: repoName,
