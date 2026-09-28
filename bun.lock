@@ -5,7 +5,7 @@
     "": {
       "name": "driftlock",
       "dependencies": {
-        "@nerdev/skillset": "^0.2.3",
+        "@nerdev/skillset": "^0.2.4",
       },
       "devDependencies": {
         "@types/inquirer": "^9.0.10",
@@ -48,6 +48,7 @@
         "@driftlock/parser": "workspace:*",
         "@driftlock/pipeline": "workspace:*",
         "@driftlock/sandbox": "workspace:*",
+        "@driftlock/vendorWatch": "workspace:*",
         "@driftlock/webhookCapture": "workspace:*",
         "chalk": "^5.3.0",
         "commander": "^12.0.0",
@@ -265,10 +266,24 @@
         "@driftlock/git": "workspace:*",
         "@driftlock/parser": "workspace:*",
         "@driftlock/sandbox": "workspace:*",
+        "@driftlock/vendorWatch": "workspace:*",
         "@driftlock/webhookCapture": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "latest",
+        "typescript": "^5.3.0",
+      },
+    },
+    "packages/vendorWatch": {
+      "name": "@driftlock/vendorWatch",
+      "version": "0.1.0",
+      "dependencies": {
+        "@driftlock/agent": "workspace:*",
+        "@driftlock/core": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "@types/node": "^20.11.0",
         "typescript": "^5.3.0",
       },
     },
@@ -330,6 +345,8 @@
     "@driftlock/sandbox": ["@driftlock/sandbox@workspace:packages/sandbox"],
 
     "@driftlock/tests": ["@driftlock/tests@workspace:packages/tests"],
+
+    "@driftlock/vendorWatch": ["@driftlock/vendorWatch@workspace:packages/vendorWatch"],
 
     "@driftlock/webhook": ["@driftlock/webhook@workspace:apps/webhook"],
 
@@ -433,7 +450,7 @@
 
     "@kwsites/promise-deferred": ["@kwsites/promise-deferred@1.1.1", "", {}, "sha512-GaHYm+c0O9MjZRu0ongGBRbinu8gVAMd2UZjji6jVmqKtZluZnptXGWhz1E8j8D2HJ3f/yMxKAUC0b+57wncIw=="],
 
-    "@nerdev/skillset": ["@nerdev/skillset@0.2.3", "", { "bin": { "skillset": "bin/skillset.mjs" } }, "sha512-cuaA9kPmaqgxxGv4W5+vKIf7oR3MAMd5ENeFvYMDTeTWMfTI72ryWmEy7Rm2Ke1iwbe+KXNmNcDGjj4Iky795Q=="],
+    "@nerdev/skillset": ["@nerdev/skillset@0.2.4", "", { "bin": { "skillset": "bin/skillset.mjs" } }, "sha512-EuaoVGkvn1jgA00ZroQofQtNQk7HUTnmRSi/0twM6ibw/0zbwEriW0p0M7jXyDR81hsiG1ZH22X6+E5R1L7pGQ=="],
 
     "@nodelib/fs.scandir": ["@nodelib/fs.scandir@2.1.5", "", { "dependencies": { "@nodelib/fs.stat": "2.0.5", "run-parallel": "^1.1.9" } }, "sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g=="],
 

@@ -19,6 +19,7 @@ import type { DriftResult } from "@driftlock/pipeline";
 import { SnapshotStore } from "./drift";
 import { harToConsumerContract } from "@driftlock/webhookCapture";
 import { runMigrate } from "./migrate";
+import { runWatch } from "./watch";
 
 const program = new Command();
 
@@ -34,6 +35,8 @@ Examples:
   $ driftlock test ./repo --command "npm test"
   $ driftlock diff ./repo --base main
   $ driftlock fix ./repo --repo owner/repo --dry-run
+  $ driftlock watch stripe
+  $ driftlock watch stripe --trigger --repo owner/repo
   $ driftlock init
 `,
     );
@@ -595,5 +598,50 @@ program
               : undefined;
         await runMigrate({ repo: opts.repo, changePath: opts.change, dryRun: opts.dryRun, ai });
     });
+
+program
+    .command("watch")
+    .description("Poll a vendor spec for breaking changes, optionally triggering migration")
+    .argument("<provider>", "Vendor to watch (stripe, twilio, p5)")
+    .option("--version <v>", "Version label recorded on the baseline", "latest")
+    .option("--baselines-dir <dir>", "Where polled baselines live", ".driftlock/vendor-baselines")
+    .option("--repo <owner/repo|path>", "With --trigger: repo to migrate")
+    .option("--trigger", "Run the migration agent when members are removed")
+    .option("--base <branch>", "Base branch for triggered PRs", "main")
+    .option("--model <name>", "Model for the triggered agent (or DRIFTLOCK_MODEL)")
+    .addHelpText(
+        "after",
+        `
+Polls the vendor's published spec and diffs it against the stored baseline.
+Exit codes: 0 no breaking change, 1 vendor removed members, 2 poll failed.
+
+  $ driftlock watch stripe
+  $ driftlock watch stripe --trigger --repo owner/repo
+`,
+    )
+    .action(
+        async (
+            provider: string,
+            opts: {
+                version: string;
+                baselinesDir: string;
+                repo?: string;
+                trigger?: boolean;
+                base: string;
+                model?: string;
+            },
+        ) => {
+            const code = await runWatch({
+                provider,
+                version: opts.version,
+                baselinesDir: opts.baselinesDir,
+                repo: opts.repo,
+                trigger: opts.trigger,
+                base: opts.base,
+                model: opts.model,
+            });
+            process.exitCode = code;
+        },
+    );
 
 program.parse();
