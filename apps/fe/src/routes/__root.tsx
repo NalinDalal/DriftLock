@@ -238,6 +238,12 @@ export default function AppShell() {
                         >
                             About
                         </Link>
+                        <Link
+                            to="/onboarding"
+                            className="font-mono text-[11px] tracking-wide text-[var(--color-ink)] underline decoration-[var(--color-line)] underline-offset-2 hover:decoration-[var(--color-ink)]"
+                        >
+                            Onboarding
+                        </Link>
                     </div>
                     <span className="font-mono text-[11px] tracking-wide text-[var(--color-muted)]">
                         DEPENDABOT BUT FOR APIS — REV. 01

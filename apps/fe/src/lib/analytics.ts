@@ -6,7 +6,11 @@ type EventName =
     | "try_sample_run"
     | "confidence_explained_open"
     | "drift_card_view"
-    | "repos_selected";
+    | "repos_selected"
+    | "onboarding_view"
+    | "onboarding_intent_selected"
+    | "onboarding_detect_run"
+    | "onboarding_step_complete";
 
 interface EventProps {
     [key: string]: string | number | boolean | undefined;

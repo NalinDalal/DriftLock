@@ -22,6 +22,7 @@ export default function InstallSuccessPage() {
             </p>
             <div className="mt-6 flex justify-center gap-2">
                 <Link to="/accounts" className="bg-[var(--color-ink)] px-5 py-2.5 font-mono text-xs tracking-wide text-[var(--color-paper)] hover:bg-[var(--color-ink)]/90">VIEW REPOS →</Link>
+                <Link to="/onboarding" className="border border-[var(--color-line)] bg-[var(--color-surface)] px-5 py-2.5 font-mono text-xs tracking-wide text-[var(--color-ink)] hover:bg-[var(--color-paper)]">HOW THIS WORKS</Link>
                 <Link to="/settings" className="border border-[var(--color-line)] bg-[var(--color-surface)] px-5 py-2.5 font-mono text-xs tracking-wide text-[var(--color-ink)] hover:bg-[var(--color-paper)]">OPEN SETTINGS</Link>
             </div>
             <p className="mt-6 font-mono text-[11px] tracking-wide text-[var(--color-muted)]">
