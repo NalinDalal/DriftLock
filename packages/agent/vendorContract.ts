@@ -989,6 +989,69 @@ export function verifyVendorSymbols(
     return findings;
 }
 
+/**
+ * Grounding for a vendor symbol the model does not know.
+ *
+ * The contract gate can only refuse an invented name; refusal alone leaves
+ * the model with exactly one move — another guess. This lookup is the other
+ * half of the gate: given a symbol the model is considering, it answers from
+ * the captured contract whether the member exists, was removed (with the
+ * replacement leaves when the packet named them), or is unknown (with the
+ * closest recorded names). The answer is cited from the contract's origin,
+ * so "I do not know" becomes a tool call instead of a guess.
+ */
+export interface SymbolLookup {
+    status: "exists" | "removed" | "unknown";
+    symbol: string;
+    detail: string;
+    suggestions: string[];
+}
+
+export function lookupVendorSymbol(
+    contract: VendorContract,
+    symbol: string,
+): SymbolLookup {
+    const members = contractMembers(contract);
+    const removed = new Set(contract.removed);
+    const query = symbol.trim();
+    if (!query) {
+        return {
+            status: "unknown",
+            symbol: query,
+            detail: "Empty symbol. Name the member you want to use, e.g. payment_method or p.UP_ARROW.",
+            suggestions: [],
+        };
+    }
+    const leaf = query.split(".").pop() ?? query;
+    if (members.has(query) || members.has(leaf)) {
+        const hit = members.has(query) ? query : leaf;
+        return {
+            status: "exists",
+            symbol: query,
+            detail: `${hit} exists in the ${contract.provider} contract captured from ${contract.origin}. Safe to reference.`,
+            suggestions: [hit],
+        };
+    }
+    if (removed.has(query) || removed.has(leaf)) {
+        const hit = removed.has(query) ? query : leaf;
+        return {
+            status: "removed",
+            symbol: query,
+            detail: `The vendor removed ${hit}. Do not read it; use a member from the contract instead.`,
+            suggestions: closest(leaf, members, 5),
+        };
+    }
+    return {
+        status: "unknown",
+        symbol: query,
+        detail:
+            `${contract.provider} has no member ${query} in the contract captured from ` +
+            `${contract.origin} (${contract.source}, ${contract.authority}). ` +
+            `Do not guess a replacement; pick from the suggestions or leave the call site for review.`,
+        suggestions: closest(leaf, members, 5),
+    };
+}
+
 function closest(target: string, pool: Set<string>, limit: number): string[] {
     const scored = [...pool]
         .filter((candidate) => !candidate.includes("."))

@@ -851,4 +851,220 @@ describe("runMigrationAgent", () => {
         const answered = result.state.transcript.filter((e) => e.role === "tool");
         expect(requested).toHaveLength(answered.length);
     });
+
+    test("a failed edit blocks verification until the same file is retried", async () => {
+        apiCalls = [
+            toolCall(
+                "replaceInFile",
+                { path: "src/client.ts", oldText: "no-such-text", newText: "x" },
+                "c1",
+            ),
+            toolCall("runCommand", { command: "npm run build" }, "c2"),
+            toolCall(
+                "createPullRequest",
+                { title: "t", body: "b", branch: "driftlock/p5-2-3" },
+                "c3",
+            ),
+        ];
+
+        const result = await runMigrationAgent({
+            root,
+            packet,
+            client: fakeClient(),
+            commandRunner: fakeOkRunner(),
+        });
+
+        expect(result.state.pendingEditRetry).toBe("src/client.ts");
+        const verify = result.state.transcript.find(
+            (entry) => entry.role === "tool" && entry.toolCallId === "c2",
+        );
+        expect(verify?.content).toContain("has not been retried");
+        expect(verify?.content).toContain("src/client.ts");
+        const pr = result.state.transcript.find(
+            (entry) => entry.role === "tool" && entry.toolCallId === "c3",
+        );
+        expect(pr?.content).toContain("has not been retried");
+        // Nothing landed on disk, so there is nothing to review; the pending
+        // retry and the refusals above are the signal, not the outcome label.
+        expect(result.outcome).toBe("no_action");
+        expect(result.receipt.confidence).toBe("low");
+    });
+
+    test("a successful retry of the same file re-opens verification", async () => {
+        apiCalls = [
+            toolCall(
+                "replaceInFile",
+                { path: "src/client.ts", oldText: "no-such-text", newText: "x" },
+                "c1",
+            ),
+            toolCall(
+                "replaceInFile",
+                { path: "src/client.ts", oldText: "createCanvas(1);", newText: "createSurface(1);" },
+                "c2",
+            ),
+            toolCall("runCommand", { command: "npm run build" }, "c3"),
+        ];
+
+        const result = await runMigrationAgent({
+            root,
+            packet,
+            client: fakeClient(),
+            commandRunner: fakeOkRunner(),
+        });
+
+        expect(result.state.pendingEditRetry).toBeNull();
+        expect(result.state.lastTestResult?.passed).toBe(true);
+    });
+
+    test("lookupVendorSymbol resolves against the contract instead of guessing", async () => {
+        apiCalls = [
+            toolCall("lookupVendorSymbol", { symbol: "payment_method" }, "c1"),
+            toolCall("lookupVendorSymbol", { symbol: "source" }, "c2"),
+        ];
+
+        const result = await runMigrationAgent({
+            root,
+            packet,
+            client: fakeClient(),
+            contract: {
+                provider: "stripe",
+                version: "2022-11-15",
+                source: "live",
+                authority: "authoritative",
+                origin: "https://api.stripe.com/v1/test",
+                capturedAt: "2026-01-01T00:00:00.000Z",
+                members: ["id", "payment_method", "status"],
+                removed: ["source"],
+            },
+            vendor: {
+                name: "stripe",
+                sdk: "stripe",
+                clientNames: ["stripe"],
+                basePath: "/v1",
+            },
+        });
+
+        const first = result.state.transcript.find(
+            (entry) => entry.role === "tool" && entry.toolCallId === "c1",
+        );
+        expect(first?.content).toContain("EXISTS");
+        const second = result.state.transcript.find(
+            (entry) => entry.role === "tool" && entry.toolCallId === "c2",
+        );
+        expect(second?.content).toContain("REMOVED");
+    });
+
+    test("checkCompleteness names a stale file the model never touched", async () => {
+        await writeFile(
+            join(root, "src/legacy.ts"),
+            "function read(event) {\n  const pi = event.data.object;\n  return pi.source;\n}\n",
+        );
+        apiCalls = [toolCall("checkCompleteness", {}, "c1")];
+
+        const result = await runMigrationAgent({
+            root,
+            packet: {
+                provider: "stripe",
+                fromVersion: "2022-08-01",
+                toVersion: "2022-11-15",
+                summary: "source removed",
+                migrationDocs: [],
+            },
+            client: fakeClient(),
+            contract: {
+                provider: "stripe",
+                version: "2022-11-15",
+                source: "live",
+                authority: "authoritative",
+                origin: "https://api.stripe.com/v1/test",
+                capturedAt: "2026-01-01T00:00:00.000Z",
+                members: ["id", "payment_method", "status"],
+                removed: ["source"],
+            },
+            vendor: {
+                name: "stripe",
+                sdk: "stripe",
+                clientNames: ["stripe", "pi"],
+                basePath: "/v1",
+            },
+        });
+
+        const entry = result.state.transcript.find(
+            (entry) => entry.role === "tool" && entry.toolCallId === "c1",
+        );
+        expect(entry?.content).toContain("INCOMPLETE");
+        expect(entry?.content).toContain("src/legacy.ts");
+        expect(result.state.symbolFindings?.length).toBeGreaterThan(0);
+    });
+
+    test("a passing verification warns inline when stale reads remain", async () => {
+        const init = Bun.spawn(["git", "init"], { cwd: root, stdout: "pipe" });
+        await init.exited;
+        const add = Bun.spawn(["git", "add", "-A"], { cwd: root, stdout: "pipe" });
+        await add.exited;
+        await writeFile(
+            join(root, "src/other.ts"),
+            "function read(event) {\n  const pi = event.data.object;\n  return pi.source;\n}\n",
+        );
+
+        apiCalls = [
+            toolCall(
+                "replaceInFile",
+                { path: "src/client.ts", oldText: "createCanvas(1);", newText: "ok(1);" },
+                "c1",
+            ),
+            toolCall("runCommand", { command: "npm run build" }, "c2"),
+        ];
+
+        const result = await runMigrationAgent({
+            root,
+            packet: {
+                provider: "stripe",
+                fromVersion: "2022-08-01",
+                toVersion: "2022-11-15",
+                summary: "source removed",
+                migrationDocs: [],
+            },
+            client: fakeClient(),
+            commandRunner: fakeOkRunner(),
+            contract: {
+                provider: "stripe",
+                version: "2022-11-15",
+                source: "live",
+                authority: "authoritative",
+                origin: "https://api.stripe.com/v1/test",
+                capturedAt: "2026-01-01T00:00:00.000Z",
+                members: ["id", "payment_method", "status"],
+                removed: ["source"],
+            },
+            vendor: {
+                name: "stripe",
+                sdk: "stripe",
+                clientNames: ["stripe", "pi"],
+                basePath: "/v1",
+            },
+        });
+
+        const verify = result.state.transcript.find(
+            (entry) => entry.role === "tool" && entry.toolCallId === "c2",
+        );
+        expect(result.state.lastTestResult?.passed).toBe(true);
+        expect(verify?.content).toContain("COMPLETENESS WARNING");
+        expect(verify?.content).toContain("src/other.ts");
+        expect(result.receipt.confidence).toBe("low");
+    });
+
+    test("the receipt carries confidence beyond pass/fail", async () => {
+        apiCalls = [toolCall("readFile", { path: "src/client.ts" }, "c1")];
+
+        const result = await runMigrationAgent({
+            root,
+            packet,
+            client: fakeClient(),
+            commandRunner: fakeOkRunner(),
+        });
+
+        expect(result.receipt.confidence).toBe("low");
+        expect(result.receipt.confidenceReasons.join(" ")).toContain("no passing verification");
+    });
 });

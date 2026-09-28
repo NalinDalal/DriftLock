@@ -43,6 +43,18 @@ export type AgentState = {
     /** Consecutive tool failures. Resets on any success; hit the limit and the
      * run stops early instead of looping on a stuck strategy. */
     consecutiveFailures: number;
+    /**
+     * Repo-relative path whose last edit failed and has not been retried
+     * successfully yet. While set, verification and PR tools are refused by
+     * the harness (not merely discouraged by the prompt), so a failed edit
+     * cannot be silently abandoned for a green build on a half-changed tree.
+     * Cleared by a successful edit to the same path.
+     */
+    pendingEditRetry: string | null;
+    /** How many consecutive edit attempts failed for `pendingEditRetry`. */
+    editRetryAttempts: number;
+    /** Every literal `searchCode` query issued, for completeness accounting. */
+    searchedQueries: string[];
     /** Vendor symbols the edits introduced that the contract could not resolve. */
     symbolFindings?: SymbolFinding[];
     contractChecked?: boolean;
@@ -119,6 +131,9 @@ export function createInitialState(
         toolsUsed: [],
         lastTestResult: undefined,
         consecutiveFailures: 0,
+        pendingEditRetry: null,
+        editRetryAttempts: 0,
+        searchedQueries: [],
         transcript: [{ role: "user", content: opening.join("\n") }],
         done: false,
         outcome: null,
@@ -189,11 +204,13 @@ export function describeNextStep(stage: MigrationStage, facts?: RepoFacts): stri
             ].join("\n");
         case "verify":
             return [
-                "Step 4: verify.",
+                "Step 4: check completeness, then verify.",
+                "Call checkCompleteness first: it lists stale reads of removed fields anywhere in the repo, including files you never touched.",
                 facts?.verificationCommands.length
-                    ? `Run exactly one of: ${facts.verificationCommands.join(", ")}. Copy it exactly.`
+                    ? `Then run exactly one of: ${facts.verificationCommands.join(", ")}. Copy it exactly.`
                     : "There is no verification command in this repository, so say that verification is unavailable. Do not invent one.",
                 "A migration is not done until it passes. If it fails, read the output, fix the cause, and run it again.",
+                "If an edit failed, retry that same file first: verification stays refused until the retry succeeds.",
             ].join("\n");
         case "pr":
             return [
@@ -207,6 +224,94 @@ export function describeNextStep(stage: MigrationStage, facts?: RepoFacts): stri
 
 export function recordFileChanged(state: AgentState, path: string): void {
     if (!state.filesChanged.includes(path)) state.filesChanged.push(path);
+}
+
+/**
+ * Records a failed edit. The harness — not the prompt — now owns the retry:
+ * until this path is successfully rewritten, `runCommand` and
+ * `createPullRequest` are refused with the failing path named.
+ */
+export function noteEditFailure(state: AgentState, path: string): void {
+    if (state.pendingEditRetry === path) {
+        state.editRetryAttempts += 1;
+    } else {
+        state.pendingEditRetry = path;
+        state.editRetryAttempts = 1;
+    }
+}
+
+/** Clears the retry gate after the pending path is successfully rewritten. */
+export function noteEditSuccess(state: AgentState, path: string): void {
+    if (state.pendingEditRetry === path || state.pendingEditRetry === null) {
+        state.pendingEditRetry = null;
+        state.editRetryAttempts = 0;
+    }
+}
+
+/** Refusal text while an edit retry is outstanding, naming the exact path. */
+export function pendingEditRefusal(state: AgentState): string {
+    return (
+        `Refusing: the last edit to ${state.pendingEditRetry} failed and has not been retried ` +
+        `(attempts: ${state.editRetryAttempts}). Fix the hunk or snippet and call ` +
+        `editFile or replaceInFile for ${state.pendingEditRetry} again. ` +
+        `Verification on a tree with a known-bad edit proves nothing, so it stays ` +
+        `disabled until that retry succeeds.`
+    );
+}
+
+export function recordSearch(state: AgentState, query: string): void {
+    const normalized = query.trim().toLowerCase();
+    if (normalized && !state.searchedQueries.includes(normalized)) {
+        state.searchedQueries.push(normalized);
+    }
+}
+
+export type ConfidenceLevel = "high" | "medium" | "low";
+
+export interface ConfidenceAssessment {
+    level: ConfidenceLevel;
+    reasons: string[];
+}
+
+/**
+ * Confidence beyond pass/fail. A green build alone used to read as success;
+ * the real runs showed a green build on a 2-of-3-sites edit and a green build
+ * with an invented vendor symbol. Every downgrade reason is named so the
+ * receipt (and the PR body) can say *why* the run is not auto-mergable.
+ */
+export function assessConfidence(state: AgentState): ConfidenceAssessment {
+    const reasons: string[] = [];
+    if (state.filesChanged.length === 0) reasons.push("no files changed");
+    if (state.lastTestResult?.passed !== true) reasons.push("no passing verification on the current tree");
+    if (state.pendingEditRetry) {
+        reasons.push(`unresolved failed edit on ${state.pendingEditRetry} (${state.editRetryAttempts} attempt(s))`);
+    }
+    const findings = state.symbolFindings?.length ?? 0;
+    if (findings > 0) reasons.push(`${findings} vendor symbol finding(s) unresolved`);
+    if (state.hasContract && !state.contractChecked) {
+        reasons.push("vendor contract not yet checked");
+    }
+    if (!state.hasContract && state.filesChanged.length > 0) {
+        reasons.push("no vendor contract gated this run");
+    }
+    if (state.searchedQueries.length === 0 && state.filesChanged.length > 0) {
+        reasons.push("no searchCode call preceded the edits");
+    }
+
+    let level: ConfidenceLevel;
+    if (reasons.length === 0) {
+        level = "high";
+    } else if (
+        state.lastTestResult?.passed === true &&
+        !state.pendingEditRetry &&
+        findings === 0
+    ) {
+        level = "medium";
+    } else {
+        level = "low";
+    }
+    if (level === "high") reasons.push("verification passed on the current tree with a clean contract check");
+    return { level, reasons };
 }
 
 export function canChangeMoreFiles(state: AgentState): boolean {
@@ -227,6 +332,13 @@ export function canRunMoreCommands(state: AgentState): boolean {
  */
 export function decideOutcome(state: AgentState): Outcome {
     const contractClean = !state.symbolFindings || state.symbolFindings.length === 0;
+    // A failed edit with no successful retry means the tree is missing an
+    // intended change, even when the last verification passed (the failure
+    // itself changed nothing, so the old pass still describes the tree but
+    // not the intent). That is review-only by construction.
+    if (state.pendingEditRetry) {
+        return state.filesChanged.length > 0 || state.lastTestResult ? "review_pr" : "no_action";
+    }
     if (state.lastTestResult?.passed && state.filesChanged.length > 0 && contractClean) {
         if (!state.hasContract) {
             return "draft_pr";
@@ -256,6 +368,9 @@ export type RunReceipt = {
     verificationPassed?: boolean;
     contractChecked: boolean;
     findingCount: number;
+    /** Confidence beyond pass/fail; feeds the auto_pr threshold. */
+    confidence: ConfidenceLevel;
+    confidenceReasons: string[];
     prUrl?: string;
     prNumber?: number;
     /** True when the published PR is a draft (no contract gated the run). */
@@ -268,6 +383,7 @@ export function buildReceipt(
     model: string,
     outcome: Outcome,
 ): RunReceipt {
+    const confidence = assessConfidence(state);
     return {
         runId: state.runId,
         provider: packet.provider,
@@ -281,6 +397,8 @@ export function buildReceipt(
         verificationPassed: state.lastTestResult?.passed,
         contractChecked: state.contractChecked ?? false,
         findingCount: state.symbolFindings?.length ?? 0,
+        confidence: confidence.level,
+        confidenceReasons: confidence.reasons,
         prUrl: state.pullRequest?.url,
         prNumber: state.pullRequest?.number,
         draft: state.pullRequest ? !state.hasContract : undefined,

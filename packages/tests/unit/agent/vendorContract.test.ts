@@ -10,6 +10,7 @@ import {
     discoverVendorReceivers,
     flattenMembers,
     isConstantName,
+    lookupVendorSymbol,
     probeLiveContract,
     resolveVendorContract,
     verifyVendorSymbols,
@@ -556,5 +557,39 @@ describe("resolveVendorContract", () => {
                 version: "1.0.0",
             }),
         ).rejects.toThrow(/No contract source/);
+    });
+});
+
+describe("lookupVendorSymbol", () => {
+    const base = contract({
+        provider: "stripe",
+        members: ["id", "payment_method", "status"],
+        removed: ["source"],
+    });
+
+    test("exists for a member the contract captured", () => {
+        const found = lookupVendorSymbol(base, "payment_method");
+        expect(found.status).toBe("exists");
+        expect(found.suggestions).toContain("payment_method");
+    });
+
+    test("removed for a field the vendor dropped, with real candidates", () => {
+        const found = lookupVendorSymbol(base, "source");
+        expect(found.status).toBe("removed");
+        expect(found.suggestions.length).toBeGreaterThan(0);
+        expect(found.suggestions).not.toContain("source");
+    });
+
+    test("unknown for an invented name, with closest names instead of a guess", () => {
+        const found = lookupVendorSymbol(base, "paymentMethodId");
+        expect(found.status).toBe("unknown");
+        expect(found.detail).toContain("has no member");
+        expect(found.detail).toContain("Do not guess");
+        expect(found.suggestions.length).toBeGreaterThan(0);
+    });
+
+    test("resolves the leaf of a dotted path", () => {
+        const found = lookupVendorSymbol(base, "intent.payment_method");
+        expect(found.status).toBe("exists");
     });
 });

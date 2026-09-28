@@ -188,6 +188,28 @@ describe("createSandboxCommandRunner", () => {
         expect(result.ok).toBe(false);
         expect(result.output).toContain("docker daemon not reachable");
     });
+
+    test("refuses opt-in network without an explicit allowlist", () => {
+        const { runner } = fakeRunner();
+        expect(() =>
+            createSandboxCommandRunner({ runner, networkEnabled: true }),
+        ).toThrow(/allowedEndpoints/);
+    });
+
+    test("passes an explicit allowlist through for registry-needing verification", async () => {
+        const { runner, calls } = fakeRunner();
+        const commandRunner = createSandboxCommandRunner({
+            runner,
+            networkEnabled: true,
+            allowedEndpoints: ["registry.npmjs.org:443"],
+        });
+        const result = await commandRunner.run(root, "npm run build");
+        expect(result.ok).toBe(true);
+        expect(calls).toHaveLength(1);
+        expect(calls[0].config.networkEnabled).toBe(true);
+        expect(calls[0].config.allowedEndpoints).toEqual(["registry.npmjs.org:443"]);
+        expect(result.output).toContain("registry.npmjs.org:443");
+    });
 });
 
 describe("agent with a sandboxed command runner", () => {

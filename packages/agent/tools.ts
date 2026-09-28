@@ -4,6 +4,8 @@ export type ToolName =
     | "readFile"
     | "editFile"
     | "replaceInFile"
+    | "lookupVendorSymbol"
+    | "checkCompleteness"
     | "runCommand"
     | "createPullRequest";
 
@@ -103,6 +105,27 @@ export const tools: ToolDefinition[] = [
             },
             required: ["path", "oldText", "newText"],
         },
+    },
+    {
+        name: "lookupVendorSymbol",
+        description:
+            "Ask the vendor contract whether a member exists before you use it. Pass the exact name you are considering, e.g. payment_method or keyIsDown. Returns exists (safe), removed (do not read it), or unknown with the closest recorded names from the captured contract. Call this instead of guessing a replacement name; a guess that does not exist is worse than no edit.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                symbol: {
+                    type: "string",
+                    description: "Vendor member name to resolve, e.g. payment_method",
+                },
+            },
+            required: ["symbol"],
+        },
+    },
+    {
+        name: "checkCompleteness",
+        description:
+            "Sweep the whole repository for reads of fields this migration removed, including files you never touched. Returns every remaining stale read as file:line items. Call this after your last edit and before verification: a green build on 2 of 3 call sites still leaves the third broken. Takes no arguments.",
+        inputSchema: { type: "object", properties: {}, required: [] },
     },
     {
         name: "runCommand",

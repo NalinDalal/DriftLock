@@ -6,6 +6,7 @@ import type { ChatCompletionMessageParam } from "openai/resources/chat/completio
 import { isToolName, toOpenAITools, type ToolName } from "./tools";
 import { SYSTEM_PROMPT } from "./prompt";
 import {
+    assessConfidence,
     buildReceipt,
     canChangeMoreFiles,
     canRunMoreCommands,
@@ -13,7 +14,11 @@ import {
     decideOutcome,
     describeNextStep,
     limits,
+    noteEditFailure,
+    noteEditSuccess,
+    pendingEditRefusal,
     recordFileChanged,
+    recordSearch,
     stageOf,
     type AgentState,
     type ChangePacket,
@@ -46,6 +51,7 @@ import {
 } from "./publisher";
 import type { CommandRunner } from "./commandRunner";
 import {
+    lookupVendorSymbol,
     verifyVendorSymbols,
     type SymbolFinding,
     type VendorContract,
@@ -378,8 +384,15 @@ async function execute(
     switch (name) {
         case "inspectRepo":
             return inspectRepo(root);
-        case "searchCode":
-            return searchCode(root, readString(args, "query"), readString(args, "path") || undefined);
+        case "searchCode": {
+            const result = await searchCode(
+                root,
+                readString(args, "query"),
+                readString(args, "path") || undefined,
+            );
+            if (result.ok) recordSearch(state, readString(args, "query"));
+            return result;
+        }
         case "readFile":
             return readFile(root, readString(args, "path"));
         case "editFile": {
@@ -389,11 +402,15 @@ async function execute(
                     output: `Refusing edit: MAX_FILES_CHANGED (${state.maxFilesChanged}) reached`,
                 };
             }
-            const result = await editFile(root, readString(args, "path"), readString(args, "patch"));
+            const path = readString(args, "path");
+            const result = await editFile(root, path, readString(args, "patch"));
             if (result.ok) {
-                recordFileChanged(state, readString(args, "path"));
+                recordFileChanged(state, path);
+                noteEditSuccess(state, path);
                 // A passing verification no longer describes the tree once it is edited.
                 state.lastTestResult = undefined;
+            } else {
+                noteEditFailure(state, path);
             }
             return result;
         }
@@ -404,20 +421,54 @@ async function execute(
                     output: `Refusing edit: MAX_FILES_CHANGED (${state.maxFilesChanged}) reached`,
                 };
             }
+            const path = readString(args, "path");
             const result = await replaceInFile(
                 root,
-                readString(args, "path"),
+                path,
                 readString(args, "oldText"),
                 readString(args, "newText"),
             );
             if (result.ok) {
-                recordFileChanged(state, readString(args, "path"));
+                recordFileChanged(state, path);
+                noteEditSuccess(state, path);
                 // A passing verification no longer describes the tree once it is edited.
                 state.lastTestResult = undefined;
+            } else {
+                noteEditFailure(state, path);
             }
             return result;
         }
+        case "lookupVendorSymbol": {
+            const contract = options.contract;
+            if (!contract) {
+                return {
+                    ok: false,
+                    output:
+                        "No vendor contract gates this run, so there is nothing authoritative to resolve against. Re-read the change packet and search the repository instead of guessing a name.",
+                };
+            }
+            const symbol = readString(args, "symbol");
+            if (!symbol.trim()) {
+                return { ok: false, output: "lookupVendorSymbol requires a non-empty symbol" };
+            }
+            const found = lookupVendorSymbol(contract, symbol);
+            const lines = [
+                `${found.status.toUpperCase()}: ${found.detail}`,
+            ];
+            if (found.suggestions.length > 0) {
+                lines.push(`Candidates from the contract: ${found.suggestions.join(", ")}.`);
+            }
+            if (found.status !== "exists") {
+                lines.push("Do not guess a name that is not in this list.");
+            }
+            return { ok: true, output: lines.join("\n") };
+        }
+        case "checkCompleteness":
+            return checkCompleteness(root, options, state);
         case "runCommand": {
+            if (state.pendingEditRetry) {
+                return { ok: false, output: pendingEditRefusal(state) };
+            }
             if (!canRunMoreCommands(state)) {
                 return {
                     ok: false,
@@ -439,9 +490,20 @@ async function execute(
                 ? await options.commandRunner.run(root, command)
                 : await runCommand(root, command);
             state.lastTestResult = { passed: result.ok, output: result.output };
+            if (!result.ok) return result;
+            // Verification passed, but a green build on 2 of 3 call sites is
+            // the exact failure the real runs showed. Warn inline while the
+            // model can still act, rather than saving the news for the PR gate.
+            const warning = await staleWarning(root, options, state);
+            if (warning) {
+                return { ok: true, output: `${result.output}\n\n${warning}` };
+            }
             return result;
         }
         case "createPullRequest":
+            if (state.pendingEditRetry) {
+                return { ok: false, output: pendingEditRefusal(state) };
+            }
             return openPullRequest(
                 args,
                 options.packet,
@@ -455,6 +517,89 @@ async function execute(
         default:
             return { ok: false, output: `Unknown tool: ${String(name)}` };
     }
+}
+
+/**
+ * On-demand completeness sweep, and the shared body behind the inline
+ * warning appended to a passing verification.
+ *
+ * Changed files get the full check; untouched files are swept for stale
+ * reads of removed fields. Findings are stored on state so the outcome and
+ * the receipt reflect them even when the model never calls createPullRequest.
+ */
+async function checkCompleteness(
+    root: string,
+    options: RunOptions,
+    state: AgentState,
+): Promise<ToolResult> {
+    const contract = options.contract;
+    const vendor = options.vendor;
+    if (!contract || !vendor) {
+        const searched = state.searchedQueries.length > 0 ? state.searchedQueries.join(", ") : "(none yet)";
+        const changed = state.filesChanged.length > 0 ? state.filesChanged.join(", ") : "(none yet)";
+        return {
+            ok: true,
+            output: [
+                "No vendor contract gates this run, so completeness cannot be checked against the vendor.",
+                `Searches issued: ${searched}. Files changed: ${changed}.`,
+                "Search once per deprecated name in the change packet, read every hit, and say in your report which names you searched and what you found.",
+            ].join("\n"),
+        };
+    }
+    const findings = [
+        ...(await checkChangedFiles(root, state.filesChanged, contract, vendor)),
+        ...(await sweepStaleReferences(root, new Set(state.filesChanged), contract, vendor)),
+    ];
+    state.symbolFindings = findings;
+    state.contractChecked = true;
+    if (findings.length === 0) {
+        return {
+            ok: true,
+            output: `Completeness clean: no stale reads of ${contract.removed.join(", ") || "(no removed fields)"} anywhere in the repository.`,
+        };
+    }
+    return {
+        ok: false,
+        output: [
+            `INCOMPLETE: ${findings.length} stale vendor symbol(s) remain. A green build does not excuse them.`,
+            "",
+            ...findings.map(
+                (finding) =>
+                    `- ${finding.file}:${finding.line} ${finding.kind}: ${finding.detail}\n    ${finding.text}`,
+            ),
+            "",
+            "Fix every line above (lookupVendorSymbol names the real replacements), then run checkCompleteness again.",
+        ].join("\n"),
+    };
+}
+
+/** Warning text appended to a passing verification when stale reads remain. */
+async function staleWarning(
+    root: string,
+    options: RunOptions,
+    state: AgentState,
+): Promise<string | null> {
+    const contract = options.contract;
+    const vendor = options.vendor;
+    if (!contract || !vendor || state.filesChanged.length === 0) return null;
+    if (contract.removed.length === 0) return null;
+    const findings = [
+        ...(await checkChangedFiles(root, state.filesChanged, contract, vendor)),
+        ...(await sweepStaleReferences(root, new Set(state.filesChanged), contract, vendor)),
+    ];
+    if (findings.length === 0) return null;
+    state.symbolFindings = findings;
+    state.contractChecked = true;
+    const { level, reasons } = assessConfidence(state);
+    return [
+        `COMPLETENESS WARNING (confidence: ${level}): verification passed, but ${findings.length} stale vendor symbol(s) remain elsewhere:`,
+        ...findings.map(
+            (finding) =>
+                `- ${finding.file}:${finding.line} ${finding.kind}: ${finding.detail}`,
+        ),
+        `Why this matters: ${reasons.join("; ")}.`,
+        "Call checkCompleteness for exact lines, fix them, then verify again. Do not open a PR yet.",
+    ].join("\n");
 }
 
 async function openPullRequest(
@@ -532,6 +677,7 @@ async function openPullRequest(
 
     if (!publisher || !target) {
         const stat = await collectDiffStat(root);
+        const confidence = assessConfidence(state);
         return {
             ok: true,
             output: [
@@ -541,6 +687,7 @@ async function openPullRequest(
                 `Title: ${title}`,
                 `Body: ${body}`,
                 `Diff stat: ${stat || "(no changes)"}`,
+                `Confidence: ${confidence.level} (${confidence.reasons.join("; ")}).`,
             ].join("\n"),
         };
     }
@@ -573,12 +720,14 @@ async function openPullRequest(
     }
 
     state.pullRequest = result;
+    const confidence = assessConfidence(state);
     return {
         ok: true,
         output: [
             `Pull request ${result.status}${draft ? " (draft)" : ""}: ${result.url}`,
             `Branch: ${result.branch}`,
             `Files published: ${files.length}`,
+            `Confidence: ${confidence.level} (${confidence.reasons.join("; ")}).`,
         ].join("\n"),
     };
 }

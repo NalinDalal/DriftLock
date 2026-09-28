@@ -561,6 +561,11 @@ describe("createPullRequest", () => {
                 },
             ],
         };
+        // The first run already rewrote src/client.ts, so reset it: otherwise
+        // the second run's edit fails and the new pending-retry gate (which
+        // refuses verify/PR until the same file is retried) fires before the
+        // title check this test exercises.
+        await writeFile(join(root, "src/client.ts"), "createCanvas(1);\n");
         const second = await runMigrationAgent({
             root,
             packet,

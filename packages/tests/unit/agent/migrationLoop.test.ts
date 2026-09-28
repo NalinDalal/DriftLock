@@ -32,13 +32,15 @@ function state(overrides: Partial<AgentState> = {}): AgentState {
 }
 
 describe("tools", () => {
-    test("exposes exactly the seven migration tools", () => {
+    test("exposes exactly the nine migration tools", () => {
         expect(tools.map((tool) => tool.name)).toEqual([
             "inspectRepo",
             "searchCode",
             "readFile",
             "editFile",
             "replaceInFile",
+            "lookupVendorSymbol",
+            "checkCompleteness",
             "runCommand",
             "createPullRequest",
         ]);
