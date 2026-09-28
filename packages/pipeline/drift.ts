@@ -1,7 +1,6 @@
 import type { CallSite, DiffSummary, DriftEvent, Fix } from "@driftlock/core";
 import type { TrafficCapture } from "@driftlock/sandbox";
 import {
-    applyFixWork,
     diffShapes,
     fixWorksForDiff,
     inferShape,
@@ -10,6 +9,7 @@ import {
     type Shape,
     type ShapeDiffResult,
 } from "@driftlock/diff";
+import { resolveFixedSource, type AIFixConfig } from "@driftlock/aiFix";
 import type { CapturedShapes } from "./snapshots";
 
 export interface DriftResult {
@@ -120,18 +120,34 @@ export function driftConfidence(
     return levels[Math.max(a, b)];
 }
 
-export function applyDriftFix(
+export interface ApplyDriftFixOptions {
+    /** When set, a confident valid model fix wins over the deterministic one. */
+    ai?: AIFixConfig;
+}
+
+export async function applyDriftFix(
     drift: DriftResult,
     source: string,
-): { fix: Fix; changes: string } | null {
+    options: ApplyDriftFixOptions = {},
+): Promise<{ fix: Fix; changes: string } | null> {
     if (drift.works.length === 0) {
         return null;
     }
-    const changes = drift.works.reduce<string>(
-        (acc, work) => applyFixWork(work, acc) ?? acc,
+    // Single fix path (see @driftlock/aiFix): deterministic works, upgraded
+    // to a model fix when configured, confident (>= 60), and valid.
+    const primaryDiff =
+        drift.requestDiff.breakingChanges.length >=
+        drift.responseDiff.breakingChanges.length
+            ? drift.requestDiff
+            : drift.responseDiff;
+    const { fixed: changes } = await resolveFixedSource({
+        works: drift.works,
         source,
-    );
-    if (changes === source) {
+        filePath: drift.callSite.filePath,
+        diff: primaryDiff,
+        ai: options.ai,
+    });
+    if (!changes || changes === source) {
         return null;
     }
     const primary = drift.works[0];

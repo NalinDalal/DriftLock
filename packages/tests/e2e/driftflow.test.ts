@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { TypeScriptExtractor } from "@driftlock/parser";
 import { STRIPE_VENDOR } from "@driftlock/core";
-import { PRGenerator } from "@driftlock/git";
+import { FixPRRunner, fixBranchName, buildFixPRTitle, buildFixPRBody } from "@driftlock/git";
 import type { DiffSummary, DriftEvent, Fix } from "@driftlock/core";
 import {
     applyFixWork,
@@ -208,6 +208,8 @@ describe("E2E: drift detection pipeline", () => {
         expect(changes).not.toContain("source: \"tok_visa\"");
         expect(changes).toContain('result.status ?? ""');
 
+        // Same seam as prod: FixPRRunner over the Git Database API
+        // (blobs -> tree -> commit -> ref -> PR).
         let pullRequestsCreated = 0;
         let prTitle = "";
         const octokitStub = {
@@ -216,15 +218,17 @@ describe("E2E: drift detection pipeline", () => {
                     getRef: async () => ({
                         data: { object: { sha: "abc123" } },
                     }),
+                    getCommit: async () => ({
+                        data: { sha: "abc123", tree: { sha: "tree123" } },
+                    }),
+                    createBlob: async () => ({ data: { sha: "blob123" } }),
+                    createTree: async () => ({ data: { sha: "tree456" } }),
+                    createCommit: async () => ({ data: { sha: "commit456" } }),
                     createRef: async () => ({ data: {} }),
-                },
-                repos: {
-                    getContent: async () => {
-                        throw new Error("file not found");
-                    },
-                    createOrUpdateFileContents: async () => ({ data: {} }),
+                    updateRef: async () => ({ data: {} }),
                 },
                 pulls: {
+                    list: async () => ({ data: [] }),
                     create: async ({
                         title,
                     }: {
@@ -241,18 +245,24 @@ describe("E2E: drift detection pipeline", () => {
                     },
                 },
             },
-        } as unknown as NonNullable<
-            ConstructorParameters<typeof PRGenerator>[1]
-        >;
+        };
 
-        const prGenerator = new PRGenerator("github-token", octokitStub);
-        const pr = await prGenerator.createFixPR(
-            "acme",
-            "payments",
-            { driftEvent: event, callSite, fix, files: fix.files },
-            "main",
+        const prRunner = new FixPRRunner(
+            octokitStub as unknown as ConstructorParameters<typeof FixPRRunner>[0],
         );
+        const branch = fixBranchName(callSite.id);
+        const pr = await prRunner.run({
+            owner: "acme",
+            repo: "payments",
+            base: "main",
+            branch,
+            title: buildFixPRTitle({ driftEvent: event, callSite, fix }),
+            body: buildFixPRBody({ driftEvent: event, callSite, fix }, fix.files),
+            commitMessage: `driftlock: apply fix for ${callSite.method}`,
+            files: fix.files.map((f) => ({ path: f.path, content: f.changes })),
+        });
 
+        expect(pr.status).toBe("opened");
         expect(pr.number).toBe(987);
         expect(pr.branch).toMatch(/^driftlock\/fix-/);
         expect(pullRequestsCreated).toBe(1);

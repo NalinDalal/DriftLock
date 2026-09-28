@@ -116,7 +116,7 @@ export async function handleRun(req: Request): Promise<Response> {
                 responseShape: current.response,
             });
             const source = readSource(clone.path, drift.callSite.filePath);
-            const applied = source ? applyDriftFix(drift, source) : null;
+            const applied = source ? await applyDriftFix(drift, source) : null;
             const driftId = `drift-${dbCallSiteId}`.slice(0, 128);
             if (applied) {
                 applied.fix.driftEventId = driftId;

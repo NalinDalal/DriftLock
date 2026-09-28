@@ -1,5 +1,13 @@
 import type { FixWork, ShapeDiffResult } from "@driftlock/diff";
 
+export { isValidAIFix } from "./validate";
+export {
+    resolveFixedSource,
+    AI_FIX_CONFIDENCE_THRESHOLD,
+    type ResolveFixInput,
+    type ResolveFixResult,
+} from "./applyFix";
+
 export type AIProvider = "openai" | "anthropic" | "gemini" | "cloudflare";
 
 export interface AIFixConfig {

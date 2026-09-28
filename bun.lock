@@ -188,6 +188,7 @@
       "name": "@driftlock/pipeline",
       "version": "0.1.0",
       "dependencies": {
+        "@driftlock/aiFix": "workspace:*",
         "@driftlock/core": "workspace:*",
         "@driftlock/db": "workspace:*",
         "@driftlock/diff": "workspace:*",
@@ -227,6 +228,7 @@
         "@driftlock/sandbox": "workspace:*",
         "@driftlock/vendorWatch": "workspace:*",
         "@driftlock/webhookCapture": "workspace:*",
+        "openai": "^4.73.0",
       },
       "devDependencies": {
         "@types/bun": "latest",

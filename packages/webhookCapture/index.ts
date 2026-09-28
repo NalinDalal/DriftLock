@@ -27,8 +27,8 @@ export {
     createWebhookFixPR,
     type WebhookPRInput,
     type WebhookPRResult,
-    isValidAIFix,
 } from "./prCreator";
+export { isValidAIFix } from "@driftlock/aiFix";
 export { harToConsumerContract, type HarCaptureOptions, type HarEntry } from "./harCapture";
 export {
     createAgentFixPR,

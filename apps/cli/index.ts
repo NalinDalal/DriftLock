@@ -373,7 +373,7 @@ Examples:
                     } catch {
                         content = "";
                     }
-                    const applied = applyDriftFix(drift, content);
+                    const applied = await applyDriftFix(drift, content);
                     if (!applied) {
                         console.log(
                             chalk.yellow(

@@ -38,7 +38,7 @@ export function createImportResolver(
 // Example vendor configs (Stripe, Twilio). NOT defaults. The extractor
 // captures every SDK import regardless. These are reference data you can
 // opt into for endpoint precision, derived instead from docs via
-// @driftlock/agent (vendorConfigFromOpenApi / Agent.inferVendorConfig).
+// @driftlock/agent (vendorConfigFromOpenApi / inferVendorConfig).
 export { STRIPE_VENDOR, TWILIO_VENDOR } from "@driftlock/core";
 
 export type ParserLanguage = "typescript" | "tsx" | "javascript";

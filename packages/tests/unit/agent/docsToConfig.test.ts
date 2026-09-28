@@ -1,7 +1,9 @@
 import { describe, expect, test, mock } from "bun:test";
+import OpenAI from "openai";
 import {
-    Agent,
     InMemoryVendorStore,
+    inferVendorConfig,
+    ensureVendorConfig,
     validateVendorConfig,
     deriveBasePath,
     methodKeyFromPath,
@@ -274,21 +276,21 @@ await example.subscriptions.update("sub_1", { plan: "pro" });
     });
 });
 
-describe("Agent.inferVendorConfig", () => {
-    function createMockedAgent(content: string) {
-        const agent = new Agent("test-key");
+describe("inferVendorConfig", () => {
+    function createMockedClient(content: string) {
+        const client = new OpenAI({ apiKey: "test-key" });
         const create = mock(async () => ({
             choices: [{ message: { content } }],
         }));
-        const boundary = agent as unknown as {
-            openai: { chat: { completions: { create: typeof create } } };
+        const boundary = client as unknown as {
+            chat: { completions: { create: typeof create } };
         };
-        boundary.openai.chat.completions.create = create;
-        return { agent, create };
+        boundary.chat.completions.create = create;
+        return { client, create };
     }
 
     test("parses and validates a model-generated config", async () => {
-        const { agent, create } = createMockedAgent(
+        const { client, create } = createMockedClient(
             JSON.stringify({
                 name: "stripe",
                 sdk: "stripe",
@@ -304,7 +306,8 @@ describe("Agent.inferVendorConfig", () => {
             }),
         );
 
-        const config = await agent.inferVendorConfig(
+        const config = await inferVendorConfig(
+            client,
             "Stripe API docs ...",
             { name: "stripe" },
         );
@@ -317,23 +320,23 @@ describe("Agent.inferVendorConfig", () => {
     });
 
     test("throws when the model returns invalid JSON", async () => {
-        const { agent } = createMockedAgent("not json");
+        const { client } = createMockedClient("not json");
         await expect(
-            agent.inferVendorConfig("docs"),
+            inferVendorConfig(client, "docs"),
         ).rejects.toThrow("valid JSON");
     });
 
     test("throws when the model returns an invalid config", async () => {
-        const { agent } = createMockedAgent(
+        const { client } = createMockedClient(
             JSON.stringify({ name: "x", sdk: "x", clientNames: [], basePath: "/v1" }),
         );
-        await expect(agent.inferVendorConfig("docs")).rejects.toThrow(
+        await expect(inferVendorConfig(client, "docs")).rejects.toThrow(
             "clientNames",
         );
     });
 });
 
-describe("Agent.ensureVendorConfig (on-demand, per package)", () => {
+describe("ensureVendorConfig (on-demand, per package)", () => {
     const postConfig = (): ReturnType<typeof vendorConfigFromOpenApi> =>
         vendorConfigFromOpenApi(
             {
@@ -353,16 +356,16 @@ describe("Agent.ensureVendorConfig (on-demand, per package)", () => {
             },
         );
 
-    function createMockedAgent(content: string) {
-        const agent = new Agent("test-key");
+    function createMockedClient(content: string) {
+        const client = new OpenAI({ apiKey: "test-key" });
         const create = mock(async () => ({
             choices: [{ message: { content } }],
         }));
-        const boundary = agent as unknown as {
-            openai: { chat: { completions: { create: typeof create } } };
+        const boundary = client as unknown as {
+            chat: { completions: { create: typeof create } };
         };
-        boundary.openai.chat.completions.create = create;
-        return { agent, create };
+        boundary.chat.completions.create = create;
+        return { client, create };
     }
 
     test("returns a seeded config from the store without calling the model", async () => {
@@ -370,9 +373,10 @@ describe("Agent.ensureVendorConfig (on-demand, per package)", () => {
         const config = postConfig();
         store.set(config);
 
-        const { agent, create } = createMockedAgent("{}");
-        const got = await agent.ensureVendorConfig("@acme/posts-sdk", null, {
+        const { client, create } = createMockedClient("{}");
+        const got = await ensureVendorConfig("@acme/posts-sdk", null, {
             store,
+            client,
         });
 
         expect(got).toEqual(config);
@@ -381,7 +385,7 @@ describe("Agent.ensureVendorConfig (on-demand, per package)", () => {
 
     test("derives from docs on a miss, caches, then serves from cache", async () => {
         const store = new InMemoryVendorStore();
-        const { agent, create } = createMockedAgent(
+        const { client, create } = createMockedClient(
             JSON.stringify({
                 name: "acme",
                 sdk: "@acme/posts-sdk",
@@ -390,33 +394,33 @@ describe("Agent.ensureVendorConfig (on-demand, per package)", () => {
             }),
         );
 
-        const first = await agent.ensureVendorConfig(
+        const first = await ensureVendorConfig(
             "@acme/posts-sdk",
             "Acme Posts API docs: POST /v2/posts creates a post.",
-            { store },
+            { store, client },
         );
         expect(first?.sdk).toBe("@acme/posts-sdk");
         expect(create).toHaveBeenCalledTimes(1);
 
-        const second = await agent.ensureVendorConfig(
+        const second = await ensureVendorConfig(
             "@acme/posts-sdk",
             null,
-            { store },
+            { store, client },
         );
         expect(second).toEqual(first);
         expect(create).toHaveBeenCalledTimes(1);
     });
 
     test("returns null when there is no config and no docs", async () => {
-        const { agent, create } = createMockedAgent("{}");
-        const got = await agent.ensureVendorConfig("@unknown/pkg", null);
+        const { client, create } = createMockedClient("{}");
+        const got = await ensureVendorConfig("@unknown/pkg", null, { client });
         expect(got).toBeNull();
         expect(create).toHaveBeenCalledTimes(0);
     });
 
     test("a docs-derived config resolves call sites for that package in the parser", async () => {
         const store = new InMemoryVendorStore();
-        const { agent } = createMockedAgent(
+        const { client } = createMockedClient(
             JSON.stringify({
                 name: "acme",
                 sdk: "@acme/posts-sdk",
@@ -424,10 +428,10 @@ describe("Agent.ensureVendorConfig (on-demand, per package)", () => {
                 basePath: "/v2",
             }),
         );
-        const config = await agent.ensureVendorConfig(
+        const config = await ensureVendorConfig(
             "@acme/posts-sdk",
             "Acme Posts API docs.",
-            { store },
+            { store, client },
         );
 
         const extractor = new TypeScriptExtractor({

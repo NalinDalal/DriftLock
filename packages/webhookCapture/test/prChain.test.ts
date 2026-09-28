@@ -6,8 +6,7 @@ import { InMemorySchemaStore } from "../schemaStore";
 import { DriftDetector } from "../driftDetector";
 import { flattenPayload } from "../schemaFlattener";
 import { diffSchemas } from "../schemaDiff";
-import { isValidAIFix } from "../prCreator";
-import { generateAIFixSync, type FixContext } from "@driftlock/aiFix";
+import { isValidAIFix, generateAIFixSync, type FixContext } from "@driftlock/aiFix";
 
 function tmpRepo(): string {
     const dir = mkdtempSync(join(tmpdir(), "driftlock-webhook-pr-"));

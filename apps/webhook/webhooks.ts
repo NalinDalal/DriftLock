@@ -339,7 +339,7 @@ async function analyzePushInBackground(input: {
         responseShape: current.response,
       });
       const source = readSource(clone.path, drift.callSite.filePath);
-      const applied = source ? applyDriftFix(drift, source) : null;
+      const applied = source ? await applyDriftFix(drift, source) : null;
       const driftId = `drift-${dbId}`.slice(0, 128);
       if (applied) applied.fix.driftEventId = driftId;
       await store.recordDrift({

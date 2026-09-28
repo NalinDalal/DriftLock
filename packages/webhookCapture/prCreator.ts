@@ -4,14 +4,13 @@ import { Octokit } from "octokit";
 import {
     diffShapes,
     fixWorksForDiff,
-    applyFixWork,
     type FixWork,
     type ShapeDiffResult,
     type Shape,
     type ShapeNode,
 } from "@driftlock/diff";
 import { PRWriter, type WriteFile } from "@driftlock/git";
-import { generateAIFix, type AIFixConfig, type AIFixResult } from "@driftlock/aiFix";
+import { resolveFixedSource, type AIFixConfig } from "@driftlock/aiFix";
 import type { DriftAlert } from "./driftDetector";
 import type { FlatSchema } from "./schemaFlattener";
 
@@ -114,120 +113,6 @@ function scanForAffectedFiles(
     return results;
 }
 
-function applyFixesToSource(
-    source: string,
-    works: FixWork[],
-): string | null {
-    let changed = source;
-    for (const work of works) {
-        const result = applyFixWork(work, changed);
-        if (result) {
-            changed = result;
-        }
-    }
-    return changed === source ? null : changed;
-}
-
-// A key's value that means this is a label or a type rather than a real field.
-// `outer: for (...)` is a label, and `({ payment }: { payment: any })` is a
-// parameter type: TypeScript type literals are indistinguishable from object
-// literals to a regex, and treating one as an invented field rejected valid TSX.
-const NOT_A_VALUE = /^(?:for|while|do|switch|if|try|return|throw|function|class|const|let|var|any|unknown|never|string|number|boolean|object|symbol|bigint|void|null|undefined)\b/;
-// `default` is a switch label that happens to follow a `{`.
-const NOT_A_KEY = new Set([
-    "default", "case", "else", "do", "try", "catch", "finally",
-    "new", "typeof", "void", "delete", "in", "instanceof", "of", "this",
-]);
-
-/**
- * Keys written explicitly as `key:` inside an object literal, ignoring comments.
- * Shorthand properties are deliberately not matched: `{ payment_method }` is a
- * reference to an existing binding, not an invented field.
- */
-function objectLiteralKeys(code: string): Set<string> {
-    const masked = code
-        .replace(/\/\*[\s\S]*?\*\//g, " ")
-        .replace(/\/\/[^\n]*/g, " ");
-    const keys = new Set<string>();
-    const keyRe =
-        /(?<=[{,])[ \t\r\n]*(?:"([^"\n]*)"|'([^'\n]*)'|([A-Za-z_$][\w$]*))[ \t\r\n]*:(?!:)([ \t\r\n]*)(\S{0,6})/g;
-    let match: RegExpExecArray | null;
-    while ((match = keyRe.exec(masked)) !== null) {
-        const key = match[1] ?? match[2] ?? match[3];
-        if (!key || NOT_A_KEY.has(key)) continue;
-        // `outer: for (...)` is a label, and `{ payment: any }` is a type.
-        if (NOT_A_VALUE.test(match[5] ?? "")) continue;
-        keys.add(key);
-    }
-    return keys;
-}
-
-export function isValidAIFix(
-    fixedCode: string,
-    works: FixWork[],
-    originalCode: string,
-    filePath = "file.ts",
-): boolean {
-    if (fixedCode === originalCode) return false;
-    if (/\/\/\s*Added new field/i.test(fixedCode)) return false;
-    const loader = filePath.endsWith(".tsx")
-        ? "tsx"
-        : filePath.endsWith(".jsx")
-          ? "jsx"
-          : /\.(js|mjs|cjs)$/.test(filePath)
-            ? "js"
-            : "ts";
-    try {
-        // Parse source syntax without executing the generated code.
-        new Bun.Transpiler({ loader }).transformSync(fixedCode);
-    } catch {
-        return false;
-    }
-    for (const work of works) {
-        if (work.kind === "field_rename" && work.from && work.to) {
-            const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-            const toRe = new RegExp(`\\b${esc(work.to)}\\b`);
-            const fromRe = new RegExp(`\\b${esc(work.from)}\\b`);
-            // New field must appear somewhere
-            if (!toRe.test(fixedCode)) return false;
-            // Old field must not remain as a property access (e.g., .source or source:)
-            if (fromRe.test(fixedCode)) {
-                // Allow if from appears only inside to (not applicable here, but keep strict)
-                return false;
-            }
-            const leaf = work.to.split(".").pop()!;
-            const camelCase = leaf.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
-            if (camelCase !== leaf) {
-                // Reject invented accesses, but preserve existing accesses and local aliases.
-                const accessRe = new RegExp(
-                    `(?<![\\w$])[\\w$]+(?:\\s*(?:\\?\\.|\\.)\\s*[\\w$]+)*\\s*(?:(?:\\?\\.|\\.)\\s*${esc(camelCase)}(?![\\w$])|(?:\\?\\.)?\\s*\\[\\s*(["'])${esc(camelCase)}\\1\\s*\\])`,
-                    "g",
-                );
-                const accesses = (code: string) => new Set(
-                    Array.from(code.matchAll(accessRe), ([access]) => access
-                        .replace(/\s+/g, "")
-                        .replace(/(?:\?\.)?\[['"]([^'"]+)['"]\]/g, ".$1")
-                        .replace(/\?\./g, ".")),
-                );
-                const originalAccesses = accesses(originalCode);
-                for (const access of accesses(fixedCode)) {
-                    if (!originalAccesses.has(access)) return false;
-                }
-                // The access check only sees `a.b` and `a["b"]`, so a bare
-                // object-literal key is invisible to it. Without this, a fix can
-                // add `{ paymentMethod: "..." }` next to a correct rename and
-                // sail through on the strength of the one legitimate key.
-                const originalKeys = objectLiteralKeys(originalCode);
-                const allowedKeys = new Set([work.to.split(".").pop()!]);
-                for (const key of objectLiteralKeys(fixedCode)) {
-                    if (!originalKeys.has(key) && !allowedKeys.has(key)) return false;
-                }
-            }
-        }
-    }
-    return true;
-}
-
 export async function createWebhookFixPR(
     input: WebhookPRInput,
 ): Promise<WebhookPRResult> {
@@ -241,64 +126,36 @@ export async function createWebhookFixPR(
         return { status: "no_matches", filesChanged: [] };
     }
 
+    // Prompt context for the model: the schema diff behind `works`.
+    const diff: ShapeDiffResult = {
+        addedFields: input.alert.diff.added,
+        removedFields: input.alert.diff.removed,
+        typeChanges: input.alert.diff.typeChanged.map((c) => ({
+            field: c.field,
+            oldType: c.from,
+            newType: c.to,
+        })),
+        optionalityChanges: [],
+        breakingChanges: [],
+        nonBreakingChanges: [],
+        confidence: "high",
+        changes: [],
+    };
+
+    // Single fix path: deterministic works, upgraded to a model fix when
+    // configured, confident, and valid (see @driftlock/aiFix).
     const files: WriteFile[] = [];
     for (const { filePath, fullPath } of affectedFiles) {
         const content = readFileSync(fullPath, "utf8");
 
-        let fixed: string | null = null;
-
-        if (input.ai) {
-            try {
-                const diff: ShapeDiffResult = {
-                    addedFields: input.alert.diff.added,
-                    removedFields: input.alert.diff.removed,
-                    typeChanges: input.alert.diff.typeChanged.map((c) => ({
-                        field: c.field,
-                        oldType: c.from,
-                        newType: c.to,
-                    })),
-                    optionalityChanges: [],
-                    breakingChanges: [],
-                    nonBreakingChanges: [],
-                    confidence: "high",
-                    changes: [],
-                };
-
-                const aiResult: AIFixResult = await generateAIFix(
-                    {
-                        diff,
-                        works,
-                        sourceCode: content,
-                        filePath,
-                        eventType: input.alert.eventType,
-                    },
-                    input.ai,
-                );
-
-                if (aiResult.confidence >= 60) {
-                    if (!isValidAIFix(aiResult.fixedCode, works, content, filePath)) {
-                        console.log(
-                            `  [AI] ${filePath}: AI fix failed validation (semantic check), falling back to deterministic`,
-                        );
-                    } else {
-                        fixed = aiResult.fixedCode;
-                        console.log(
-                            `  [AI] ${filePath}: confidence=${aiResult.confidence} - ${aiResult.explanation.slice(0, 100)}`,
-                        );
-                    }
-                } else {
-                    console.log(
-                        `  [AI] ${filePath}: confidence=${aiResult.confidence} too low, falling back to deterministic`,
-                    );
-                }
-            } catch (err) {
-                console.error(`  [AI] ${filePath}: AI fix failed, falling back to deterministic:`, err);
-            }
-        }
-
-        if (!fixed) {
-            fixed = applyFixesToSource(content, works);
-        }
+        const { fixed } = await resolveFixedSource({
+            works,
+            source: content,
+            filePath,
+            eventType: input.alert.eventType,
+            diff,
+            ai: input.ai,
+        });
 
         if (fixed) {
             files.push({ path: filePath, content: fixed });
