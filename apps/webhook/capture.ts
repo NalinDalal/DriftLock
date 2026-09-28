@@ -1,4 +1,4 @@
-import { InMemorySchemaStore, DbSchemaStore, DriftDetector, createWebhookFixPR, createAgentFixPR, resolveAgentFixDeps, severityForSchemaDiff, routeBySeverity } from "@driftlock/webhookCapture";
+import { InMemorySchemaStore, DbSchemaStore, DriftDetector, createWebhookFixPR, createAgentFixPR, resolveAgentFixDeps, severityForSchemaDiff, routeBySeverity, parseCaptureSecrets, verifyCaptureSignature } from "@driftlock/webhookCapture";
 import type { DriftAlert, RollbackAlert, SchemaStore, SchemaSnapshot, FlatSchema } from "@driftlock/webhookCapture";
 import { getDb } from "@driftlock/db";
 import { settings } from "@driftlock/db/schema";
@@ -23,6 +23,7 @@ interface WebhookConfig {
     cloudflareAccountId?: string;
     forwardUrl?: string;
     confidenceThreshold?: number;
+    captureSecrets?: string;
 }
 
 let cachedConfig: WebhookConfig | null = null;
@@ -491,9 +492,36 @@ export function createCaptureHandler() {
             return json({ error: "Missing endpoint ID" }, 400);
         }
 
+        // Raw body first: HMAC verification must run over the exact bytes.
+        let rawBody: string;
+        try {
+            rawBody = await req.text();
+        } catch {
+            return json({ error: "Unable to read body" }, 400);
+        }
+
+        const config = await loadConfig();
+        const secrets = parseCaptureSecrets(
+            getConfigValue(config, "captureSecrets", "CAPTURE_SECRETS", ""),
+        );
+        const secret = secrets.get(endpointId);
+        if (secret) {
+            const check = verifyCaptureSignature({ rawBody, headers: req.headers, secret });
+            if (!check.ok) {
+                console.warn(
+                    `[SECURITY] Rejected unsigned/invalid capture for endpoint=${endpointId} reason=${check.reason}`,
+                );
+                return json({ error: "Invalid signature" }, 401);
+            }
+        } else {
+            console.warn(
+                `No CAPTURE_SECRETS entry for endpoint=${endpointId}. Accepting unsigned payload (set CAPTURE_SECRETS in prod)`,
+            );
+        }
+
         let body: Record<string, unknown>;
         try {
-            body = (await req.json()) as Record<string, unknown>;
+            body = JSON.parse(rawBody) as Record<string, unknown>;
         } catch {
             return json({ error: "Body must be JSON" }, 400);
         }
@@ -504,7 +532,6 @@ export function createCaptureHandler() {
             req.headers.get("x-github-event") ??
             "__default__";
 
-        const config = await loadConfig();
         const forwardUrl = getConfigValue(config, "forwardUrl", "WEBHOOK_FORWARD_URL", "");
 
         await ensureInit();
