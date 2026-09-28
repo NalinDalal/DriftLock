@@ -7,8 +7,13 @@ import {
     changePacketFromDrift,
     runMigrationAgent,
     type ChangePacket,
+    type CommandRunner,
     type VendorContract,
 } from "@driftlock/agent";
+
+function fakeOkRunner(): CommandRunner {
+    return { run: async () => ({ ok: true, output: "fake pass" }) };
+}
 
 type FakeCall = {
     choices: Array<{
@@ -155,6 +160,7 @@ describe("the contract gate blocks a bad migration that every other check passed
             contract: p5Contract,
             vendor: P5_VENDOR,
             client: fakeClient(),
+            commandRunner: fakeOkRunner(),
         });
 
         expect(result.state.lastTestResult?.passed).toBe(true);
@@ -192,6 +198,7 @@ describe("the contract gate blocks a bad migration that every other check passed
             contract: p5Contract,
             vendor: P5_VENDOR,
             client: fakeClient(),
+            commandRunner: fakeOkRunner(),
         });
 
         expect(result.state.symbolFindings).toEqual([]);
@@ -256,6 +263,7 @@ describe("the contract gate catches a migration that was left half finished", ()
             contract: stripeContract,
             vendor: STRIPE_VENDOR,
             client: fakeClient(),
+            commandRunner: fakeOkRunner(),
         });
 
         expect(result.filesChanged).toEqual(["webhook.js"]);

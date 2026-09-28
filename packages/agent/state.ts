@@ -1,5 +1,6 @@
 import { describeContract, type SymbolFinding, type VendorContract } from "./vendorContract";
 import { describeRepoFacts, type RepoFacts } from "./repoFacts";
+import type { ToolName } from "./tools";
 
 export type ChangePacket = {
     provider: string;
@@ -13,7 +14,8 @@ export type Outcome = "auto_pr" | "review_pr" | "draft_pr" | "no_action";
 
 export type ToolCall = {
     id: string;
-    name: string;
+    /** Always a validated tool name; `parseToolCalls` drops anything else. */
+    name: ToolName;
     args: Record<string, unknown>;
 };
 
@@ -283,4 +285,35 @@ export function buildReceipt(
         prNumber: state.pullRequest?.number,
         draft: state.pullRequest ? !state.hasContract : undefined,
     };
+}
+
+/** Tool results newer than this are never compacted: the model needs its
+ * immediate context intact to act on the last thing it saw. */
+const PROTECTED_RECENT_TOOLS = 3;
+
+/**
+ * Bounds transcript growth (SDK compaction, without a compaction model).
+ * While the transcript serializes past `budgetChars`, the oldest `tool`
+ * results beyond the protected recent window are replaced with a one-line
+ * omission note. Assistant/tool-call skeletons are never touched: dropping
+ * them would break the tool_call_id chain the API expects. Returns how many
+ * entries were compacted.
+ */
+export function trimTranscript(state: AgentState, budgetChars = 120_000): number {
+    let compacted = 0;
+    const size = (): number => JSON.stringify(state.transcript).length;
+    if (size() <= budgetChars) return compacted;
+
+    const toolIndices: number[] = [];
+    for (let i = 0; i < state.transcript.length; i += 1) {
+        if (state.transcript[i].role === "tool") toolIndices.push(i);
+    }
+    const compactable = toolIndices.slice(0, Math.max(0, toolIndices.length - PROTECTED_RECENT_TOOLS));
+    for (const index of compactable) {
+        if (size() <= budgetChars) break;
+        const entry = state.transcript[index];
+        entry.content = `[omitted: ${entry.toolName ?? "tool"} result dropped to bound context]`;
+        compacted += 1;
+    }
+    return compacted;
 }

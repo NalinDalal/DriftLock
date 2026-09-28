@@ -115,6 +115,8 @@ describe.skipIf(!configured)("live model loop", () => {
             model,
             publisher,
             target: { owner: "acme", repo: "widgets", base: "main" },
+            // Operator-run live test on the operator's own tmp fixture.
+            allowHostExecution: true,
         });
 
         const { state } = result;

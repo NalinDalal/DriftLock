@@ -9,9 +9,14 @@ import {
     readChangedFiles,
     runMigrationAgent,
     type ChangePacket,
+    type CommandRunner,
     type PullRequestPublisher,
     type VendorContract,
 } from "@driftlock/agent";
+
+function fakeOkRunner(): CommandRunner {
+    return { run: async () => ({ ok: true, output: "fake pass" }) };
+}
 import { P5_VENDOR } from "@driftlock/core";
 import { FixPRRunner } from "@driftlock/git";
 
@@ -292,6 +297,7 @@ describe("createGitHubPublisher", () => {
                 buildCall("npm run build"),
                 prCall("driftlock/p5-2-3"),
             ]),
+            commandRunner: fakeOkRunner(),
         });
 
         const names = calls.map((call) => call.name);
@@ -359,6 +365,7 @@ describe("createGitHubPublisher", () => {
                 buildCall("npm run build"),
                 prCall("driftlock/p5-2-3"),
             ]),
+            commandRunner: fakeOkRunner(),
         });
 
         expect(calls).toHaveLength(0);
@@ -380,6 +387,7 @@ describe("createPullRequest", () => {
                 buildCall("npm run build"),
                 prCall("driftlock/p5-2-3"),
             ]),
+            commandRunner: fakeOkRunner(),
         });
 
         // No contract gates this run, so the gate publishes a draft and the
@@ -429,6 +437,7 @@ describe("createPullRequest", () => {
                 buildCall("npm run build"),
                 prCall("driftlock/p5-2-3"),
             ]),
+            commandRunner: fakeOkRunner(),
         });
 
         expect(result.outcome).toBe("auto_pr");
@@ -450,6 +459,7 @@ describe("createPullRequest", () => {
                 buildCall("npm run build"),
                 prCall("main"),
             ]),
+            commandRunner: fakeOkRunner(),
         });
 
         expect(seen).toHaveLength(0);
@@ -503,6 +513,7 @@ describe("createPullRequest", () => {
                 buildCall("npm run build"),
                 prCall("driftlock/p5-2-3"),
             ]),
+            commandRunner: fakeOkRunner(),
         });
 
         expect(result.state.pullRequest).toBeUndefined();
@@ -524,6 +535,7 @@ describe("createPullRequest", () => {
                 buildCall("npm run build"),
                 prCall("driftlock/p5-2-3"),
             ]),
+            commandRunner: fakeOkRunner(),
         });
         expect(seen).toHaveLength(1);
 
@@ -555,6 +567,7 @@ describe("createPullRequest", () => {
             publisher,
             target,
             client: scriptedClient([editCall(), buildCall("npm run build"), blankTitle]),
+            commandRunner: fakeOkRunner(),
         });
         expect(seen).toHaveLength(1);
         const entry = second.state.transcript.find(

@@ -6,7 +6,11 @@ import type OpenAI from "openai";
 import { STRIPE_VENDOR } from "@driftlock/core";
 import { createAgentFixPR } from "../agentFix";
 import type { DriftAlert } from "../driftDetector";
-import type { PullRequestPublisher } from "@driftlock/agent";
+import type { CommandRunner, PullRequestPublisher } from "@driftlock/agent";
+
+function fakeOkRunner(): CommandRunner {
+    return { run: async () => ({ ok: true, output: "fake pass" }) };
+}
 
 let root: string;
 
@@ -119,6 +123,7 @@ describe("createAgentFixPR runs a webhook drift through the migration agent", ()
             token: "test-token",
             vendor: STRIPE_VENDOR,
             publisher,
+            commandRunner: fakeOkRunner(),
             client: scriptedClient([
                 toolCall(
                     "replaceInFile",
@@ -160,6 +165,7 @@ describe("createAgentFixPR runs a webhook drift through the migration agent", ()
             token: "test-token",
             vendor: STRIPE_VENDOR,
             publisher,
+            commandRunner: fakeOkRunner(),
             client: scriptedClient([
                 toolCall(
                     "replaceInFile",

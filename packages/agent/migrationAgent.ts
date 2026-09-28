@@ -3,7 +3,7 @@ import { readdir } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import { join } from "node:path";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
-import { isToolName, toOpenAITools } from "./tools";
+import { isToolName, toOpenAITools, type ToolName } from "./tools";
 import { SYSTEM_PROMPT } from "./prompt";
 import {
     buildReceipt,
@@ -22,6 +22,7 @@ import {
     type RunReceipt,
     type ToolCall,
     type TranscriptEntry,
+    trimTranscript,
 } from "./state";
 import {
     collectDiffStat,
@@ -155,6 +156,13 @@ export type RunOptions = {
     target?: PullRequestTarget;
     commandRunner?: CommandRunner;
     /**
+     * Allow model-requested commands to run directly on the host. Defaults to
+     * false: without a `commandRunner` (e.g. `createSandboxCommandRunner()`),
+     * `runCommand` is refused so untrusted repository scripts can never execute
+     * outside isolation. Set true only for an operator's own machine.
+     */
+    allowHostExecution?: boolean;
+    /**
      * Ground truth about the vendor's API surface. When present it is injected
      * into the opening message and enforced before any pull request is opened.
      */
@@ -173,6 +181,22 @@ export type RunOptions = {
     modelTimeoutMs?: number;
     modelMaxRetries?: number;
     modelRetryBaseMs?: number;
+    /**
+     * Human-in-the-loop for high-stakes tools. Before a tool in
+     * `toolsRequiringApproval` runs, `approveTool` is consulted; a rejection
+     * (or a throwing hook — fail-closed) returns a FAILED tool result the
+     * model can react to instead of executing. Defaults to approving.
+     */
+    approveTool?: (call: { name: ToolName; args: Record<string, unknown> }) =>
+        | Promise<"approve" | "reject">
+        | "approve"
+        | "reject";
+    toolsRequiringApproval?: ToolName[];
+    /** Progress observer; see `AgentEvent`. Never affects the run. */
+    onEvent?: (event: AgentEvent) => void;
+    /** Transcript budget in serialized characters before old tool results are
+     * compacted. Defaults to 120000. */
+    transcriptBudgetChars?: number;
 };
 
 export type RunResult = {
@@ -182,6 +206,21 @@ export type RunResult = {
     /** Structured audit line for this run: what changed, what proved it. */
     receipt: RunReceipt;
 };
+
+/**
+ * Run observer (SDK event sinks, without the SDK). Fires on iteration start,
+ * every tool result, every model retry, and completion. Observer errors are
+ * swallowed: a sink failure must never change what the run does.
+ */
+export type AgentEvent =
+    | { type: "iteration"; iteration: number; stage: MigrationStage }
+    | { type: "tool"; name: ToolName; ok: boolean; iteration: number }
+    | { type: "model_retry"; attempt: number; error: string }
+    | { type: "done"; outcome: Outcome; iterations: number };
+
+/** Tools that pause for operator approval. Publishing is the irreversible
+ * external side effect in this loop, so it is the only default. */
+export const DEFAULT_APPROVAL_TOOLS: ToolName[] = ["createPullRequest"];
 
 type RunnerDeps = {
     create: OpenAI["chat"]["completions"]["create"];
@@ -210,7 +249,12 @@ function modelErrorMessage(error: unknown): string {
 async function createWithRetry(
     create: RunnerDeps["create"],
     body: Parameters<RunnerDeps["create"]>[0],
-    options: { timeoutMs: number; maxRetries: number; baseDelayMs: number },
+    options: {
+        timeoutMs: number;
+        maxRetries: number;
+        baseDelayMs: number;
+        onRetry?: (attempt: number, error: unknown) => void;
+    },
 ): Promise<
     Extract<Awaited<ReturnType<RunnerDeps["create"]>>, { choices: unknown }>
 > {
@@ -232,6 +276,7 @@ async function createWithRetry(
             if (attempt >= options.maxRetries || !isRetryableModelError(error)) {
                 throw error;
             }
+            options.onRetry?.(attempt + 1, error);
             const delay = Math.min(options.baseDelayMs * 2 ** attempt, 10_000);
             await Bun.sleep(delay * (0.5 + Math.random() * 0.5));
             attempt += 1;
@@ -310,6 +355,26 @@ async function execute(
     state: AgentState,
 ): Promise<ToolResult> {
     const root = options.root;
+    // Human-in-the-loop: high-stakes tools pause for approval first. A denial
+    // (or a throwing hook — fail-closed) is an ordinary FAILED result the
+    // model can react to, not a halt.
+    if ((options.toolsRequiringApproval ?? DEFAULT_APPROVAL_TOOLS).includes(name)) {
+        let decision: "approve" | "reject" = "approve";
+        try {
+            decision = (await options.approveTool?.({ name, args })) ?? "approve";
+        } catch (error) {
+            return {
+                ok: false,
+                output: `Approval hook failed for ${name}: ${error instanceof Error ? error.message : String(error)}. Denied by default; fix the hook or call again.`,
+            };
+        }
+        if (decision !== "approve") {
+            return {
+                ok: false,
+                output: `Operator denied ${name}. Explain what you wanted and ask what to change, or proceed without it.`,
+            };
+        }
+    }
     switch (name) {
         case "inspectRepo":
             return inspectRepo(root);
@@ -361,6 +426,15 @@ async function execute(
             }
             state.commandsRun += 1;
             const command = readString(args, "command");
+            if (!options.commandRunner && options.allowHostExecution !== true) {
+                const refused = {
+                    ok: false,
+                    output:
+                        "Refusing command: no commandRunner was supplied, and host execution is disabled. Pass commandRunner: createSandboxCommandRunner() (Docker isolation), or set allowHostExecution: true only on an operator's own machine.",
+                };
+                state.lastTestResult = { passed: false, output: refused.output };
+                return refused;
+            }
             const result = options.commandRunner
                 ? await options.commandRunner.run(root, command)
                 : await runCommand(root, command);
@@ -533,6 +607,15 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
         maxRetries: options.modelMaxRetries ?? 2,
         baseDelayMs: options.modelRetryBaseMs ?? 1000,
     };
+    const budgetChars = options.transcriptBudgetChars ?? 120_000;
+    // Observer errors must never change what the run does.
+    const emit = (event: AgentEvent): void => {
+        try {
+            options.onEvent?.(event);
+        } catch {
+            // Sinks observe; they do not steer.
+        }
+    };
     let lastStage: MigrationStage | null = null;
 
     while (!state.done && state.iteration < state.maxIterations) {
@@ -553,6 +636,7 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
             }
             lastStage = stage;
         }
+        emit({ type: "iteration", iteration: state.iteration, stage });
 
         // A dead model endpoint must degrade to an outcome, never throw: the
         // edits on disk are real work worth reporting as review_pr.
@@ -570,7 +654,11 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
                     tools: toOpenAITools(),
                     tool_choice: "auto",
                 },
-                modelResilience,
+                {
+                    ...modelResilience,
+                    onRetry: (attempt, error) =>
+                        emit({ type: "model_retry", attempt, error: modelErrorMessage(error) }),
+                },
             );
         } catch (error) {
             state.transcript.push({
@@ -612,6 +700,7 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
                 toolName: call.name,
                 content: result.ok ? result.output : `FAILED: ${result.output}`,
             });
+            emit({ type: "tool", name: call.name, ok: result.ok, iteration: state.iteration });
             if (call.name === "createPullRequest" && result.ok) state.done = true;
             // Failure threshold: that many tool failures in a row means the
             // strategy is stuck. Escalate to a human (review/draft) instead of
@@ -640,6 +729,9 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
         if (state.done && !state.outcome) {
             state.outcome = decideOutcome(state);
         }
+
+        // Bound context growth before the next model call.
+        trimTranscript(state, budgetChars);
     }
 
     if (!state.done) {
@@ -651,6 +743,7 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
     }
 
     const outcome = state.outcome ?? decideOutcome(state);
+    emit({ type: "done", outcome, iterations: state.iteration });
     return {
         outcome,
         state,

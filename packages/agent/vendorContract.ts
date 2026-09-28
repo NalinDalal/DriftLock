@@ -722,23 +722,42 @@ export function changePacketFromDrift(drift: ObservedDrift): {
     removed: string[];
     added: string[];
 } {
+    // Observed fields arrive as envelope paths (`data.object.source`) but
+    // handler code reads the leaf (`paymentIntent.source`), and a model told
+    // only the full path searches the codebase for the literal dotted string
+    // and finds nothing. Name the leaf first, keep the path as provenance,
+    // and spell out the exact searchCode calls: weaker models follow explicit
+    // tool directives they would never derive from prose.
+    const leafOf = (field: string): string => field.split(".").pop() ?? field;
+    const readable = (field: string): string => {
+        const leaf = leafOf(field);
+        return leaf === field ? field : `${leaf} (observed at ${field})`;
+    };
+    const searchTerms = uniqueSorted(
+        [...drift.removed, ...drift.added].map(leafOf).filter((leaf) => leaf.length > 0),
+    );
     const lines: string[] = [
         `Observed on the wire between ${drift.fromVersion} and ${drift.toVersion}.`,
     ];
 
     if (drift.removed.length > 0) {
         lines.push(
-            `The vendor stopped sending these fields: ${drift.removed.join(", ")}. Remove every read of them.`,
+            `The vendor stopped sending these fields: ${drift.removed.map(readable).join(", ")}. Remove every read of them; search for the leaf names, not the dotted paths.`,
         );
     }
     if (drift.added.length > 0) {
         lines.push(
-            `The vendor started sending these fields: ${drift.added.join(", ")}. They are the replacements.`,
+            `The vendor started sending these fields: ${drift.added.map(readable).join(", ")}. They are the replacements.`,
         );
     }
     for (const change of drift.typeChanged) {
         lines.push(
-            `${change.field} changed type from ${change.from} to ${change.to}. Update any code that assumed the old type.`,
+            `${readable(change.field)} changed type from ${change.from} to ${change.to}. Update any code that assumed the old type.`,
+        );
+    }
+    if (searchTerms.length > 0) {
+        lines.push(
+            `Start with these searches, one call each: ${searchTerms.map((term) => `searchCode "${term}"`).join(", ")}. Do not guess file paths before searching.`,
         );
     }
     if (

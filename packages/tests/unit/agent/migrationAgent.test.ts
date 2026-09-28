@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runMigrationAgent, type ChangePacket } from "@driftlock/agent";
+import { runMigrationAgent, type ChangePacket, type CommandRunner } from "@driftlock/agent";
+
+function fakeFailRunner(): CommandRunner {
+    return { run: async () => ({ ok: false, output: "fake fail" }) };
+}
 
 type FakeCall = {
     choices: Array<{
@@ -52,6 +56,10 @@ function fakeClient() {
             },
         },
     } as unknown as Parameters<typeof runMigrationAgent>[0]["client"];
+}
+
+function fakeOkRunner(): CommandRunner {
+    return { run: async () => ({ ok: true, output: "fake pass" }) };
 }
 
 const packet: ChangePacket = {
@@ -116,7 +124,12 @@ describe("runMigrationAgent", () => {
             ),
         ];
 
-        const result = await runMigrationAgent({ root, packet, client: fakeClient() });
+        const result = await runMigrationAgent({
+            root,
+            packet,
+            client: fakeClient(),
+            commandRunner: fakeOkRunner(),
+        });
 
         // No contract gates this run, so the verified diff is a draft.
         expect(result.outcome).toBe("draft_pr");
@@ -162,10 +175,26 @@ describe("runMigrationAgent", () => {
             root,
             packet,
             client: fakeClient(),
+            commandRunner: fakeOkRunner(),
         });
 
         expect(result.outcome).toBe("draft_pr");
         expect(result.filesChanged).toEqual(["src/client.ts"]);
+    });
+
+    test("refuses host execution without a commandRunner", async () => {
+        apiCalls = [toolCall("runCommand", { command: "npm run build" }, "c1")];
+
+        const result = await runMigrationAgent({ root, packet, client: fakeClient() });
+
+        const entry = result.state.transcript.find(
+            (e) => e.role === "tool" && e.toolCallId === "c1",
+        );
+        expect(entry?.content).toContain("host execution is disabled");
+        expect(result.state.lastTestResult?.passed).toBe(false);
+        // Every runCommand attempt is refused, so no verification ever passes
+        // and no PR can open.
+        expect(result.state.pullRequest).toBeUndefined();
     });
 
     test("a passing verification does not survive a later edit", async () => {
@@ -197,7 +226,12 @@ describe("runMigrationAgent", () => {
             ),
         ];
 
-        const result = await runMigrationAgent({ root, packet, client: fakeClient() });
+        const result = await runMigrationAgent({
+            root,
+            packet,
+            client: fakeClient(),
+            commandRunner: fakeOkRunner(),
+        });
 
         // The build passed before the edit, but the edit wiped that result,
         // so the PR gate refuses until verification runs again.
@@ -348,6 +382,7 @@ describe("runMigrationAgent", () => {
             root,
             packet,
             client: fakeClient(),
+            commandRunner: fakeFailRunner(),
         });
         expect(result.outcome).toBe("review_pr");
         expect(result.state.lastTestResult?.passed).toBe(false);
@@ -602,5 +637,218 @@ describe("runMigrationAgent", () => {
         expect(first.receipt.provider).toBe("p5");
         expect(first.receipt.outcome).toBe("no_action");
         expect(first.receipt.model).toBe("gpt-4o-mini");
+    });
+
+    test("a denied pull request is guidance, not a halt", async () => {
+        const init = Bun.spawn(["git", "init"], { cwd: root, stdout: "pipe" });
+        await init.exited;
+        const add = Bun.spawn(["git", "add", "-A"], { cwd: root, stdout: "pipe" });
+        await add.exited;
+
+        apiCalls = [
+            toolCall(
+                "editFile",
+                {
+                    path: "src/client.ts",
+                    patch: [
+                        "--- a/src/client.ts",
+                        "+++ b/src/client.ts",
+                        "@@ -1 +1 @@",
+                        "-createCanvas(1);",
+                        "+createSurface(1);",
+                    ].join("\n"),
+                },
+                "c1",
+            ),
+            toolCall("runCommand", { command: "npm run build" }, "c2"),
+            toolCall(
+                "createPullRequest",
+                { title: "t", body: "b", branch: "driftlock/p5-2.3" },
+                "c3",
+            ),
+        ];
+
+        const seen: string[] = [];
+        const result = await runMigrationAgent({
+            root,
+            packet,
+            client: fakeClient(),
+            commandRunner: fakeOkRunner(),
+            approveTool: async (call) => {
+                seen.push(call.name);
+                return call.name === "createPullRequest" ? "reject" : "approve";
+            },
+        });
+
+        expect(seen).toContain("createPullRequest");
+        const denial = result.state.transcript.find(
+            (entry) => entry.role === "tool" && entry.toolCallId === "c3",
+        );
+        expect(denial?.content).toContain("denied");
+        expect(result.state.pullRequest).toBeUndefined();
+    });
+
+    test("an explicitly approved pull request proceeds", async () => {
+        const init = Bun.spawn(["git", "init"], { cwd: root, stdout: "pipe" });
+        await init.exited;
+        const add = Bun.spawn(["git", "add", "-A"], { cwd: root, stdout: "pipe" });
+        await add.exited;
+
+        apiCalls = [
+            toolCall(
+                "editFile",
+                {
+                    path: "src/client.ts",
+                    patch: [
+                        "--- a/src/client.ts",
+                        "+++ b/src/client.ts",
+                        "@@ -1 +1 @@",
+                        "-createCanvas(1);",
+                        "+createSurface(1);",
+                    ].join("\n"),
+                },
+                "c1",
+            ),
+            toolCall("runCommand", { command: "npm run build" }, "c2"),
+            toolCall(
+                "createPullRequest",
+                { title: "t", body: "b", branch: "driftlock/p5-2-3" },
+                "c3",
+            ),
+        ];
+
+        const result = await runMigrationAgent({
+            root,
+            packet,
+            client: fakeClient(),
+            commandRunner: fakeOkRunner(),
+            approveTool: () => "approve",
+        });
+
+        const pr = result.state.transcript.find(
+            (entry) => entry.role === "tool" && entry.toolCallId === "c3",
+        );
+        expect(pr?.content).toContain("PREVIEW ONLY");
+    });
+
+    test("a throwing approval hook fails closed", async () => {
+        apiCalls = [toolCall("createPullRequest", { title: "t", body: "b", branch: "x" }, "c1")];
+
+        const result = await runMigrationAgent({
+            root,
+            packet,
+            client: fakeClient(),
+            approveTool: () => {
+                throw new Error("hook is down");
+            },
+        });
+
+        const entry = result.state.transcript.find(
+            (item) => item.role === "tool" && item.toolCallId === "c1",
+        );
+        expect(entry?.content).toContain("Approval hook failed");
+        expect(result.state.pullRequest).toBeUndefined();
+    });
+
+    test("emits run events and survives a throwing observer", async () => {
+        const events: Array<{ type: string }> = [];
+        apiCalls = [toolCall("inspectRepo", {}, "c1"), finalText("done")];
+
+        const result = await runMigrationAgent({
+            root,
+            packet,
+            client: fakeClient(),
+            onEvent: (event) => {
+                events.push(event);
+                if (event.type === "tool") throw new Error("sink is down");
+            },
+        });
+
+        expect(events[0]).toMatchObject({ type: "iteration", iteration: 1 });
+        expect(events.some((event) => event.type === "tool")).toBe(true);
+        expect(events.at(-1)).toMatchObject({ type: "done" });
+        expect(result.outcome).toBe("no_action");
+    });
+
+    test("model retries are observable", async () => {
+        const retries: Array<{ attempt: number; error: string }> = [];
+        let calls = 0;
+        const client = {
+            chat: {
+                completions: {
+                    create: async () => {
+                        calls += 1;
+                        if (calls === 1) {
+                            throw Object.assign(new Error("overloaded"), { status: 503 });
+                        }
+                        return finalText("done");
+                    },
+                },
+            },
+        } as unknown as Parameters<typeof runMigrationAgent>[0]["client"];
+
+        await runMigrationAgent({
+            root,
+            packet,
+            client,
+            modelRetryBaseMs: 5,
+            onEvent: (event) => {
+                if (event.type === "model_retry") retries.push(event);
+            },
+        });
+
+        expect(calls).toBe(2);
+        expect(retries).toHaveLength(1);
+        expect(retries[0].attempt).toBe(1);
+    });
+
+    test("bounds a long transcript without breaking the run", async () => {
+        const init = Bun.spawn(["git", "init"], { cwd: root, stdout: "pipe" });
+        await init.exited;
+        const add = Bun.spawn(["git", "add", "-A"], { cwd: root, stdout: "pipe" });
+        await add.exited;
+
+        apiCalls = [
+            toolCall("inspectRepo", {}, "c1"),
+            toolCall("searchCode", { query: "createCanvas" }, "c2"),
+            toolCall("readFile", { path: "src/client.ts" }, "c3"),
+            toolCall(
+                "editFile",
+                {
+                    path: "src/client.ts",
+                    patch: [
+                        "--- a/src/client.ts",
+                        "+++ b/src/client.ts",
+                        "@@ -1 +1 @@",
+                        "-createCanvas(1);",
+                        "+createSurface(1);",
+                    ].join("\n"),
+                },
+                "c4",
+            ),
+            toolCall("runCommand", { command: "npm run build" }, "c5"),
+            toolCall(
+                "createPullRequest",
+                { title: "Migrate to p5 2.3", body: "Renamed call", branch: "driftlock/p5-2.3" },
+                "c6",
+            ),
+        ];
+
+        const result = await runMigrationAgent({
+            root,
+            packet,
+            client: fakeClient(),
+            commandRunner: fakeOkRunner(),
+            transcriptBudgetChars: 2000,
+        });
+
+        expect(result.outcome).toBe("draft_pr");
+        expect(
+            result.state.transcript.some((entry) => entry.content.includes("[omitted:")),
+        ).toBe(true);
+        // Skeletons survive: every tool result still has its request.
+        const requested = result.state.transcript.flatMap((e) => e.toolCalls ?? []);
+        const answered = result.state.transcript.filter((e) => e.role === "tool");
+        expect(requested).toHaveLength(answered.length);
     });
 });

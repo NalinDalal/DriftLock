@@ -3,7 +3,9 @@ import {
     changePacketFromDrift,
     contractFromWebhookAlert,
     createGitHubPublisher,
+    createSandboxCommandRunner,
     runMigrationAgent,
+    type CommandRunner,
     type PullRequestPublisher,
     type RunResult,
 } from "@driftlock/agent";
@@ -26,6 +28,8 @@ export interface AgentFixInput {
     model?: string;
     /** Override for tests. Defaults to a GitHub publisher on `token`. */
     publisher?: PullRequestPublisher;
+    /** Override for tests. Defaults to Docker isolation. */
+    commandRunner?: CommandRunner;
 }
 
 export interface AgentFixResult {
@@ -69,6 +73,9 @@ export async function createAgentFixPR(input: AgentFixInput): Promise<AgentFixRe
         packet,
         contract,
         vendor: input.vendor,
+        // Production path edits a real customer checkout: verification must run
+        // in Docker isolation, never on the DriftLock host.
+        commandRunner: input.commandRunner ?? createSandboxCommandRunner(),
         publisher: input.publisher ?? createGitHubPublisher(input.token),
         target: { owner: input.owner, repo: input.repo, base: input.base },
         client: input.client,

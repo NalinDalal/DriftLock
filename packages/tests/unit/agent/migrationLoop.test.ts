@@ -11,6 +11,7 @@ import {
     recordFileChanged,
     tools,
     toOpenAITools,
+    trimTranscript,
     type ChangePacket,
     type AgentState,
 } from "@driftlock/agent";
@@ -264,5 +265,47 @@ describe("tool ACI", () => {
         expect(run.description).toContain("&&");
         const replace = tools.find((tool) => tool.name === "replaceInFile")!;
         expect(replace.description).toContain("default edit tool");
+    });
+});
+
+describe("trimTranscript", () => {
+    function toolEntry(id: string, content: string) {
+        return {
+            role: "tool" as const,
+            content,
+            toolCallId: id,
+            toolName: "readFile",
+        };
+    }
+
+    test("returns 0 and changes nothing under budget", () => {
+        const current = state();
+        expect(trimTranscript(current, 120_000)).toBe(0);
+        expect(current.transcript).toHaveLength(1);
+    });
+
+    test("compacts oldest tool results but keeps skeleton and recency", () => {
+        const current = state();
+        for (let i = 0; i < 5; i += 1) {
+            current.transcript.push({
+                role: "assistant",
+                content: "",
+                toolCalls: [{ id: `c${i}`, name: "readFile", args: {} }],
+            });
+            current.transcript.push(toolEntry(`c${i}`, "x".repeat(5000)));
+        }
+
+        const compacted = trimTranscript(current, 8000);
+
+        expect(compacted).toBe(2);
+        // Skeleton intact: requests still pair with answers.
+        expect(current.transcript.flatMap((e) => e.toolCalls ?? [])).toHaveLength(5);
+        expect(current.transcript.filter((e) => e.role === "tool")).toHaveLength(5);
+        // Oldest compacted, newest three untouched.
+        const tools = current.transcript.filter((e) => e.role === "tool");
+        expect(tools[0].content).toContain("[omitted:");
+        expect(tools[1].content).toContain("[omitted:");
+        expect(tools[2].content).toHaveLength(5000);
+        expect(tools[4].content).toHaveLength(5000);
     });
 });
