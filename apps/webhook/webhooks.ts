@@ -353,6 +353,12 @@ async function analyzePushInBackground(input: {
         prNumber: null,
         status: "detected",
       });
+      store.emitEvent?.("drift_detected", {
+        driftId,
+        repo: input.fullName,
+        callSiteId: dbId,
+        method: drift.callSite.method,
+      });
       await store.setCallSiteSnapshotState(dbId, "drifted");
       driftCount += 1;
 
@@ -371,7 +377,23 @@ async function analyzePushInBackground(input: {
           files: applied.fix.files.map((f) => ({ path: f.path, content: f.changes })),
         });
         console.log(`  [PR] ${pr.status}: ${pr.url}`);
-        if (pr.status === "opened" || pr.status === "already_open") prCount += 1;
+        if (pr.status === "opened" || pr.status === "already_open") {
+          await store.updateDriftStatus(driftId, "pr_opened", pr.number);
+          store.emitEvent?.("pr_opened", { driftId, prNumber: pr.number, url: pr.url });
+          prCount += 1;
+        } else if (pr.status === "merged") {
+          await store.updateDriftStatus(driftId, "merged", pr.number);
+          store.emitEvent?.("pr_merged", { driftId, prNumber: pr.number, url: pr.url });
+          const current = result.shapes.get(drift.callSite.id);
+          if (current) {
+            await snapshotStore.save(dbId, current, {
+              testCommand: command,
+              exitCode: result.exitCode,
+              duration: result.duration,
+              trafficCaptured: result.trafficCaptured,
+            });
+          }
+        }
       }
     }
 
@@ -421,9 +443,61 @@ function readSource(repoPath: string, filePath: string): string | null {
 
 async function handlePullRequest(payload: any) {
   const { action, pull_request, repository } = payload;
+  const fullName: string = repository?.full_name ?? "";
+  const prNumber: number | undefined = pull_request?.number;
+  const merged: boolean = pull_request?.merged === true;
+  const headBranch: string = pull_request?.head?.ref ?? "";
 
-  console.log(`PR ${action}: ${pull_request.title} in ${repository.full_name}`);
+  console.log(`PR ${action}: ${pull_request?.title} in ${fullName}`);
 
-  // TODO: If PR is merged, check for API changes
-  // TODO: If PR is opened by DriftLock, track status
+  if (action !== "closed" || prNumber === undefined) return;
+
+  let store: ReturnType<typeof createStore>;
+  try {
+    store = createStore(getDb());
+  } catch (e) {
+    console.log(`  [SKIP] DB unavailable, PR status not tracked:`, e);
+    return;
+  }
+  const [owner, name] = fullName.split("/");
+  if (!owner || !name) return;
+  const repo = await store.getRepository(owner, name).catch(() => null);
+  if (!repo) {
+    console.log(`  [SKIP] ${fullName} not installed, PR #${prNumber} not tracked`);
+    return;
+  }
+
+  if (merged) {
+    // Source of truth for pr_merged: GitHub says the PR landed. Prefer
+    // direct prNumber match; fall back to bot-branch mapping for older rows
+    // that were recorded before prNumber was persisted.
+    const matched = await store.updateDriftStatusByPrNumber(repo.id, prNumber, "merged");
+    if (matched === 0 && headBranch.startsWith("driftlock/fix-")) {
+      const open = await store.listOpenDriftsByRepo(repo.id);
+      for (const row of open) {
+        if (fixBranchName(row.callSiteId) === headBranch) {
+          await store.updateDriftStatus(row.id, "merged", prNumber);
+        }
+      }
+    }
+    store.emitEvent?.("pr_merged", { repo: fullName, prNumber, branch: headBranch });
+    console.log(`  [PR] merged #${prNumber} tracked`);
+    return;
+  }
+
+  // Closed without merge on a bot branch = human rejected the fix:
+  // record false_positive so precision can be measured.
+  if (headBranch.startsWith("driftlock/")) {
+    const matched = await store.updateDriftStatusByPrNumber(repo.id, prNumber, "false_positive");
+    if (matched === 0 && headBranch.startsWith("driftlock/fix-")) {
+      const open = await store.listOpenDriftsByRepo(repo.id);
+      for (const row of open) {
+        if (fixBranchName(row.callSiteId) === headBranch) {
+          await store.updateDriftStatus(row.id, "false_positive", prNumber);
+        }
+      }
+    }
+    store.emitEvent?.("false_positive", { repo: fullName, prNumber, branch: headBranch });
+    console.log(`  [PR] closed unmerged ${headBranch} marked false_positive`);
+  }
 }

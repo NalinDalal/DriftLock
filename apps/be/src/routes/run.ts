@@ -135,6 +135,12 @@ export async function handleRun(req: Request): Promise<Response> {
                 prNumber: null,
                 status: "detected",
             });
+            store.emitEvent?.("drift_detected", {
+                driftId,
+                repo: `${owner}/${name}`,
+                callSiteId: dbCallSiteId,
+                method: drift.callSite.method,
+            });
             await store.setCallSiteSnapshotState(dbCallSiteId, "drifted");
             driftCount += 1;
         }

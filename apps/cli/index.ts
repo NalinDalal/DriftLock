@@ -454,6 +454,9 @@ Examples:
                     const driftEvent = buildDriftEvent(drift);
                     driftEvent.suggestedFix = fix;
                     driftEvent.status = "fix_generated";
+                    console.log(
+                        `[EVENT] type=drift_detected ${JSON.stringify({ driftId: driftEvent.id, callSiteId: callSite.id, method: callSite.method })}`,
+                    );
 
                     const result = await prRunner.run({
                         owner,
@@ -478,15 +481,24 @@ Examples:
                         if (current) {
                             await store.save(callSite.id, current);
                         }
+                        console.log(
+                            `[EVENT] type=pr_merged ${JSON.stringify({ driftId: driftEvent.id, prNumber: result.number, url: result.url })}`,
+                        );
                         prSpinner.succeed(
                             `Fix already merged (${result.url}); baseline refreshed`,
                         );
                         continue;
                     }
                     if (result.status === "already_open") {
+                        console.log(
+                            `[EVENT] type=pr_opened ${JSON.stringify({ driftId: driftEvent.id, prNumber: result.number, url: result.url })}`,
+                        );
                         prSpinner.succeed(`PR already open: ${result.url}`);
                         continue;
                     }
+                    console.log(
+                        `[EVENT] type=pr_opened ${JSON.stringify({ driftId: driftEvent.id, prNumber: result.number, url: result.url })}`,
+                    );
                     prSpinner.succeed(`PR created: ${result.url}`);
                 }
             } catch (error) {

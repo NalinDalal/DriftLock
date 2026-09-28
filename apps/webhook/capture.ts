@@ -211,10 +211,10 @@ class PersistentCaptureStore implements SchemaStore {
         diff: unknown;
         previousSchema: FlatSchema;
         currentSchema: FlatSchema;
-    }): Promise<void> {
+    }): Promise<string | null> {
         try {
             const id = await this.resolveId(params.endpointId);
-            await this.db.recordDrift({
+            return await this.db.recordDrift({
                 endpointId: id,
                 eventType: params.eventType,
                 diff: params.diff,
@@ -223,6 +223,17 @@ class PersistentCaptureStore implements SchemaStore {
             });
         } catch (e) {
             console.warn(`[STORE] recordDrift failed:`, e);
+            return null;
+        }
+    }
+
+    async markDrift(id: string | null, status: "pr_opened" | "merged" | "false_positive"): Promise<void> {
+        if (!id) return;
+        try {
+            await this.db.updateDriftStatus(id, status);
+            console.log(`[EVENT] type=${status === "pr_opened" ? "pr_opened" : status === "merged" ? "pr_merged" : "false_positive"} ${JSON.stringify({ driftId: id })}`);
+        } catch (e) {
+            console.warn(`[STORE] markDrift failed:`, e);
         }
     }
 }
@@ -269,7 +280,8 @@ function setupDetectorCallbacks(det: DriftDetector) {
 
         // Persist drift for measurement (PR opened/merged rates, precision).
         // Best effort: capture must not fail if the drifts table is down.
-        await store
+        // recordDrift itself emits drift_detected.
+        const driftRowId = await store
             .recordDrift({
                 endpointId: alert.endpointId,
                 eventType: alert.eventType,
@@ -277,7 +289,10 @@ function setupDetectorCallbacks(det: DriftDetector) {
                 previousSchema: alert.previous,
                 currentSchema: alert.current,
             })
-            .catch((e) => console.warn(`[STORE] recordDrift skipped:`, e));
+            .catch((e) => {
+                console.warn(`[STORE] recordDrift skipped:`, e);
+                return null;
+            });
 
         const githubToken = getConfigValue(config, "githubToken", "GITHUB_TOKEN", "");
         const repoPath = getConfigValue(config, "repoPath", "WEBHOOK_REPO_PATH", "");
@@ -323,8 +338,10 @@ function setupDetectorCallbacks(det: DriftDetector) {
 
                 if (result.status === "opened") {
                     console.log(`  [PR] Created: ${result.url}`);
+                    await store.markDrift(driftRowId, "pr_opened");
                 } else if (result.status === "already_open") {
                     console.log(`  [PR] Already open: ${result.url}`);
+                    await store.markDrift(driftRowId, "pr_opened");
                 } else {
                     console.log(`  [PR] ${result.status} (outcome: ${result.outcome})`);
                 }
@@ -343,8 +360,10 @@ function setupDetectorCallbacks(det: DriftDetector) {
 
             if (result.status === "opened") {
                 console.log(`  [PR] Created: ${result.url}`);
+                await store.markDrift(driftRowId, "pr_opened");
             } else if (result.status === "already_open") {
                 console.log(`  [PR] Already open: ${result.url}`);
+                await store.markDrift(driftRowId, "pr_opened");
             } else {
                 console.log(`  [PR] ${result.status}`);
             }
