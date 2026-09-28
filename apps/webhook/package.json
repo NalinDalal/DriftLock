@@ -16,9 +16,11 @@
     "@driftlock/db": "workspace:*",
     "@driftlock/git": "workspace:*",
     "@driftlock/parser": "workspace:*",
+    "@driftlock/pipeline": "workspace:*",
     "@driftlock/webhookCapture": "workspace:*",
     "drizzle-orm": "^0.45.2",
-    "octokit": "^4.1.0"
+    "octokit": "^4.1.0",
+    "simple-git": "^3.23.0"
   },
   "devDependencies": {
     "@types/bun": "latest",
