@@ -288,7 +288,7 @@ Environment variables:
   AI_MODEL        CLOUDFLARE_API_TOKEN take precedence per provider)
 
 With --json, the last stdout line is always a JSON summary:
-  {"callSites":N,"drifts":N,"fixes":N,"prs":[...],"baselines":N}
+  {"callSites":N,"drifts":N,"fixes":N,"prs":[...],"baselines":N,"pendingCapture":N}
 
 Examples:
   $ driftlock fix ./repo --dry-run
@@ -340,7 +340,7 @@ Examples:
 
                 if (allCallSites.length === 0) {
                     spinner.warn("No API call sites found");
-                    emitSummary({ callSites: 0, drifts: 0, fixes: 0, prs: [], baselines: 0 });
+                    emitSummary({ callSites: 0, drifts: 0, fixes: 0, prs: [], baselines: 0, pendingCapture: 0 });
                     return;
                 }
 
@@ -348,6 +348,21 @@ Examples:
 
                 const drifts = result.drifts;
                 const baselines = result.baselines;
+                const pendingCapture = result.pendingCapture;
+                const noTraffic = result.trafficCaptured === 0;
+                if (noTraffic) {
+                    console.log(
+                        chalk.yellow(
+                            `\nNo API traffic captured through the proxy, so baselines are impossible for ${pendingCapture.length} of ${allCallSites.length} call site(s). Make the test suite exercise them, then re-run.`,
+                        ),
+                    );
+                } else if (pendingCapture.length > 0) {
+                    console.log(
+                        chalk.dim(
+                            `\n${pendingCapture.length} call site(s) produced no traffic and stay pending capture.`,
+                        ),
+                    );
+                }
                 spinner.text = `Comparing ${result.trafficCaptured} captured requests against baseline`;
 
                 if (baselines.length > 0) {
@@ -365,7 +380,11 @@ Examples:
                 }
 
                 if (drifts.length === 0) {
-                    if (baselines.length === 0) {
+                    if (noTraffic) {
+                        spinner.warn(
+                            "No traffic captured, nothing to baseline or compare",
+                        );
+                    } else if (baselines.length === 0) {
                         spinner.succeed("No drift detected");
                     } else {
                         spinner.succeed(
@@ -378,6 +397,7 @@ Examples:
                         fixes: 0,
                         prs: [],
                         baselines: baselines.length,
+                        pendingCapture: pendingCapture.length,
                     });
                     return;
                 }
@@ -444,6 +464,7 @@ Examples:
                         fixes: 0,
                         prs: [],
                         baselines: baselines.length,
+                        pendingCapture: pendingCapture.length,
                     });
                     return;
                 }
@@ -461,6 +482,7 @@ Examples:
                         fixes: fixes.length,
                         prs: [],
                         baselines: baselines.length,
+                        pendingCapture: pendingCapture.length,
                     });
                     return;
                 }
@@ -477,6 +499,7 @@ Examples:
                         fixes: fixes.length,
                         prs: [],
                         baselines: baselines.length,
+                        pendingCapture: pendingCapture.length,
                     });
                     return;
                 }
@@ -583,6 +606,7 @@ Examples:
                     fixes: fixes.length,
                     prs,
                     baselines: baselines.length,
+                    pendingCapture: pendingCapture.length,
                 });
             } catch (error) {
                 spinner.fail("Fix generation failed");

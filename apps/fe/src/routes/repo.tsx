@@ -295,7 +295,11 @@ export default function RepoPage({ owner, name }: { owner: string; name: string 
                 ) : drifts.error ? (
                     <div className="rounded-[10px] border border-[var(--color-danger-border)] bg-[var(--color-danger-bg)] px-4 py-3 text-sm text-[var(--color-danger-text)]">{drifts.error}</div>
                 ) : (drifts.data?.drifts ?? []).length === 0 ? (
-                    <EmptyState title="No drift in the last baseline" hint="Captured traffic matches the recorded snapshots. You are up to date." />
+                    ((repo?.stats.pendingCapture ?? 0) > 0) ? (
+                        <EmptyState title="Not yet observable" hint={`${repo?.stats.pendingCapture} call site(s) have no captured traffic, so there is nothing to compare yet. Run the workflow so the test suite exercises them through the proxy.`} />
+                    ) : (
+                        <EmptyState title="No drift in the last baseline" hint="Captured traffic matches the recorded snapshots. You are up to date." />
+                    )
                 ) : (
                     <div className="flex flex-col gap-3">
                         {drifts.data?.drifts.map((event) => (

@@ -257,9 +257,13 @@ export class SandboxRunner {
 
     private createTimeout(ms: number): Promise<never> {
         return new Promise((_, reject) => {
-            setTimeout(() => {
+            const timer = setTimeout(() => {
                 reject(new Error(`Sandbox timed out after ${ms}ms`));
             }, ms);
+            // The losing side of the Promise.race must not hold the event
+            // loop (and the CLI process) open for the full window after the
+            // container already finished.
+            timer.unref();
         });
     }
 
