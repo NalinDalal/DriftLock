@@ -21,9 +21,9 @@ export default function InstallSuccessPage() {
                 DriftLock{installationId ? ` installation ${installationId}` : ""} was {action === "update" ? "updated" : "installed"} for your account. Your selected repos are now watched.
             </p>
             <div className="mt-6 flex justify-center gap-2">
-                <Link to="/accounts" className="bg-[var(--color-ink)] px-5 py-2.5 font-mono text-xs tracking-wide text-[var(--color-paper)] hover:bg-[var(--color-ink)]/90">VIEW REPOS →</Link>
+                <Link to="/actions" search={{ repo: undefined }} className="bg-[var(--color-ink)] px-5 py-2.5 font-mono text-xs tracking-wide text-[var(--color-paper)] hover:bg-[var(--color-ink)]/90">CONNECT ACTIONS →</Link>
+                <Link to="/accounts" className="border border-[var(--color-line)] bg-[var(--color-surface)] px-5 py-2.5 font-mono text-xs tracking-wide text-[var(--color-ink)] hover:bg-[var(--color-paper)]">VIEW REPOS</Link>
                 <Link to="/onboarding" className="border border-[var(--color-line)] bg-[var(--color-surface)] px-5 py-2.5 font-mono text-xs tracking-wide text-[var(--color-ink)] hover:bg-[var(--color-paper)]">HOW THIS WORKS</Link>
-                <Link to="/settings" className="border border-[var(--color-line)] bg-[var(--color-surface)] px-5 py-2.5 font-mono text-xs tracking-wide text-[var(--color-ink)] hover:bg-[var(--color-paper)]">OPEN SETTINGS</Link>
             </div>
             <p className="mt-6 font-mono text-[11px] tracking-wide text-[var(--color-muted)]">
                 If you do not see your repos, <button onClick={() => navigate({ to: "/install" })} className="underline underline-offset-2 hover:text-[var(--color-ink)]">go to Install again</button> or refresh <Link to="/accounts" className="underline underline-offset-2">/accounts</Link>.

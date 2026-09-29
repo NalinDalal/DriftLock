@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { track } from "../lib/analytics";
 import { toast } from "../lib/toast";
 
@@ -31,13 +31,38 @@ function aiSecretFor(provider: Provider): string | null {
     return null;
 }
 
-function applyProvider(yaml: string, provider: Provider): string {
+const MODELS: Record<Exclude<Provider, "none">, Array<{ id: string; label: string }>> = {
+    openai: [
+        { id: "gpt-4o-mini", label: "gpt-4o-mini · cheap, default pick" },
+        { id: "gpt-4o", label: "gpt-4o · stronger" },
+        { id: "gpt-4.1", label: "gpt-4.1 · newest" },
+    ],
+    anthropic: [
+        { id: "claude-sonnet-4-20250514", label: "Sonnet 4 · default pick" },
+        { id: "claude-3-5-sonnet-20241022", label: "Sonnet 3.5 · proven" },
+        { id: "claude-3-5-haiku-20241022", label: "Haiku 3.5 · cheap" },
+    ],
+    gemini: [
+        { id: "gemini-2.5-flash", label: "2.5 Flash · default pick" },
+        { id: "gemini-2.0-flash", label: "2.0 Flash" },
+        { id: "gemini-1.5-pro", label: "1.5 Pro · stronger" },
+    ],
+};
+
+const CUSTOM_MODEL = "__custom";
+
+function modelEnvFor(provider: Provider): string {
+    return provider === "gemini" ? "GEMINI_MODEL" : "AI_MODEL";
+}
+
+function applyProvider(yaml: string, provider: Provider, model: string | null): string {
     if (provider === "none") return yaml;
     const keyEnv = provider === "gemini" ? "GEMINI_API_KEY" : "AI_API_KEY";
     const secret = aiSecretFor(provider) ?? "DRIFTLOCK_AI_KEY";
+    const modelLine = model ? `\n          ${modelEnvFor(provider)}: ${model}` : "";
     return yaml.replace(
         "          # AI_PROVIDER: openai              # openai, anthropic, or gemini\n          # AI_API_KEY: ${{ secrets.DRIFTLOCK_AI_KEY }}",
-        `          AI_PROVIDER: ${provider}\n          ${keyEnv}: \${{ secrets.${secret} }}`,
+        `          AI_PROVIDER: ${provider}\n          ${keyEnv}: \${{ secrets.${secret} }}${modelLine}`,
     );
 }
 
@@ -46,7 +71,7 @@ async function copy(text: string, label: string) {
         await navigator.clipboard.writeText(text);
         toast(`${label} copied`);
     } catch {
-        toast("Copy failed — select the text manually");
+        toast("Copy failed, select the text manually");
     }
 }
 
@@ -58,9 +83,27 @@ export default function ActionsPage() {
     const [error, setError] = useState<string | null>(null);
     const [repo, setRepo] = useState<Repo | null>(null);
     const [provider, setProvider] = useState<Provider>("none");
+    // "" = provider default (model line omitted from the yml).
+    const [model, setModel] = useState<string>("");
+    const [customModel, setCustomModel] = useState<string>("");
     const [rawKey, setRawKey] = useState<string | null>(null);
     const [issuing, setIssuing] = useState(false);
     const [yaml, setYaml] = useState<string | null>(null);
+    // Preselect after /install: /actions?repo=owner/name skips the picker.
+    const { repo: preselectedFullName } = useSearch({ from: "/actions" });
+
+    function selectProvider(p: Provider) {
+        setProvider(p);
+        setModel("");
+        setCustomModel("");
+    }
+
+    /** Resolved model id, or null for the provider default. */
+    function effectiveModel(): string | null {
+        if (provider === "none") return null;
+        if (model === CUSTOM_MODEL) return customModel.trim() || null;
+        return model || null;
+    }
 
     useEffect(() => {
         document.title = "GitHub Actions | DriftLock";
@@ -77,15 +120,25 @@ export default function ActionsPage() {
                 return res.json();
             })
             .then((data) => {
-                setRepos(data.repos ?? []);
+                const list = (data.repos ?? []) as Repo[];
+                setRepos(list);
                 setLoading(false);
-                setStep(2);
+                const match = preselectedFullName
+                    ? list.find((r) => r.fullName.toLowerCase() === preselectedFullName.toLowerCase())
+                    : undefined;
+                if (match) {
+                    setRepo(match);
+                    track("actions_repo_preselected", { repo: match.fullName });
+                    setStep(3);
+                } else {
+                    setStep(2);
+                }
             })
             .catch((err) => {
                 setError(err.message);
                 setLoading(false);
             });
-    }, [navigate]);
+    }, [navigate, preselectedFullName]);
 
     async function issueKey() {
         if (!repo) return;
@@ -98,7 +151,7 @@ export default function ActionsPage() {
             if (!res.ok) throw new Error("Failed to issue key");
             const data = (await res.json()) as { key: { raw: string } };
             setRawKey(data.key.raw);
-            track("actions_key_issued", { repo: repo.fullName, provider });
+            track("actions_key_issued", { repo: repo.fullName, provider, model: effectiveModel() ?? "default" });
             setStep(4);
         } catch (err) {
             toast(err instanceof Error ? err.message : "Failed to issue key");
@@ -115,16 +168,17 @@ export default function ActionsPage() {
                 return res.json();
             })
             .then((data: { yaml: string }) => {
-                const filled = applyProvider(data.yaml, provider)
+                const chosen = provider === "none" ? null : model === CUSTOM_MODEL ? customModel.trim() || null : model || null;
+                const filled = applyProvider(data.yaml, provider, chosen)
                     .replaceAll("__OWNER__", repo.owner)
                     .replaceAll("__REPO__", repo.name)
                     .replaceAll("__BRANCH__", repo.defaultBranch || "main")
                     .replaceAll("__API_URL__", API_URL || DEFAULT_API_URL);
                 setYaml(filled);
-                track("actions_yaml_viewed", { repo: repo.fullName, provider });
+                track("actions_yaml_viewed", { repo: repo.fullName, provider, model: chosen ?? "default" });
             })
             .catch(() => setYaml(null));
-    }, [step, repo, provider]);
+    }, [step, repo, provider, model, customModel]);
 
     if (loading) {
         return (
@@ -138,7 +192,7 @@ export default function ActionsPage() {
         return (
             <div className="flex min-h-[50vh] items-center justify-center">
                 <div className="text-center">
-                    <p className="font-mono text-xs text-[var(--color-signal-red)]">COULD NOT LOAD REPOS — {error}</p>
+                    <p className="font-mono text-xs text-[var(--color-signal-red)]">COULD NOT LOAD REPOS: {error}</p>
                     <button onClick={() => navigate({ to: "/login" })} className="mt-4 font-mono text-xs text-[var(--color-ink)] underline underline-offset-2">
                         Sign in again
                     </button>
@@ -163,7 +217,7 @@ export default function ActionsPage() {
                     </h1>
                     <p className="mt-4 max-w-[520px] font-mono text-[13px] leading-5 text-[var(--color-ink)]/80">
                         {step === 2 && "Detection runs on GitHub Actions in your repo. Your code never leaves your infrastructure."}
-                        {step === 3 && "Deterministic fixes are free forever. Model fixes need your own AI key — it stays in your repo secrets, never on our servers."}
+                        {step === 3 && "Deterministic fixes are free forever. Model fixes need your own AI key. It stays in your repo secrets, never on our servers."}
                         {step === 4 && "This key is shown once. After this screen it exists only as a hash."}
                     </p>
                 </div>
@@ -208,7 +262,7 @@ export default function ActionsPage() {
                                 <button
                                     key={p.id}
                                     type="button"
-                                    onClick={() => setProvider(p.id)}
+                                    onClick={() => selectProvider(p.id)}
                                     className={`border p-5 text-left transition-[transform,background] active:scale-[0.99] ${provider === p.id ? "border-[var(--color-line-strong)] bg-[var(--color-paper)] shadow-[3px_3px_0_var(--color-line-strong)]" : "border-[var(--color-line-strong)] bg-[var(--color-surface)] hover:bg-[var(--color-paper)]"}`}
                                 >
                                     <p className="font-mono text-sm font-semibold text-[var(--color-ink)]">{p.label}</p>
@@ -216,9 +270,37 @@ export default function ActionsPage() {
                                 </button>
                             ))}
                         </div>
+                        {provider !== "none" && (
+                            <div className="mt-4 border border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-3">
+                                <label htmlFor="dl-model" className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-muted)]">
+                                    MODEL · BAKED INTO THE YML AS {modelEnvFor(provider)}
+                                </label>
+                                <select
+                                    id="dl-model"
+                                    value={model}
+                                    onChange={(e) => setModel(e.target.value)}
+                                    className="mt-2 w-full border border-[var(--color-line-strong)]/15 bg-[var(--color-paper)] px-3 py-2 font-mono text-xs text-[var(--color-ink)]"
+                                >
+                                    <option value="">Provider default (recommended)</option>
+                                    {MODELS[provider].map((m) => (
+                                        <option key={m.id} value={m.id}>{m.label}</option>
+                                    ))}
+                                    <option value={CUSTOM_MODEL}>Custom…</option>
+                                </select>
+                                {model === CUSTOM_MODEL && (
+                                    <input
+                                        value={customModel}
+                                        onChange={(e) => setCustomModel(e.target.value)}
+                                        placeholder="e.g. gpt-4o-mini"
+                                        spellCheck={false}
+                                        className="mt-2 w-full border border-[var(--color-line-strong)]/15 bg-[var(--color-paper)] px-3 py-2 font-mono text-xs text-[var(--color-ink)] placeholder:text-[var(--color-muted)]"
+                                    />
+                                )}
+                            </div>
+                        )}
                         <button
                             onClick={issueKey}
-                            disabled={issuing}
+                            disabled={issuing || (model === CUSTOM_MODEL && !customModel.trim())}
                             className="mt-6 bg-[var(--color-ink)] px-6 py-2.5 font-mono text-xs tracking-wide text-[var(--color-paper)] transition-[transform,background] hover:bg-[var(--color-ink)]/90 active:scale-[0.98] disabled:opacity-40"
                         >
                             {issuing ? "ISSUING…" : "ISSUE KEY AND CONTINUE →"}
@@ -231,7 +313,7 @@ export default function ActionsPage() {
                         {rawKey && (
                             <div className="border border-[var(--color-signal-red)]/30 bg-[var(--color-red-bg)] px-4 py-3">
                                 <p className="font-mono text-[11px] font-semibold tracking-[0.08em] text-[var(--color-signal-red)]">
-                                    YOUR DRIFTLOCK KEY — SHOWN ONCE
+                                    YOUR DRIFTLOCK KEY, SHOWN ONCE
                                 </p>
                                 <div className="mt-2 flex flex-wrap items-center gap-2">
                                     <code className="flex-1 min-w-[240px] break-all border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2 font-mono text-xs text-[var(--color-ink)]">
@@ -248,7 +330,7 @@ export default function ActionsPage() {
                         )}
 
                         <div>
-                            <p className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-muted)]">1 · ADD SECRETS — REPO → SETTINGS → SECRETS → ACTIONS</p>
+                            <p className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-muted)]">1 · ADD SECRETS: REPO → SETTINGS → SECRETS → ACTIONS</p>
                             <div className="mt-2 border border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-3 font-mono text-xs leading-6 text-[var(--color-ink)]">
                                 <p>DRIFTLOCK_API_KEY <span className="text-[var(--color-muted)]">= the key above (required)</span></p>
                                 {aiSecret && (
@@ -272,7 +354,7 @@ export default function ActionsPage() {
                         </div>
 
                         <p className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-muted)]">
-                            3 · PUSH — DETECTION RUNS ON EVERY PUSH TO {repo.defaultBranch.toUpperCase()}, FIX ARRIVES AS A PR
+                            3 · PUSH. DETECTION RUNS ON EVERY PUSH TO {repo.defaultBranch.toUpperCase()}, FIX ARRIVES AS A PR
                         </p>
                     </div>
                 )}

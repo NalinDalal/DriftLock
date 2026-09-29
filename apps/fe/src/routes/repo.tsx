@@ -49,7 +49,7 @@ function asError(err: unknown): string {
 function DriftCard({ event, owner, name }: { event: DriftEvent; owner: string; name: string }) {
     const [open, setOpen] = useState(false);
     const confidenceExplain: Record<DriftEvent["confidence"], string> = {
-        high: "Single-field change with clear mapping. Fix is deterministic — rename or null check covers it.",
+        high: "Single-field change with clear mapping. Fix is deterministic, rename or null check covers it.",
         medium: "Multiple fields changed. Fix covers the primary change; review response reads.",
         low: "Ambiguous shape or multiple type changes. Treat PR as draft and verify manually.",
     };
@@ -118,7 +118,7 @@ function DriftCard({ event, owner, name }: { event: DriftEvent; owner: string; n
                     )}
                 </div>
 
-                {/* confidence explainer — scope control: one hypothesis, measured */}
+                {/* confidence explainer, scope control: one hypothesis, measured */}
                 {open && (
                     <div className="mt-4 rounded-[10px] border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-3">
                         <p className="text-xs font-medium text-[var(--color-ink)]">Why {event.confidence} confidence</p>
@@ -238,7 +238,7 @@ export default function RepoPage({ owner, name }: { owner: string; name: string 
                             <select
                                 value={repo.permission}
                                 onChange={(e) => setPolicy({ permission: e.target.value as Permission })}
-                                className="rounded-full border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium text-[var(--color-ink)] focus:border-[var(--color-line)] focus:outline-none"
+                                className="rounded-full border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium text-[var(--color-ink)]"
                             >
                                 <option value="read">Read</option>
                                 <option value="read-write">Read + write</option>

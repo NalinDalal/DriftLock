@@ -42,23 +42,12 @@ export default function AppShell() {
     const [toastMsg, setToastMsg] = useState<string | null>(null);
 
     useEffect(() => {
-        // Landing is static: do not hit /api/me when unauthenticated and backend may be offline.
-        // Only fetch user on authenticated routes to avoid demo 502 noise.
-        // Auth rides the httpOnly session cookie (credentials: include in the client).
-        const needsAuth =
-            location.pathname.startsWith("/accounts") ||
-            location.pathname.startsWith("/repos") ||
-            location.pathname.startsWith("/settings") ||
-            location.pathname.startsWith("/webhooks") ||
-            location.pathname.startsWith("/install") ||
-            location.pathname.startsWith("/actions") ||
-            location.pathname.startsWith("/onboarding");
-        if (!needsAuth) {
-            setUser(null);
-            return;
-        }
+        // Header auth state is global: the landing page must also show the
+        // signed-in user instead of "Sign in". /api/me is cookie-authenticated
+        // and resolves to { user: null } when logged out or offline, so this
+        // is safe on public routes (failures just mean "signed out").
         getMe()
-            .then(({ user: me }) => setUser(me))
+            .then(({ user: me }) => setUser(me ?? null))
             .catch(() => setUser(null));
     }, [location.pathname]);
 
@@ -81,7 +70,7 @@ export default function AppShell() {
     const onLogin = location.pathname.startsWith("/login");
 
     const navLink = (active: boolean) =>
-        `relative px-3 py-1 text-[13px] font-medium tracking-[-0.01em] transition-colors ${active ? "text-[var(--color-ink)]" : "text-[var(--color-muted)] hover:text-[var(--color-ink)]"}`;
+        `relative flex min-h-[44px] items-center px-3 text-[13px] font-medium tracking-[-0.01em] transition-colors ${active ? "text-[var(--color-ink)]" : "text-[var(--color-muted)] hover:text-[var(--color-ink)]"}`;
 
     async function handleLogout() {
         // Revoke server-side (cookie cleared by the response); the redirect
@@ -108,6 +97,12 @@ export default function AppShell() {
 
     return (
         <div className="flex min-h-screen flex-col bg-[var(--color-paper)] transition-colors">
+            <a
+                href="#main"
+                className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-[8px] focus:bg-[var(--color-ink)] focus:px-4 focus:py-2.5 focus:text-[13px] focus:font-medium focus:text-[var(--color-paper)]"
+            >
+                Skip to content
+            </a>
             <header className="sticky top-0 z-30 border-b border-[var(--color-line)] bg-[var(--color-paper)]/85 backdrop-blur-[10px]">
                 <div className="mx-auto flex h-[60px] w-full max-w-[1080px] items-center justify-between gap-4 px-6">
                     <div className="flex items-center gap-6">
@@ -120,14 +115,14 @@ export default function AppShell() {
                                 REV. 01
                             </span>
                         </Link>
-                        <nav className="hidden items-center gap-0 sm:flex">
+                        <nav aria-label="Primary" className="hidden items-center gap-0 sm:flex">
                             <Link
                                 to="/accounts"
                                 className={navLink(onAccounts)}
                             >
                                 Repos
                                 {onAccounts && (
-                                    <span className="absolute inset-x-3 -bottom-[14px] h-[2px] bg-[var(--color-ink)]" />
+                                    <span className="absolute inset-x-3 -bottom-[8px] h-[2px] bg-[var(--color-ink)]" />
                                 )}
                             </Link>
                             <Link
@@ -136,7 +131,7 @@ export default function AppShell() {
                             >
                                 Webhooks
                                 {onWebhooks && (
-                                    <span className="absolute inset-x-3 -bottom-[14px] h-[2px] bg-[var(--color-ink)]" />
+                                    <span className="absolute inset-x-3 -bottom-[8px] h-[2px] bg-[var(--color-ink)]" />
                                 )}
                             </Link>
                             <Link
@@ -145,7 +140,7 @@ export default function AppShell() {
                             >
                                 Settings
                                 {onSettings && (
-                                    <span className="absolute inset-x-3 -bottom-[14px] h-[2px] bg-[var(--color-ink)]" />
+                                    <span className="absolute inset-x-3 -bottom-[8px] h-[2px] bg-[var(--color-ink)]" />
                                 )}
                             </Link>
                         </nav>
@@ -155,12 +150,12 @@ export default function AppShell() {
                         <button
                             onClick={() => setDark(!dark)}
                             aria-label="Toggle theme"
-                            className="flex h-7 w-7 items-center justify-center rounded-full border border-[var(--color-line)] bg-[var(--color-paper)] text-[var(--color-ink)] transition-colors hover:bg-[var(--color-line)]"
+                            className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--color-ink)] transition-colors hover:bg-[var(--color-line)]"
                             title={dark ? "Switch to light" : "Switch to dark"}
                         >
                             <span className="text-[11px]">{dark ? "☀" : "☾"}</span>
                         </button>
-                        <nav className="flex items-center gap-0 sm:hidden">
+                        <nav aria-label="Primary, compact" className="flex items-center gap-0 sm:hidden">
                             <Link
                                 to="/accounts"
                                 className={navLink(onAccounts)}
@@ -176,13 +171,13 @@ export default function AppShell() {
                         </nav>
                         <Link
                             to="/install"
-                            className={`hidden sm:inline-flex items-center justify-center rounded-full px-4 py-1.5 text-[13px] font-medium transition-[transform,background] active:scale-[0.97] ${onInstall ? "bg-[var(--color-ink)] text-[var(--color-paper)]" : "bg-[var(--color-ink)] text-[var(--color-paper)] hover:opacity-90"}`}
+                            className={`hidden min-h-[44px] items-center justify-center rounded-full px-4 text-[13px] font-medium transition-[transform,background] active:scale-[0.97] sm:inline-flex ${onInstall ? "bg-[var(--color-ink)] text-[var(--color-paper)]" : "bg-[var(--color-ink)] text-[var(--color-paper)] hover:opacity-90"}`}
                         >
                             Install
                         </Link>
                         <Link
                             to="/install"
-                            className="inline-flex items-center justify-center rounded-full bg-[var(--color-ink)] px-3 py-1.5 text-xs font-medium text-[var(--color-paper)] active:scale-[0.97] sm:hidden"
+                            className="inline-flex min-h-[44px] items-center justify-center rounded-full bg-[var(--color-ink)] px-3 text-xs font-medium text-[var(--color-paper)] active:scale-[0.97] sm:hidden"
                         >
                             Install
                         </Link>
@@ -197,7 +192,7 @@ export default function AppShell() {
                                 </span>
                                 <button
                                     onClick={handleLogout}
-                                    className="text-xs text-[var(--color-muted)] hover:text-[var(--color-ink)] hover:underline"
+                                    className="min-h-[44px] px-1 text-xs text-[var(--color-muted)] hover:text-[var(--color-ink)] hover:underline"
                                 >
                                     Sign out
                                 </button>
@@ -214,7 +209,7 @@ export default function AppShell() {
                 </div>
             </header>
 
-            <main className="mx-auto w-full max-w-[1080px] flex-1 px-6 py-8">
+            <main id="main" tabIndex={-1} className="mx-auto w-full max-w-[1080px] flex-1 px-6 py-8">
                 <Outlet />
             </main>
 
@@ -240,18 +235,26 @@ export default function AppShell() {
                         </Link>
                     </div>
                     <span className="font-mono text-[11px] tracking-wide text-[var(--color-muted)]">
-                        DEPENDABOT BUT FOR APIS — REV. 01
+                        DEPENDABOT BUT FOR APIS · REV. 01
                     </span>
                 </div>
             </footer>
 
-            {toastMsg && (
-                <div className="pointer-events-none fixed inset-x-0 bottom-6 flex justify-center px-6">
+            {/* The live region is always mounted. A region that appears at the
+                same moment as its text is often not announced, and this toast
+                is the only confirmation a save produces. */}
+            <div
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+                className="pointer-events-none fixed inset-x-0 bottom-6 z-40 flex justify-center px-6"
+            >
+                {toastMsg && (
                     <div className="pointer-events-auto rounded-full bg-[var(--color-ink)] px-4 py-2.5 text-[13px] font-medium text-[var(--color-paper)] shadow-lg">
                         {toastMsg}
                     </div>
-                </div>
-            )}
+                )}
+            </div>
         </div>
     );
 }

@@ -1,11 +1,14 @@
 export type DotTone = "neutral" | "green" | "amber" | "red" | "blue";
 
+// Dot fills reuse the existing semantic text tokens, so a status colour is
+// identical to the matching Badge tone and no new token is spent. All four are
+// mid-tone values that hold up on the light and dark surface.
 const DOTS: Record<DotTone, string> = {
     neutral: "bg-[var(--color-muted-2)]",
-    green: "bg-emerald-500",
-    amber: "bg-amber-500",
-    red: "bg-red-500",
-    blue: "bg-sky-500",
+    green: "bg-[var(--color-success-text)]",
+    amber: "bg-[var(--color-warning-text)]",
+    red: "bg-[var(--color-danger-text)]",
+    blue: "bg-[var(--color-info-text)]",
 };
 
 export function StatusDot({

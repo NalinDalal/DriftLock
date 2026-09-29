@@ -218,7 +218,7 @@ export default function AboutPage() {
                 DriftLock is built by Nalin and contributors at github.com/nerdev-co/DriftLock. Headquarters is remote with an India base. Primary contact is nalin@nerdev.in. Community is at discord.gg/driftlock.
             </p>
             <p className="mt-3 font-mono text-xs">
-                <a href="https://www.linkedin.com/in/nalindalal" target="_blank" rel="noreferrer" className="underline decoration-[#CBD5E1] underline-offset-2 hover:decoration-[#0F172A] hover:text-[var(--color-ink)] text-[var(--color-ink)]">
+                <a href="https://www.linkedin.com/in/nalindalal" target="_blank" rel="noreferrer" className="underline decoration-[var(--color-line-strong)] underline-offset-2 hover:decoration-[var(--color-ink)] hover:text-[var(--color-ink)] text-[var(--color-ink)]">
                     Nalin Dalal on LinkedIn
                 </a>
             </p>
@@ -241,7 +241,7 @@ export default function AboutPage() {
             <h2 className="mt-12 border-t border-[var(--color-line-strong)] pt-6 heading-section text-[var(--color-ink)]">Key Facts</h2>
             <div className="mt-4 overflow-x-auto border border-[var(--color-line-strong)]">
                 <table className="w-full border-collapse font-mono text-xs">
-                    <tbody className="divide-y divide-[#E6E7EE]">
+                    <tbody className="divide-y divide-[var(--color-line)]">
                         <tr><th className="bg-[var(--color-paper)] px-3 py-2 text-left font-semibold tracking-wide text-[var(--color-ink)]">Company Name</th><td className="px-3 py-2 text-[var(--color-ink)]/80">DriftLock</td></tr>
                         <tr><th className="bg-[var(--color-paper)] px-3 py-2 text-left font-semibold tracking-wide text-[var(--color-ink)]">Type</th><td className="px-3 py-2 text-[var(--color-ink)]/80">Self-maintaining API platform for drift detection and fix PRs</td></tr>
                         <tr><th className="bg-[var(--color-paper)] px-3 py-2 text-left font-semibold tracking-wide text-[var(--color-ink)]">Founded</th><td className="px-3 py-2 text-[var(--color-ink)]/80">2024</td></tr>

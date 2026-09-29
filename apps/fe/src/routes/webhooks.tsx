@@ -167,7 +167,7 @@ export default function WebhookDashboard() {
                         <select
                             value={selectedEndpoint ?? ""}
                             onChange={(e) => setSelectedEndpoint(e.target.value || null)}
-                            className="rounded-full border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium text-[var(--color-ink)] focus:border-[var(--color-line)] focus:outline-none"
+                            className="rounded-full border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium text-[var(--color-ink)]"
                         >
                             <option value="">Select an endpoint to view schemas</option>
                             {endpoints.data?.endpoints.map((ep) => (

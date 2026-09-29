@@ -37,7 +37,7 @@ export default function LoginPage() {
                 </div>
 
                 <p className="mt-4 text-center text-xs text-[var(--color-muted)]">
-                    By signing in you agree to the Terms. Questions? <a href="https://discord.gg/driftlock" className="underline decoration-zinc-300 underline-offset-2 hover:decoration-zinc-500">Discord</a>
+                    By signing in you agree to the Terms. Questions? <a href="https://discord.gg/driftlock" className="underline decoration-[var(--color-line-strong)] underline-offset-2 hover:decoration-[var(--color-ink)]">Discord</a>
                 </p>
             </div>
         </div>

@@ -9,7 +9,7 @@ export default function AuthCallbackPage() {
 
     useEffect(() => {
         // The session now lives in an httpOnly cookie set by the backend
-        // during the OAuth redirect chain — there is no token in the URL to
+        // during the OAuth redirect chain, there is no token in the URL to
         // collect. Confirm the session, then go home.
         fetch(`${API_URL}/api/auth/session`, { credentials: "include" })
             .then((res) => (res.ok ? res.json() : null))

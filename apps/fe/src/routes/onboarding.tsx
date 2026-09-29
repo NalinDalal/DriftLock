@@ -163,7 +163,7 @@ export default function OnboardingPage() {
                         <div className="grid lg:grid-cols-[1.15fr_0.85fr]">
                             <div className="border-r border-[var(--color-line)] bg-[var(--color-paper)] p-3 sm:p-4">
                                 <div className="flex items-center justify-between pb-2">
-                                    <p className="font-mono text-[11px] tracking-wide text-[var(--color-ink)]">PASTE CODE — NOTHING LEAVES YOUR BROWSER</p>
+                                    <p className="font-mono text-[11px] tracking-wide text-[var(--color-ink)]">PASTE CODE, NOTHING LEAVES YOUR BROWSER</p>
                                     <button onClick={run} className="border border-[var(--color-line-strong)] bg-[var(--color-ink)] px-3 py-1 font-mono text-[11px] tracking-wide text-[var(--color-paper)] transition-[transform,background] hover:bg-[var(--color-ink)]/90 active:scale-[0.98]">
                                         DETECT
                                     </button>
@@ -172,12 +172,12 @@ export default function OnboardingPage() {
                                     value={code}
                                     onChange={(e) => { setCode(e.target.value); setRan(false); }}
                                     spellCheck={false}
-                                    className="h-[240px] w-full resize-none border border-[var(--color-line-strong)]/15 bg-[var(--color-surface)] p-3 font-mono text-xs leading-5 text-[var(--color-ink)] focus:outline-none"
+                                    className="h-[240px] w-full resize-none border border-[var(--color-line-strong)]/15 bg-[var(--color-surface)] p-3 font-mono text-xs leading-5 text-[var(--color-ink)]"
                                 />
                             </div>
                             <div className="bg-[var(--color-surface)] p-3 sm:p-4">
                                 <p className="border-b border-[var(--color-line)] pb-2 font-mono text-[11px] tracking-wide text-[var(--color-ink)]">
-                                    {!ran ? "PRESS DETECT" : sites.length > 0 ? `${sites.length} FOUND — THIS IS THE PRODUCT WORKING` : "NO CALLS FOUND"}
+                                    {!ran ? "PRESS DETECT" : sites.length > 0 ? `${sites.length} FOUND, THIS IS THE PRODUCT WORKING` : "NO CALLS FOUND"}
                                 </p>
                                 {ran && (
                                     <div className="mt-3 flex flex-col gap-2">
@@ -203,7 +203,7 @@ export default function OnboardingPage() {
                                     disabled={ran && sites.length === 0}
                                     className="mt-4 inline-flex w-full items-center justify-center bg-[var(--color-ink)] px-4 py-2.5 font-mono text-xs tracking-wide text-[var(--color-paper)] transition-[transform,background] hover:bg-[var(--color-ink)]/90 active:scale-[0.98] disabled:opacity-40"
                                 >
-                                    {ran && sites.length > 0 ? "IT FOUND THEM — WHAT NEXT? →" : "CONTINUE →"}
+                                    {ran && sites.length > 0 ? "IT FOUND THEM, WHAT NEXT? →" : "CONTINUE →"}
                                 </button>
                             </div>
                         </div>
@@ -249,6 +249,7 @@ export default function OnboardingPage() {
                             </Link>
                             <Link
                                 to="/actions"
+                                search={{ repo: undefined }}
                                 onClick={() => track("actions_clicked", { source: "onboarding" })}
                                 className="border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-6 py-2.5 font-mono text-xs tracking-wide text-[var(--color-ink)] transition-[transform,background] hover:bg-[var(--color-paper)] active:scale-[0.98]"
                             >

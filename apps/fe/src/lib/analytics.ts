@@ -14,6 +14,7 @@ type EventName =
     | "actions_clicked"
     | "actions_view"
     | "actions_repo_selected"
+    | "actions_repo_preselected"
     | "actions_key_issued"
     | "actions_yaml_viewed";
 
@@ -43,6 +44,6 @@ export function track(name: EventName, props?: EventProps) {
 }
 
 export function useTrackOnMount(name: EventName, props?: EventProps) {
-    // Intentionally not a hook — caller uses useEffect
+    // Intentionally not a hook, caller uses useEffect
     return { name, props };
 }

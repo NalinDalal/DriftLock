@@ -113,13 +113,13 @@ function TryPlayground() {
     return (
         <div className="overflow-hidden border border-[var(--color-line-strong)] bg-[var(--color-surface)]">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--color-line-strong)] bg-[var(--color-ink)] px-4 py-2.5">
-                <p className="font-mono text-[11px] tracking-wide text-[var(--color-paper)]">TRY — NO INSTALL · SAME EXTRACTOR THE CLI USES</p>
+                <p className="font-mono text-[11px] tracking-wide text-[var(--color-paper)]">TRY, NO INSTALL · SAME EXTRACTOR THE CLI USES</p>
                 <span className="font-mono text-[10px] tracking-wide text-[var(--color-paper)]/60">NO DATA LEAVES BROWSER</span>
             </div>
             <div className="grid lg:grid-cols-[1.15fr_0.85fr]">
                 <div className="border-r border-[var(--color-line)] bg-[var(--color-paper)] p-3 sm:p-4">
                     <div className="flex items-center justify-between pb-2">
-                        <p className="font-mono text-[11px] tracking-wide text-[var(--color-ink)]">src/payments.ts — 00{String(sites.length).padStart(2, "0")}</p>
+                        <p className="font-mono text-[11px] tracking-wide text-[var(--color-ink)]">src/payments.ts rev 00{String(sites.length).padStart(2, "0")}</p>
                         <button onClick={run} className="border border-[var(--color-line-strong)] bg-[var(--color-ink)] px-3 py-1 font-mono text-[11px] tracking-wide text-[var(--color-paper)] transition-[transform,background] hover:bg-[var(--color-ink)]/90 active:scale-[0.98]">
                             DETECT
                         </button>
@@ -141,8 +141,8 @@ function TryPlayground() {
                                 }
                             }}
                             spellCheck={false}
-                            className="absolute inset-0 h-full w-full resize-none bg-transparent p-3 font-mono text-xs leading-5 caret-[var(--color-ink)] text-transparent selection:bg-[var(--color-line)] focus:outline-none overflow-auto whitespace-pre-wrap break-words"
-                            style={{ color: "transparent", caretColor: "#0F172A" }}
+                            aria-label="Editable code sample. Vendor call sites are detected as you type."
+                            className="absolute inset-0 h-full w-full resize-none overflow-auto whitespace-pre-wrap break-words bg-transparent p-3 font-mono text-xs leading-5 text-transparent caret-[var(--color-ink)] selection:bg-[var(--color-line)]"
                         />
                     </div>
                     <p className="mt-2 font-mono text-[11px] text-[var(--color-muted)]">Like VS Code. Keywords purple, types blue, strings green.</p>
@@ -166,7 +166,7 @@ function TryPlayground() {
                                         <p className="font-mono text-xs font-medium text-[var(--color-ink)]">{s.method}</p>
                                         <p className="font-mono text-[11px] text-[var(--color-muted)]">{s.endpoint} · L{s.line}</p>
                                     </div>
-                                    <span className="font-mono text-[11px] tracking-wide text-[var(--color-ink)]">—</span>
+                                    <span className="font-mono text-[11px] tracking-wide text-[var(--color-ink)]">→</span>
                                 </div>
                             ))
                         )}
@@ -332,8 +332,8 @@ export default function LandingPage() {
                                 </span>
                                 <span className="ml-2 flex h-6 w-6 items-center justify-center border border-[var(--color-line-strong)] bg-[var(--color-surface)]">
                                     <svg width="12" height="12" viewBox="0 0 14 14" fill="none" aria-hidden>
-                                        <rect x="3" y="6" width="8" height="6" rx="1" stroke="#0F172A" strokeWidth="1.2" />
-                                        <path d="M4.5 6V4.2a2.5 2.5 0 0 1 5 0V6" stroke="#0F172A" strokeWidth="1.2" />
+                                        <rect x="3" y="6" width="8" height="6" rx="1" stroke="var(--color-ink)" strokeWidth="1.2" />
+                                        <path d="M4.5 6V4.2a2.5 2.5 0 0 1 5 0V6" stroke="var(--color-ink)" strokeWidth="1.2" />
                                     </svg>
                                 </span>
                             </span>
@@ -362,7 +362,7 @@ export default function LandingPage() {
                             <p className="text-[var(--color-ink)]/80">Semver is a convention, not a guarantee. Many APIs do not follow it strictly.</p>
                             <p className="text-[var(--color-ink)]/80">Mocked tests cannot catch drift. DriftLock classifies real versus mocked traffic.</p>
                         </div>
-                        <p className="mt-6 border-l-2 border-[var(--color-line-strong)] pl-4 font-mono text-xs leading-4 text-[var(--color-muted)]">I built DriftLock because Prisma 7 broke my app before interviews. What I needed was not a version bump but a code migration. <span className="text-[var(--color-muted)]"> — README</span></p>
+                        <p className="mt-6 border-l-2 border-[var(--color-line-strong)] pl-4 font-mono text-xs leading-4 text-[var(--color-muted)]">I built DriftLock because Prisma 7 broke my app before interviews. What I needed was not a version bump but a code migration. <span className="text-[var(--color-muted)]"> · README</span></p>
                     </div>
                 </div>
             </div>
