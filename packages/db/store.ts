@@ -340,7 +340,12 @@ export function createStore(db: Database) {
     | "false_positive";
 
   function emitEvent(
-    type: "drift_detected" | "pr_opened" | "pr_merged" | "false_positive",
+    type:
+      | "drift_detected"
+      | "pr_opened"
+      | "pr_merged"
+      | "false_positive"
+      | "api_called",
     detail: Record<string, unknown>,
   ) {
     // Structured, greppable event log. This is the measurement seam for

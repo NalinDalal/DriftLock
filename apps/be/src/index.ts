@@ -1,5 +1,5 @@
 import { config } from "./config";
-import { requireBearer } from "./auth";
+import { authenticate } from "./auth";
 import { badRequest, corsResponse, isCorsPreflight, notFound } from "./utils";
 import { handleHealth } from "./routes/health";
 import { handleAccounts, handleAccountRepos, handleMe } from "./routes/accounts";
@@ -32,8 +32,10 @@ import {
 import { handleGitHubSetup } from "./routes/githubSetup";
 import { handleInstallationsSync } from "./routes/installations";
 
-// Auth routes don't require bearer token
+// Auth routes don't require credentials. /api/health stays public so
+// orchestrators and load balancers can probe without a token.
 const AUTH_ROUTES = new Set([
+    "/api/health",
     "/api/auth/github",
     "/api/auth/github/callback",
     // GitHub redirects the browser here after an App install, so there is no
@@ -131,11 +133,12 @@ const server = Bun.serve({
         }
         const url = new URL(req.url);
 
-        // Skip auth for public routes
+        // Skip auth for public routes; everything else accepts the
+        // operator token or a per-key dlk_... credential.
         if (!AUTH_ROUTES.has(url.pathname)) {
-            const denied = requireBearer(req);
-            if (denied) {
-                return denied;
+            const auth = await authenticate(req);
+            if (auth instanceof Response) {
+                return auth;
             }
         }
 
