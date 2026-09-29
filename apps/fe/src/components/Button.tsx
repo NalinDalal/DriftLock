@@ -4,9 +4,9 @@ export type ButtonVariant = "primary" | "secondary" | "ghost";
 export type ButtonSize = "sm" | "md";
 
 const VARIANTS: Record<ButtonVariant, string> = {
-    primary: "bg-[#0a0a0f] text-[var(--color-paper)] hover:bg-zinc-800 active:scale-[0.98] shadow-[0_1px_2px_rgba(0,0,0,0.12)]",
+    primary: "bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-ink)]/90 active:scale-[0.98] shadow-[0_1px_2px_rgba(0,0,0,0.12)]",
     secondary:
-        "border border-[var(--color-line)] bg-[var(--color-surface)] text-zinc-800 hover:bg-[var(--color-surface)] active:scale-[0.98]",
+        "border border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-ink)] hover:bg-[var(--color-paper)] active:scale-[0.98]",
     ghost: "text-[var(--color-muted)] hover:text-[var(--color-ink)] hover:bg-[var(--color-surface)] active:scale-[0.98]",
 };
 

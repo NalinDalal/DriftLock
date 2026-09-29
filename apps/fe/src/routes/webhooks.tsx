@@ -45,7 +45,7 @@ function DriftCard({ drift }: { drift: WebhookDrift }) {
                 </div>
                 <p className="mt-3 text-xs text-[var(--color-muted)]">{timeAgo(drift.detectedAt)}</p>
             </div>
-            <div className="h-1 w-full bg-amber-400" />
+            <div className="h-1 w-full bg-[var(--color-warning-text)]" />
         </Card>
     );
 }
@@ -103,9 +103,9 @@ export default function WebhookDashboard() {
                         <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-muted)]">Endpoints</p>
                         <p className="mt-1 text-[20px] font-semibold tracking-tight text-[var(--color-ink)]">{endpoints.data.endpoints.length}</p>
                     </Card>
-                    <Card className={`px-4 py-3 ${(drifts.data?.drifts.length ?? 0) > 0 ? "border-amber-200 bg-amber-50/50" : ""}`}>
+                    <Card className={`px-4 py-3 ${(drifts.data?.drifts.length ?? 0) > 0 ? "border-[var(--color-warning-border)] bg-[var(--color-warning-bg)]" : ""}`}>
                         <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-muted)]">Drifts</p>
-                        <p className={`mt-1 text-[20px] font-semibold tracking-tight ${(drifts.data?.drifts.length ?? 0) > 0 ? "text-amber-600" : "text-[var(--color-ink)]"}`}>
+                        <p className={`mt-1 text-[20px] font-semibold tracking-tight ${(drifts.data?.drifts.length ?? 0) > 0 ? "text-[var(--color-warning-text)]" : "text-[var(--color-ink)]"}`}>
                             {drifts.data?.drifts.length ?? 0}
                         </p>
                     </Card>
@@ -135,7 +135,7 @@ export default function WebhookDashboard() {
                 (drifts.loading ? (
                     <p className="text-sm text-[var(--color-muted)]">Loading drifts...</p>
                 ) : drifts.error ? (
-                    <div className="rounded-[10px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{drifts.error}</div>
+                    <div className="rounded-[10px] border border-[var(--color-danger-border)] bg-[var(--color-danger-bg)] px-4 py-3 text-sm text-[var(--color-danger-text)]">{drifts.error}</div>
                 ) : (drifts.data?.drifts ?? []).length === 0 ? (
                     <EmptyState title="No webhook drifts detected" hint="Payload shape changes will appear here as soon as a vendor changes a field." />
                 ) : (
@@ -150,7 +150,7 @@ export default function WebhookDashboard() {
                 (endpoints.loading ? (
                     <p className="text-sm text-[var(--color-muted)]">Loading endpoints...</p>
                 ) : endpoints.error ? (
-                    <div className="rounded-[10px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{endpoints.error}</div>
+                    <div className="rounded-[10px] border border-[var(--color-danger-border)] bg-[var(--color-danger-bg)] px-4 py-3 text-sm text-[var(--color-danger-text)]">{endpoints.error}</div>
                 ) : (endpoints.data?.endpoints ?? []).length === 0 ? (
                     <EmptyState title="No webhook endpoints" hint="Register endpoints to start capturing schemas." />
                 ) : (
@@ -180,7 +180,7 @@ export default function WebhookDashboard() {
                     {schemas.loading ? (
                         <p className="text-sm text-[var(--color-muted)]">Loading schemas...</p>
                     ) : schemas.error ? (
-                        <div className="rounded-[10px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{schemas.error}</div>
+                        <div className="rounded-[10px] border border-[var(--color-danger-border)] bg-[var(--color-danger-bg)] px-4 py-3 text-sm text-[var(--color-danger-text)]">{schemas.error}</div>
                     ) : !selectedEndpoint ? (
                         <EmptyState title="Pick an endpoint" hint="Schema snapshots are stored per endpoint and event type." />
                     ) : (schemas.data?.schemas ?? []).length === 0 ? (

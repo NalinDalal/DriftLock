@@ -14,7 +14,7 @@ export function Stat({
             <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--color-muted)]">
                 {label}
             </span>
-            <span className="text-[22px] font-semibold tabular-nums tracking-[-0.02em] text-[#0a0a0f] leading-none">
+            <span className="text-[22px] font-semibold tabular-nums tracking-[-0.02em] text-[var(--color-ink)] leading-none">
                 {value}
             </span>
             {hint && (

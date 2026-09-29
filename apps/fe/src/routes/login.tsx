@@ -19,7 +19,7 @@ export default function LoginPage() {
         <div className="flex min-h-[70vh] items-center justify-center px-6 py-12">
             <div className="w-full max-w-[420px]">
                 <div className="mb-6 text-center">
-                    <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-[10px] bg-[#0a0a0f] text-sm font-bold text-[var(--color-paper)]">DL</div>
+                    <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-[10px] bg-[var(--color-ink)] text-sm font-bold text-[var(--color-paper)]">DL</div>
                     <h1 className="mt-4 text-[22px] font-semibold tracking-tight text-[var(--color-ink)]">Sign in to DriftLock</h1>
                     <p className="mt-1.5 text-[13px] leading-5 text-[var(--color-muted)]">Self-maintaining APIs. DriftLock opens a PR when a vendor contract changes.</p>
                 </div>

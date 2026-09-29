@@ -1,7 +1,7 @@
 export type DotTone = "neutral" | "green" | "amber" | "red" | "blue";
 
 const DOTS: Record<DotTone, string> = {
-    neutral: "bg-zinc-300",
+    neutral: "bg-[var(--color-muted-2)]",
     green: "bg-emerald-500",
     amber: "bg-amber-500",
     red: "bg-red-500",

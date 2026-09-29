@@ -64,11 +64,11 @@ function DriftCard({ event, owner, name }: { event: DriftEvent; owner: string; n
                     <div>
                         <div className="flex flex-wrap items-center gap-1.5">
                             <p className="text-[13px] font-semibold tracking-tight text-[var(--color-ink)]">{event.packageName}</p>
-                            <span className="text-zinc-300">·</span>
-                            <span className="font-mono text-xs text-zinc-600">{event.method}</span>
+                            <span className="text-[var(--color-muted-2)]">·</span>
+                            <span className="font-mono text-xs text-[var(--color-muted)]">{event.method}</span>
                             <Badge tone="neutral">{event.callSiteId.slice(0, 8)}</Badge>
                         </div>
-                        <p className="mt-1.5 max-w-[560px] text-[13px] leading-5 text-zinc-600">{event.summary}</p>
+                        <p className="mt-1.5 max-w-[560px] text-[13px] leading-5 text-[var(--color-muted)]">{event.summary}</p>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                         <Badge tone="neutral">{TAG_LABEL[event.tag]}</Badge>
@@ -78,7 +78,7 @@ function DriftCard({ event, owner, name }: { event: DriftEvent; owner: string; n
                                 setOpen(next);
                                 if (next) track("confidence_explained_open", { confidence: event.confidence });
                             }}
-                            className={`rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors active:scale-[0.97] ${CONFIDENCE_TONE[event.confidence] === "green" ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : CONFIDENCE_TONE[event.confidence] === "amber" ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100" : "border-red-200 bg-red-50 text-red-700 hover:bg-red-100"}`}
+                            className={`rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors active:scale-[0.97] ${CONFIDENCE_TONE[event.confidence] === "green" ? "border-[var(--color-success-border)] bg-[var(--color-success-bg)] text-[var(--color-success-text)]" : CONFIDENCE_TONE[event.confidence] === "amber" ? "border-[var(--color-warning-border)] bg-[var(--color-warning-bg)] text-[var(--color-warning-text)]" : "border-[var(--color-danger-border)] bg-[var(--color-danger-bg)] text-[var(--color-danger-text)]"}`}
                             title={confidenceExplain[event.confidence]}
                         >
                             {event.confidence} · why?
@@ -93,7 +93,7 @@ function DriftCard({ event, owner, name }: { event: DriftEvent; owner: string; n
                             <span
                                 key={`${event.id}-${c.field}`}
                                 className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[11px] font-medium ${
-                                    c.kind === "added" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : c.kind === "removed" ? "border-red-200 bg-red-50 text-red-700" : "border-sky-200 bg-sky-50 text-sky-700"
+                                    c.kind === "added" ? "border-[var(--color-success-border)] bg-[var(--color-success-bg)] text-[var(--color-success-text)]" : c.kind === "removed" ? "border-[var(--color-danger-border)] bg-[var(--color-danger-bg)] text-[var(--color-danger-text)]" : "border-[var(--color-info-border)] bg-[var(--color-info-bg)] text-[var(--color-info-text)]"
                                 }`}
                             >
                                 <span className="opacity-60">{c.kind}</span>
@@ -107,10 +107,10 @@ function DriftCard({ event, owner, name }: { event: DriftEvent; owner: string; n
                 <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[var(--color-muted)]">
                     <span>{timeAgo(event.detectedAt)}</span>
                     <span>·</span>
-                    <span className={event.confirmed ? "text-emerald-600" : ""}>{event.confirmed ? "confirmed" : "unconfirmed"}</span>
+                    <span className={event.confirmed ? "text-[var(--color-success-text)]" : ""}>{event.confirmed ? "confirmed" : "unconfirmed"}</span>
                     <span>·</span>
                     {event.prNumber ? (
-                        <a href={`https://github.com/${owner}/${name}/pull/${event.prNumber}`} target="_blank" rel="noreferrer" className="font-medium text-[var(--color-ink)] underline decoration-zinc-300 underline-offset-2 hover:decoration-zinc-600">
+                        <a href={`https://github.com/${owner}/${name}/pull/${event.prNumber}`} target="_blank" rel="noreferrer" className="font-medium text-[var(--color-ink)] underline decoration-[var(--color-line)] underline-offset-2 hover:decoration-[var(--color-muted)]">
                             PR #{event.prNumber} ↗
                         </a>
                     ) : (
@@ -124,15 +124,15 @@ function DriftCard({ event, owner, name }: { event: DriftEvent; owner: string; n
                         <p className="text-xs font-medium text-[var(--color-ink)]">Why {event.confidence} confidence</p>
                         <p className="mt-1 text-xs leading-4 text-[var(--color-muted)]">{confidenceExplain[event.confidence]}</p>
                         <div className="mt-2 flex flex-wrap gap-1.5 font-mono text-[11px]">
-                            <span className="rounded bg-[var(--color-surface)] border border-[var(--color-line)] px-1.5 py-0.5 text-zinc-600">{event.changes.length} field changes</span>
-                            <span className="rounded bg-[var(--color-surface)] border border-[var(--color-line)] px-1.5 py-0.5 text-zinc-600">{event.confirmed ? "confirmed by traffic" : "unconfirmed"}</span>
-                            <span className="rounded bg-[var(--color-surface)] border border-[var(--color-line)] px-1.5 py-0.5 text-zinc-600">tag: {event.tag}</span>
+                            <span className="rounded bg-[var(--color-surface)] border border-[var(--color-line)] px-1.5 py-0.5 text-[var(--color-muted)]">{event.changes.length} field changes</span>
+                            <span className="rounded bg-[var(--color-surface)] border border-[var(--color-line)] px-1.5 py-0.5 text-[var(--color-muted)]">{event.confirmed ? "confirmed by traffic" : "unconfirmed"}</span>
+                            <span className="rounded bg-[var(--color-surface)] border border-[var(--color-line)] px-1.5 py-0.5 text-[var(--color-muted)]">tag: {event.tag}</span>
                         </div>
                         <p className="mt-2 text-[11px] text-[var(--color-muted)]">If confidence is low, open the PR as draft and check response reads in {event.method}.</p>
                     </div>
                 )}
             </div>
-            <div className={`h-1 w-full ${event.confidence === "high" ? "bg-emerald-400" : event.confidence === "medium" ? "bg-amber-400" : "bg-zinc-200"}`} />
+            <div className={`h-1 w-full ${event.confidence === "high" ? "bg-[var(--color-success-text)]" : event.confidence === "medium" ? "bg-[var(--color-warning-text)]" : "bg-[var(--color-muted-2)]"}`} />
         </Card>
     );
 }
@@ -147,7 +147,7 @@ function CallSiteRow({ site }: { site: CallSiteSummary }) {
                         {site.filePath}:{site.line}
                     </p>
                     <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
-                        <span className="rounded bg-[var(--color-surface)] px-1.5 py-0.5 font-mono text-[11px] text-zinc-600">{site.packageName}</span>
+                        <span className="rounded bg-[var(--color-surface)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--color-muted)]">{site.packageName}</span>
                         {site.endpoint ? (
                             <span className="font-mono text-[var(--color-muted)]">
                                 {site.httpMethod} {site.endpoint}
@@ -163,12 +163,12 @@ function CallSiteRow({ site }: { site: CallSiteSummary }) {
                 <div className="mt-3 rounded-[8px] bg-[var(--color-surface)] px-3 py-2">
                     {site.requestShape && site.requestShape.length > 0 && (
                         <p className="font-mono text-[11px] leading-4 text-[var(--color-muted)]">
-                            <span className="font-semibold text-zinc-600">request</span> {site.requestShape.map((f) => f.field).join(", ")}
+                            <span className="font-semibold text-[var(--color-muted)]">request</span> {site.requestShape.map((f) => f.field).join(", ")}
                         </p>
                     )}
                     {site.responseFields.length > 0 && (
                         <p className="mt-1 font-mono text-[11px] leading-4 text-[var(--color-muted)]">
-                            <span className="font-semibold text-zinc-600">reads</span> {site.responseFields.join(", ")}
+                            <span className="font-semibold text-[var(--color-muted)]">reads</span> {site.responseFields.join(", ")}
                         </p>
                     )}
                 </div>
@@ -180,7 +180,7 @@ function CallSiteRow({ site }: { site: CallSiteSummary }) {
 function PullRow({ pull }: { pull: Pull }) {
     return (
         <Card className="flex items-center gap-4 p-4 transition-colors hover:bg-[var(--color-surface)]">
-            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs ${pull.status === "open" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
+            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs ${pull.status === "open" ? "bg-[var(--color-warning-bg)] text-[var(--color-warning-text)]" : "bg-[var(--color-success-bg)] text-[var(--color-success-text)]"}`}>
                 {pull.status === "open" ? "◐" : "✓"}
             </div>
             <div className="min-w-0 flex-1">
@@ -255,9 +255,9 @@ export default function RepoPage({ owner, name }: { owner: string; name: string 
                         <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-muted)]">Call sites</p>
                         <p className="mt-1 text-[20px] font-semibold tabular-nums tracking-tight text-[var(--color-ink)]">{repo.stats.callSites}</p>
                     </Card>
-                    <Card className={`px-4 py-3 ${repo.stats.driftOpen > 0 ? "border-amber-200 bg-amber-50/50" : ""}`}>
+                    <Card className={`px-4 py-3 ${repo.stats.driftOpen > 0 ? "border-[var(--color-warning-border)] bg-[var(--color-warning-bg)]" : ""}`}>
                         <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-muted)]">Drift open</p>
-                        <p className={`mt-1 text-[20px] font-semibold tabular-nums tracking-tight ${repo.stats.driftOpen > 0 ? "text-amber-600" : "text-[var(--color-ink)]"}`}>{repo.stats.driftOpen}</p>
+                        <p className={`mt-1 text-[20px] font-semibold tabular-nums tracking-tight ${repo.stats.driftOpen > 0 ? "text-[var(--color-warning-text)]" : "text-[var(--color-ink)]"}`}>{repo.stats.driftOpen}</p>
                     </Card>
                     <Card className="px-4 py-3">
                         <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-muted)]">Open PRs</p>
@@ -293,7 +293,7 @@ export default function RepoPage({ owner, name }: { owner: string; name: string 
                         <div className="h-[110px] animate-pulse rounded-[10px] border border-[var(--color-line)] bg-[var(--color-surface)]" />
                     </div>
                 ) : drifts.error ? (
-                    <div className="rounded-[10px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{drifts.error}</div>
+                    <div className="rounded-[10px] border border-[var(--color-danger-border)] bg-[var(--color-danger-bg)] px-4 py-3 text-sm text-[var(--color-danger-text)]">{drifts.error}</div>
                 ) : (drifts.data?.drifts ?? []).length === 0 ? (
                     <EmptyState title="No drift in the last baseline" hint="Captured traffic matches the recorded snapshots. You are up to date." />
                 ) : (
@@ -308,7 +308,7 @@ export default function RepoPage({ owner, name }: { owner: string; name: string 
                 (detail.loading ? (
                     <p className="text-sm text-[var(--color-muted)]">Loading call sites...</p>
                 ) : detail.error ? (
-                    <div className="rounded-[10px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{detail.error}</div>
+                    <div className="rounded-[10px] border border-[var(--color-danger-border)] bg-[var(--color-danger-bg)] px-4 py-3 text-sm text-[var(--color-danger-text)]">{detail.error}</div>
                 ) : (detail.data?.callsites ?? []).length === 0 ? (
                     <EmptyState title="No API call sites found" hint="Imports that resolve to external packages show up here." />
                 ) : (
@@ -323,7 +323,7 @@ export default function RepoPage({ owner, name }: { owner: string; name: string 
                 (detail.loading ? (
                     <p className="text-sm text-[var(--color-muted)]">Loading pull requests...</p>
                 ) : detail.error ? (
-                    <div className="rounded-[10px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{detail.error}</div>
+                    <div className="rounded-[10px] border border-[var(--color-danger-border)] bg-[var(--color-danger-bg)] px-4 py-3 text-sm text-[var(--color-danger-text)]">{detail.error}</div>
                 ) : (detail.data?.pulls ?? []).length === 0 ? (
                     <EmptyState title="No pull requests" hint="Fix PRs from the drift pipeline appear here." />
                 ) : (

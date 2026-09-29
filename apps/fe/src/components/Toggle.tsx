@@ -15,7 +15,7 @@ export function Toggle({
             aria-label={label}
             onClick={() => onChange(!checked)}
             className={`relative inline-flex h-[22px] w-[38px] shrink-0 items-center rounded-full transition-colors duration-200 ${
-                checked ? "bg-[#0a0a0f]" : "bg-zinc-300"
+                checked ? "bg-[var(--color-ink)]" : "bg-[var(--color-line)]"
             }`}
         >
             <span
