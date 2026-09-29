@@ -17,6 +17,7 @@ import { analyzeAndCompare, applyDriftFix, buildDriftEvent } from "@driftlock/pi
 import type { CallSite, Fix } from "@driftlock/core";
 import type { DriftResult } from "@driftlock/pipeline";
 import { SnapshotStore } from "./drift";
+import { aiConfigFromEnv } from "./aiEnv";
 import { harToConsumerContract } from "@driftlock/webhookCapture";
 import { runMigrate } from "./migrate";
 import { runWatch } from "./watch";
@@ -268,6 +269,7 @@ program
         [],
     )
     .option("--dry-run", "Show affected call sites without creating PRs")
+    .option("--json", "Print a machine-readable summary as the last stdout line (for CI)")
     .addHelpText(
         "after",
         `
@@ -281,11 +283,18 @@ The core DriftLock loop:
 
 Environment variables:
   GITHUB_TOKEN    Required for PR creation (not needed for --dry-run)
+  AI_PROVIDER     Optional model fixes: openai, anthropic, gemini, cloudflare
+  AI_API_KEY      API key for openai/anthropic (GEMINI_API_KEY and
+  AI_MODEL        CLOUDFLARE_API_TOKEN take precedence per provider)
+
+With --json, the last stdout line is always a JSON summary:
+  {"callSites":N,"drifts":N,"fixes":N,"prs":[...],"baselines":N}
 
 Examples:
   $ driftlock fix ./repo --dry-run
   $ driftlock fix ./repo --repo owner/repo
   $ driftlock fix ./repo --command "bun test"
+  $ driftlock fix ./repo --repo owner/repo --json 2>/dev/null | tail -n 1 | jq .
 `,
     )
     .action(
@@ -297,8 +306,14 @@ Examples:
                 dryRun?: boolean;
                 command?: string;
                 forward?: string[];
+                json?: boolean;
             },
         ) => {
+            const emitSummary = (summary: Record<string, unknown>) => {
+                if (options.json) {
+                    console.log(JSON.stringify(summary));
+                }
+            };
             const spinner = ora("Starting drift detection...").start();
 
             try {
@@ -316,8 +331,16 @@ Examples:
                 const allCallSites = result.callSites;
                 const shapes = result.shapes;
 
+                // Model fixes when AI credentials are present, otherwise the
+                // deterministic path (same single fix path, see @driftlock/aiFix).
+                const ai = aiConfigFromEnv();
+                if (ai) {
+                    console.log(chalk.dim(`Model fixes enabled (${ai.provider}${ai.model ? `:${ai.model}` : ""})`));
+                }
+
                 if (allCallSites.length === 0) {
                     spinner.warn("No API call sites found");
+                    emitSummary({ callSites: 0, drifts: 0, fixes: 0, prs: [], baselines: 0 });
                     return;
                 }
 
@@ -349,6 +372,13 @@ Examples:
                             "Baseline captured, no comparison yet",
                         );
                     }
+                    emitSummary({
+                        callSites: allCallSites.length,
+                        drifts: 0,
+                        fixes: 0,
+                        prs: [],
+                        baselines: baselines.length,
+                    });
                     return;
                 }
 
@@ -356,7 +386,8 @@ Examples:
                     `Detected drift at ${drifts.length} call site(s)`,
                 );
 
-                // Step 4: Apply deterministic fixes
+                // Step 4: Apply fixes (deterministic, upgraded to model fixes
+                // when AI credentials are configured)
                 const fixes: Array<{
                     callSite: CallSite;
                     drift: DriftResult;
@@ -373,7 +404,7 @@ Examples:
                     } catch {
                         content = "";
                     }
-                    const applied = await applyDriftFix(drift, content);
+                    const applied = await applyDriftFix(drift, content, { ai });
                     if (!applied) {
                         console.log(
                             chalk.yellow(
@@ -407,6 +438,13 @@ Examples:
 
                 if (fixes.length === 0) {
                     spinner.succeed("No statically applicable fixes");
+                    emitSummary({
+                        callSites: allCallSites.length,
+                        drifts: drifts.length,
+                        fixes: 0,
+                        prs: [],
+                        baselines: baselines.length,
+                    });
                     return;
                 }
 
@@ -417,6 +455,13 @@ Examples:
                             "\nDry run, skipping PR creation. Remove --dry-run to create PRs.",
                         ),
                     );
+                    emitSummary({
+                        callSites: allCallSites.length,
+                        drifts: drifts.length,
+                        fixes: fixes.length,
+                        prs: [],
+                        baselines: baselines.length,
+                    });
                     return;
                 }
 
@@ -426,6 +471,13 @@ Examples:
                             "\nNo --repo specified. Skipping PR creation. Use --repo owner/repo to create PRs.",
                         ),
                     );
+                    emitSummary({
+                        callSites: allCallSites.length,
+                        drifts: drifts.length,
+                        fixes: fixes.length,
+                        prs: [],
+                        baselines: baselines.length,
+                    });
                     return;
                 }
 
@@ -449,6 +501,12 @@ Examples:
 
                 const prSpinner = ora("Creating PR...").start();
                 const prRunner = new FixPRRunner(githubToken);
+                const prs: Array<{
+                    driftId: string;
+                    status: string;
+                    url: string;
+                    number: number;
+                }> = [];
 
                 for (const { callSite, drift, fix } of fixes) {
                     const driftEvent = buildDriftEvent(drift);
@@ -484,6 +542,12 @@ Examples:
                         console.log(
                             `[EVENT] type=pr_merged ${JSON.stringify({ driftId: driftEvent.id, prNumber: result.number, url: result.url })}`,
                         );
+                        prs.push({
+                            driftId: driftEvent.id,
+                            status: result.status,
+                            url: result.url,
+                            number: result.number,
+                        });
                         prSpinner.succeed(
                             `Fix already merged (${result.url}); baseline refreshed`,
                         );
@@ -493,14 +557,33 @@ Examples:
                         console.log(
                             `[EVENT] type=pr_opened ${JSON.stringify({ driftId: driftEvent.id, prNumber: result.number, url: result.url })}`,
                         );
+                        prs.push({
+                            driftId: driftEvent.id,
+                            status: result.status,
+                            url: result.url,
+                            number: result.number,
+                        });
                         prSpinner.succeed(`PR already open: ${result.url}`);
                         continue;
                     }
                     console.log(
                         `[EVENT] type=pr_opened ${JSON.stringify({ driftId: driftEvent.id, prNumber: result.number, url: result.url })}`,
                     );
+                    prs.push({
+                        driftId: driftEvent.id,
+                        status: result.status,
+                        url: result.url,
+                        number: result.number,
+                    });
                     prSpinner.succeed(`PR created: ${result.url}`);
                 }
+                emitSummary({
+                    callSites: allCallSites.length,
+                    drifts: drifts.length,
+                    fixes: fixes.length,
+                    prs,
+                    baselines: baselines.length,
+                });
             } catch (error) {
                 spinner.fail("Fix generation failed");
                 console.error(error);

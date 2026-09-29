@@ -12,6 +12,7 @@ import InstallPage from "./routes/install";
 import InstallSuccessPage from "./routes/install-success";
 import AboutPage from "./routes/about";
 import OnboardingPage from "./routes/onboarding";
+import ActionsPage from "./routes/actions";
 
 const rootRoute = createRootRoute({ component: AppShell });
 
@@ -93,6 +94,12 @@ const onboardingRoute = createRoute({
     component: OnboardingPage,
 });
 
+const actionsRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/actions",
+    component: ActionsPage,
+});
+
 const routeTree = rootRoute.addChildren([
     indexRoute,
     accountsRoute,
@@ -106,6 +113,7 @@ const routeTree = rootRoute.addChildren([
     installSuccessRoute,
     aboutRoute,
     onboardingRoute,
+    actionsRoute,
 ]);
 
 export const router = createRouter({ routeTree });

@@ -14,8 +14,22 @@ const findApiKey = mock(async (raw: string) =>
 );
 const emitEvent = mock(() => {});
 
+const SESSION_TOKEN = "a".repeat(64);
+const getSetting = mock(async (key: string) =>
+    key === `session:${SESSION_TOKEN}`
+        ? {
+              userId: 1,
+              login: "octo",
+              name: "Octo",
+              avatarUrl: "https://x/y.png",
+              accessToken: "gho_x",
+              orgs: [],
+          }
+        : null,
+);
+
 mock.module("../src/store", () => ({
-    getStore: () => ({ findApiKey, emitEvent }),
+    getStore: () => ({ findApiKey, emitEvent, getSetting }),
 }));
 
 mock.module("../src/config", () => ({
@@ -41,6 +55,7 @@ afterEach(() => {
     resetRateLimits();
     findApiKey.mockClear();
     emitEvent.mockClear();
+    getSetting.mockClear();
     delete process.env.RATE_LIMIT_PER_MINUTE;
     (config as { bearerToken: string | null }).bearerToken = "op-token";
 });
@@ -92,6 +107,26 @@ describe("authenticate", () => {
         findApiKey.mockRejectedValueOnce(new Error("down"));
         const res = (await authenticate(request("Bearer dlk_valid"))) as Response;
         expect(res.status).toBe(503);
+    });
+
+    test("dashboard session token authenticates without a key lookup", async () => {
+        const ctx = ctxOf(await authenticate(request(`Bearer ${SESSION_TOKEN}`)));
+        expect(ctx.mode).toBe("session");
+        expect(ctx.session).toMatchObject({ login: "octo" });
+        expect(findApiKey).not.toHaveBeenCalled();
+        expect(emitEvent).not.toHaveBeenCalled();
+    });
+
+    test("unknown session-shaped token is 401", async () => {
+        const res = (await authenticate(request(`Bearer ${"b".repeat(64)}`))) as Response;
+        expect(res.status).toBe(401);
+    });
+
+    test("non-hex bearer is 401 without touching the DB", async () => {
+        const res = (await authenticate(request("Bearer not-a-real-token!"))) as Response;
+        expect(res.status).toBe(401);
+        expect(findApiKey).not.toHaveBeenCalled();
+        expect(getSetting).not.toHaveBeenCalled();
     });
 
     test("per-key rate limit trips at the configured quota", async () => {

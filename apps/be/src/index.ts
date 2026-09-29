@@ -16,6 +16,8 @@ import {
     handleUpdateSettings,
 } from "./routes/settings";
 import { handleRun } from "./routes/run";
+import { handleReportRun } from "./routes/report";
+import { handleActionsTemplate } from "./routes/templates";
 import {
     handleWebhookEndpoints,
     handleWebhookSchemas,
@@ -36,6 +38,7 @@ import { handleInstallationsSync } from "./routes/installations";
 // orchestrators and load balancers can probe without a token.
 const AUTH_ROUTES = new Set([
     "/api/health",
+    "/api/templates/actions",
     "/api/auth/github",
     "/api/auth/github/callback",
     // GitHub redirects the browser here after an App install, so there is no
@@ -96,6 +99,12 @@ async function dispatch(req: Request, url: URL): Promise<Response> {
     }
     if (url.pathname === "/api/runs" && req.method === "POST") {
         return handleRun(req);
+    }
+    if (url.pathname === "/api/runs/report" && req.method === "POST") {
+        return handleReportRun(req);
+    }
+    if (url.pathname === "/api/templates/actions" && req.method === "GET") {
+        return handleActionsTemplate();
     }
     if (url.pathname === "/api/webhooks/endpoints") {
         return handleWebhookEndpoints(url);

@@ -9,11 +9,44 @@ export interface ApiKeyIdentity {
     masked: string;
 }
 
-export type AuthMode = "open" | "operator" | "api-key";
+export type AuthMode = "open" | "operator" | "api-key" | "session";
 
 export interface AuthContext {
     mode: AuthMode;
     key?: ApiKeyIdentity;
+    session?: SessionIdentity;
+}
+
+export interface SessionValue {
+    userId: number;
+    login: string;
+    name: string;
+    avatarUrl: string;
+    accessToken: string;
+    orgs: Array<{ login: string; id: number }>;
+}
+
+export interface SessionIdentity {
+    login: string;
+    name: string;
+}
+
+/** Session tokens are 64 lowercase hex chars. Anything else is not a session. */
+export function isSessionTokenFormat(raw: string): boolean {
+    return /^[0-9a-f]{64}$/.test(raw);
+}
+
+/**
+ * Look up a dashboard session by token. Format-checked before any DB touch,
+ * and resolved through the store (parameterized) — never string-interpolated.
+ */
+export async function findSession(raw: string): Promise<SessionValue | null> {
+    if (!isSessionTokenFormat(raw)) return null;
+    try {
+        return await getStore().getSetting<SessionValue>(`session:${raw}`);
+    } catch {
+        return null;
+    }
 }
 
 function rateLimitPerMin(): number {
@@ -66,11 +99,12 @@ function emitApiCalled(keyId: string, req: Request): void {
 }
 
 /**
- * Authenticate one request. Three modes, in order:
+ * Authenticate one request. Four modes, in order:
  * 1. `open` — no credentials presented and no BEARER_TOKEN configured
  *    (dev default; preserved behavior).
  * 2. `operator` — matches the static BEARER_TOKEN (us, dashboards, deploys).
  * 3. `api-key` — `dlk_...` key verified by hash lookup (workflows, users).
+ * 4. `session` — dashboard session token from GitHub OAuth (browser users).
  *
  * Returns an AuthContext, or a 401/429/503 Response to short-circuit.
  */
@@ -96,6 +130,13 @@ export async function authenticate(req: Request): Promise<AuthContext | Response
     }
 
     if (!raw.startsWith("dlk_")) {
+        const session = await findSession(raw);
+        if (session) {
+            return {
+                mode: "session",
+                session: { login: session.login, name: session.name },
+            };
+        }
         return json({ error: "Unauthorized" }, 401);
     }
 

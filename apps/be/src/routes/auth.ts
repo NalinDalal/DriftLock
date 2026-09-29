@@ -1,4 +1,5 @@
 import { getDb, settings } from "@driftlock/db";
+import { findSession } from "../auth";
 
 function json(data: unknown, status = 200): Response {
     return new Response(JSON.stringify(data, null, 2), {
@@ -122,29 +123,17 @@ export async function handleGetSession(req: Request): Promise<Response> {
     }
 
     const token = authHeader.slice(7);
-    const db = getDb();
-
-    try {
-        const result = await db.execute(
-            `SELECT value FROM settings WHERE key = 'session:${token}'`
-        );
-
-        if (result.length === 0) {
-            return json({ user: null });
-        }
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const session = (result[0] as { value: any }).value;
-        return json({
-            user: {
-                login: session.login,
-                name: session.name,
-                avatarUrl: session.avatarUrl,
-            },
-        });
-    } catch (_e) {
+    const session = await findSession(token);
+    if (!session) {
         return json({ user: null });
     }
+    return json({
+        user: {
+            login: session.login,
+            name: session.name,
+            avatarUrl: session.avatarUrl,
+        },
+    });
 }
 
 export async function handleGitHubRepos(req: Request): Promise<Response> {
@@ -154,19 +143,12 @@ export async function handleGitHubRepos(req: Request): Promise<Response> {
     }
 
     const token = authHeader.slice(7);
-    const db = getDb();
+    const session = await findSession(token);
+    if (!session) {
+        return json({ error: "Invalid session" }, 401);
+    }
 
     try {
-        const result = await db.execute(
-            `SELECT value FROM settings WHERE key = 'session:${token}'`
-        );
-
-        if (result.length === 0) {
-            return json({ error: "Invalid session" }, 401);
-        }
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const session = (result[0] as { value: any }).value;
         const accessToken = session.accessToken;
 
         // Fetch user's repos

@@ -247,6 +247,13 @@ export default function OnboardingPage() {
                             >
                                 INSTALL GITHUB APP
                             </Link>
+                            <Link
+                                to="/actions"
+                                onClick={() => track("actions_clicked", { source: "onboarding" })}
+                                className="border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-6 py-2.5 font-mono text-xs tracking-wide text-[var(--color-ink)] transition-[transform,background] hover:bg-[var(--color-paper)] active:scale-[0.98]"
+                            >
+                                OR USE GITHUB ACTIONS
+                            </Link>
                             <button
                                 onClick={() => { setStep(2); setRan(false); }}
                                 className="border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-6 py-2.5 font-mono text-xs tracking-wide text-[var(--color-ink)] transition-[transform,background] hover:bg-[var(--color-paper)] active:scale-[0.98]"

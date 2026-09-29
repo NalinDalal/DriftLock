@@ -10,7 +10,12 @@ type EventName =
     | "onboarding_view"
     | "onboarding_intent_selected"
     | "onboarding_detect_run"
-    | "onboarding_step_complete";
+    | "onboarding_step_complete"
+    | "actions_clicked"
+    | "actions_view"
+    | "actions_repo_selected"
+    | "actions_key_issued"
+    | "actions_yaml_viewed";
 
 interface EventProps {
     [key: string]: string | number | boolean | undefined;

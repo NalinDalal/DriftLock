@@ -1,0 +1,70 @@
+# DriftLock — Dependabot, but for APIs.
+#
+# SETUP (one time):
+#   1. Onboard at <your DriftLock URL>/actions and copy your DRIFTLOCK_API_KEY.
+#   2. Repo → Settings → Secrets and variables → Actions → New repository secret:
+#        DRIFTLOCK_API_KEY = <the key>            (required: reports runs to DriftLock Cloud)
+#        DRIFTLOCK_AI_KEY  = <your model key>     (optional: model fixes instead of deterministic)
+#   3. Save this file as .github/workflows/driftlock.yml and push.
+#
+# WHAT IT DOES (every push + PR to __BRANCH__):
+#   1. Scans the checkout for vendor API call sites (Stripe today).
+#   2. Runs your test suite in an isolated sandbox and captures API traffic.
+#   3. Diffs captured shapes against the committed baseline to detect drift.
+#   4. Opens a GitHub PR with the fix. Nothing merges without your review.
+#   5. Reports the run to DriftLock Cloud for metering and your dashboard.
+#
+# PLACEHOLDERS (filled by /actions onboarding, or by hand):
+#   __OWNER__   GitHub org or user, e.g. acme
+#   __REPO__    Repository name, e.g. payments
+#   __BRANCH__  Default branch, e.g. main
+#   __API_URL__ DriftLock Cloud base URL, e.g. https://api.driftlock.dev
+
+name: DriftLock
+
+on:
+  push:
+    branches: [__BRANCH__]
+  pull_request:
+    branches: [__BRANCH__]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Detect drift and open fix PR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Optional: model fixes. Without these, fixes are deterministic
+          # (renames, null checks, type coercions) — still automatic.
+          # AI_PROVIDER: openai              # openai, anthropic, or gemini
+          # AI_API_KEY: ${{ secrets.DRIFTLOCK_AI_KEY }}
+        run: |
+          bunx @driftlock/cli fix . --repo __OWNER__/__REPO__ --command "bun test" --json 2>/dev/null \
+            | tail -n 1 > driftlock-summary.json
+          cat driftlock-summary.json
+
+      - name: Report run to DriftLock Cloud
+        # Always report, even when detection found nothing: quiet runs are signal.
+        if: always()
+        env:
+          DRIFTLOCK_API_KEY: ${{ secrets.DRIFTLOCK_API_KEY }}
+          DRIFTLOCK_API_URL: __API_URL__
+        run: |
+          SUMMARY=$(cat driftlock-summary.json 2>/dev/null || echo '{"callSites":0,"drifts":0,"fixes":0,"prs":[],"baselines":0}')
+          CALLSITES=$(echo "$SUMMARY" | jq -r .callSites)
+          DRIFTS=$(echo "$SUMMARY" | jq -r .drifts)
+          PRS=$(echo "$SUMMARY" | jq -c .prs)
+          curl -sf -X POST "$DRIFTLOCK_API_URL/api/runs/report" \
+            -H "Authorization: Bearer $DRIFTLOCK_API_KEY" \
+            -H "content-type: application/json" \
+            -d "{\"owner\":\"__OWNER__\",\"repo\":\"__REPO__\",\"callSites\":$CALLSITES,\"drifts\":$DRIFTS,\"prs\":$PRS}" \
+            || echo "::warning::DriftLock Cloud report failed (local fix PR unaffected)"
