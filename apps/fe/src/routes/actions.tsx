@@ -65,15 +65,14 @@ export default function ActionsPage() {
     useEffect(() => {
         document.title = "GitHub Actions | DriftLock";
         track("actions_view", {});
-        const token = localStorage.getItem("driftlock_token");
-        if (!token) {
-            navigate({ to: "/login" });
-            return;
-        }
         fetch(`${API_URL}/api/auth/repos`, {
-            headers: { Authorization: `Bearer ${token}` },
+            credentials: "include",
         })
             .then((res) => {
+                if (res.status === 401) {
+                    navigate({ to: "/login" });
+                    throw new Error("Not signed in");
+                }
                 if (!res.ok) throw new Error("Failed to fetch repos");
                 return res.json();
             })
@@ -90,12 +89,11 @@ export default function ActionsPage() {
 
     async function issueKey() {
         if (!repo) return;
-        const token = localStorage.getItem("driftlock_token");
         setIssuing(true);
         try {
             const res = await fetch(
                 `${API_URL}/api/settings/rotate?name=${encodeURIComponent(`${repo.owner}-${repo.name}-actions`)}`,
-                { method: "POST", headers: { Authorization: `Bearer ${token}` } },
+                { method: "POST", credentials: "include" },
             );
             if (!res.ok) throw new Error("Failed to issue key");
             const data = (await res.json()) as { key: { raw: string } };

@@ -1,6 +1,19 @@
 import { timingSafeEqual } from "crypto";
 import { getDb, settings } from "@driftlock/db";
-import { findSession, sessionTtlMs } from "../auth";
+import {
+    CALLBACK_RATE_LIMIT_PER_MIN,
+    LOGIN_RATE_LIMIT_PER_MIN,
+    checkIpRateLimit,
+    findSession,
+    sessionTtlMs,
+} from "../auth";
+import {
+    clearSessionCookieHeader,
+    parseCookies,
+    sessionCookieHeader,
+    sessionTokenFromCookies,
+} from "../cookies";
+import { encryptSecret } from "../secrets";
 import { getStore } from "../store";
 
 function json(data: unknown, status = 200): Response {
@@ -36,18 +49,6 @@ function isSecureContext(): boolean {
     return BACKEND_URL.startsWith("https://");
 }
 
-function parseCookies(req: Request): Map<string, string> {
-    const out = new Map<string, string>();
-    const header = req.headers.get("cookie");
-    if (!header) return out;
-    for (const part of header.split(";")) {
-        const idx = part.indexOf("=");
-        if (idx <= 0) continue;
-        out.set(part.slice(0, idx).trim(), decodeURIComponent(part.slice(idx + 1).trim()));
-    }
-    return out;
-}
-
 function setStateCookie(state: string): string {
     return (
         `${OAUTH_STATE_COOKIE}=${state}; HttpOnly; SameSite=Lax; Path=/; Max-Age=600` +
@@ -69,9 +70,12 @@ function validState(provided: string | null, expected: string | undefined): bool
     return timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
 }
 
-export async function handleGitHubLogin(): Promise<Response> {
+export async function handleGitHubLogin(req: Request): Promise<Response> {
     if (!GITHUB_CLIENT_ID) {
         return json({ error: "GitHub OAuth not configured. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET." }, 500);
+    }
+    if (!checkIpRateLimit(req, LOGIN_RATE_LIMIT_PER_MIN)) {
+        return json({ error: "Rate limit exceeded" }, 429);
     }
 
     const redirectUri = `${BACKEND_URL}/api/auth/github/callback`;
@@ -96,6 +100,10 @@ export async function handleGitHubCallback(req: Request): Promise<Response> {
 
     if (!code) {
         return json({ error: "Missing code parameter" }, 400);
+    }
+
+    if (!checkIpRateLimit(req, CALLBACK_RATE_LIMIT_PER_MIN)) {
+        return json({ error: "Rate limit exceeded" }, 429);
     }
 
     // Reject login-CSRF: the state returned by GitHub must match the cookie
@@ -156,7 +164,8 @@ export async function handleGitHubCallback(req: Request): Promise<Response> {
     const sessionToken = generateSessionToken();
     const db = getDb();
 
-    // Store user data in settings for now
+    // Store user data in settings for now. The GitHub access token is
+    // encrypted at rest when SESSION_ENC_KEY is set (plaintext dev fallback).
     await db.execute(`DELETE FROM settings WHERE key = 'session:${sessionToken}'`);
     await db.insert(settings).values({
         key: `session:${sessionToken}`,
@@ -165,26 +174,27 @@ export async function handleGitHubCallback(req: Request): Promise<Response> {
             login: user.login,
             name: user.name,
             avatarUrl: user.avatar_url,
-            accessToken: tokenData.access_token,
+            accessToken: encryptSecret(tokenData.access_token),
             orgs: orgs.map((o) => ({ login: o.login, id: o.id })),
             createdAt: Date.now(),
             expiresAt: Date.now() + sessionTtlMs(),
         },
     });
 
-    // Redirect to frontend with session token; the state cookie is single-use.
-    const done = redirect(`${FRONTEND_URL}/auth/callback?token=${sessionToken}`);
-    done.headers.set("Set-Cookie", clearStateCookie());
+    // Session travels in an httpOnly cookie only — no token in the URL, so
+    // it never lands in history or logs. The state cookie is single-use.
+    const done = redirect(`${FRONTEND_URL}/auth/callback`);
+    done.headers.append("Set-Cookie", sessionCookieHeader(sessionToken));
+    done.headers.append("Set-Cookie", clearStateCookie());
     return done;
 }
 
 export async function handleGetSession(req: Request): Promise<Response> {
-    const authHeader = req.headers.get("authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
+    const token = sessionTokenFromCookies(req);
+    if (!token) {
         return json({ user: null });
     }
 
-    const token = authHeader.slice(7);
     const session = await findSession(token);
     if (!session) {
         return json({ user: null });
@@ -199,12 +209,11 @@ export async function handleGetSession(req: Request): Promise<Response> {
 }
 
 export async function handleGitHubRepos(req: Request): Promise<Response> {
-    const authHeader = req.headers.get("authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
+    const token = sessionTokenFromCookies(req);
+    if (!token) {
         return json({ error: "Unauthorized" }, 401);
     }
 
-    const token = authHeader.slice(7);
     const session = await findSession(token);
     if (!session) {
         return json({ error: "Invalid session" }, 401);
@@ -305,9 +314,7 @@ export function handleInstallUrl(req: Request): Response {
 }
 
 export async function handleLogout(req: Request): Promise<Response> {
-    const authHeader = req.headers.get("authorization");
-    const token =
-        authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    const token = sessionTokenFromCookies(req);
     if (token) {
         try {
             await getStore().deleteSetting(`session:${token}`);
@@ -315,5 +322,7 @@ export async function handleLogout(req: Request): Promise<Response> {
             // Revocation is best-effort; the response stays the same either way.
         }
     }
-    return json({ ok: true });
+    const res = json({ ok: true });
+    res.headers.append("Set-Cookie", clearSessionCookieHeader());
+    return res;
 }

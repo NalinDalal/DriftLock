@@ -42,32 +42,17 @@ export default function AppShell() {
     const [toastMsg, setToastMsg] = useState<string | null>(null);
 
     useEffect(() => {
-        const token = localStorage.getItem("driftlock_token");
-        if (token) {
-            fetch(`${import.meta.env.VITE_API_URL ?? ""}/api/auth/session`, {
-                headers: { Authorization: `Bearer ${token}` },
-            })
-                .then((res) => (res.ok ? res.json() : null))
-                .then((data) => {
-                    if (data?.user)
-                        setUser({
-                            // GitHub returns null for `name` when a user has not
-                            // set one, and the avatar initials below call
-                            // .split() on it, so fall back to the login.
-                            name: data.user.name ?? data.user.login ?? "",
-                            handle: data.user.login,
-                        });
-                })
-                .catch(() => {});
-            return;
-        }
         // Landing is static: do not hit /api/me when unauthenticated and backend may be offline.
         // Only fetch user on authenticated routes to avoid demo 502 noise.
+        // Auth rides the httpOnly session cookie (credentials: include in the client).
         const needsAuth =
             location.pathname.startsWith("/accounts") ||
             location.pathname.startsWith("/repos") ||
             location.pathname.startsWith("/settings") ||
-            location.pathname.startsWith("/webhooks");
+            location.pathname.startsWith("/webhooks") ||
+            location.pathname.startsWith("/install") ||
+            location.pathname.startsWith("/actions") ||
+            location.pathname.startsWith("/onboarding");
         if (!needsAuth) {
             setUser(null);
             return;
@@ -98,8 +83,17 @@ export default function AppShell() {
     const navLink = (active: boolean) =>
         `relative px-3 py-1 text-[13px] font-medium tracking-[-0.01em] transition-colors ${active ? "text-[var(--color-ink)]" : "text-[var(--color-muted)] hover:text-[var(--color-ink)]"}`;
 
-    function handleLogout() {
-        localStorage.removeItem("driftlock_token");
+    async function handleLogout() {
+        // Revoke server-side (cookie cleared by the response); the redirect
+        // happens either way so a dead backend cannot trap the user.
+        try {
+            await fetch(`${import.meta.env.VITE_API_URL ?? ""}/api/auth/logout`, {
+                method: "POST",
+                credentials: "include",
+            });
+        } catch {
+            // Best-effort: still leave.
+        }
         window.location.href = "/";
     }
 

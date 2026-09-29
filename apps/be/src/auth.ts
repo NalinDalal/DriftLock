@@ -1,5 +1,7 @@
 import { config } from "./config";
 import { getStore } from "./store";
+import { sessionTokenFromCookies } from "./cookies";
+import { decryptSecret } from "./secrets";
 import { json } from "./utils";
 
 export interface ApiKeyIdentity {
@@ -54,8 +56,19 @@ export function isSessionTokenFormat(raw: string): boolean {
 export async function findSession(raw: string): Promise<SessionValue | null> {
     if (!isSessionTokenFormat(raw)) return null;
     try {
-        const session = await getStore().getSetting<SessionValue>(`session:${raw}`);
-        if (!session) return null;
+        const stored = await getStore().getSetting<SessionValue>(`session:${raw}`);
+        if (!stored) return null;
+        // accessToken is AES-256-GCM when SESSION_ENC_KEY was set at login,
+        // plaintext otherwise (dev / pre-encryption rows pass through).
+        let accessToken: string;
+        try {
+            accessToken = decryptSecret(stored.accessToken ?? "");
+        } catch {
+            // Key lost or blob corrupt: force re-login, which re-encrypts
+            // with the current key (self-healing).
+            return null;
+        }
+        const session = { ...stored, accessToken };
         if (
             typeof session.expiresAt !== "number" ||
             !Number.isFinite(session.expiresAt) ||
@@ -104,6 +117,19 @@ export function resetRateLimits(): void {
     buckets.clear();
 }
 
+/**
+ * IP-scoped rate limit for unauthenticated surfaces (OAuth login/callback).
+ * Returns true when the request may proceed.
+ */
+export function checkIpRateLimit(req: Request, limitPerMin: number): boolean {
+    return allow(`ip:${clientIp(req)}`, limitPerMin, Date.now());
+}
+
+/** Quota for the login redirect (cheap, but still bounded). */
+export const LOGIN_RATE_LIMIT_PER_MIN = 60;
+/** Quota for the OAuth callback (each hit calls GitHub's token endpoint). */
+export const CALLBACK_RATE_LIMIT_PER_MIN = 10;
+
 function clientIp(req: Request): string {
     const forwarded = req.headers.get("x-forwarded-for");
     if (forwarded) return forwarded.split(",")[0].trim();
@@ -129,64 +155,65 @@ function emitApiCalled(keyId: string, req: Request): void {
  *    (dev default; preserved behavior).
  * 2. `operator` — matches the static BEARER_TOKEN (us, dashboards, deploys).
  * 3. `api-key` — `dlk_...` key verified by hash lookup (workflows, users).
- * 4. `session` — dashboard session token from GitHub OAuth (browser users).
+ * 4. `session` — dashboard session from the httpOnly cookie (browser users).
+ *    Sessions are cookie-only: Bearer session tokens are no longer accepted,
+ *    so exfiltrated pre-cookie tokens stop working.
  *
  * Returns an AuthContext, or a 401/429/503 Response to short-circuit.
  */
 export async function authenticate(req: Request): Promise<AuthContext | Response> {
-    const header = req.headers.get("authorization");
     const now = Date.now();
 
-    if (!header) {
-        if (!config.bearerToken) {
-            return { mode: "open" };
-        }
-        return json({ error: "Unauthorized" }, 401);
-    }
-
-    const match = /^Bearer (.+)$/.exec(header.trim());
-    if (!match) {
-        return json({ error: "Unauthorized" }, 401);
-    }
-    const raw = match[1];
-
-    if (config.bearerToken && raw === config.bearerToken) {
+    // Operator token first: deploys and dashboards present it explicitly.
+    const header = req.headers.get("authorization");
+    const raw = header ? /^Bearer (.+)$/.exec(header.trim())?.[1] : undefined;
+    if (raw && config.bearerToken && raw === config.bearerToken) {
         return { mode: "operator" };
     }
 
-    if (!raw.startsWith("dlk_")) {
-        const session = await findSession(raw);
+    // Workflow / user keys by hash lookup.
+    if (raw?.startsWith("dlk_")) {
+        let row;
+        try {
+            row = await getStore().findApiKey(raw);
+        } catch {
+            return json({ error: "Auth unavailable" }, 503);
+        }
+        if (!row) {
+            if (!allow(`ip:${clientIp(req)}`, openRateLimitPerMin(), now)) {
+                console.warn(`[RATE_LIMIT] bucket=ip scope=auth-fail`);
+                return json({ error: "Rate limit exceeded" }, 429);
+            }
+            return json({ error: "Unauthorized" }, 401);
+        }
+
+        if (!allow(`key:${row.id}`, rateLimitPerMin(), now)) {
+            console.warn(`[RATE_LIMIT] bucket=key:${row.id} name=${row.name}`);
+            return json({ error: "Rate limit exceeded" }, 429);
+        }
+
+        emitApiCalled(row.id, req);
+        return {
+            mode: "api-key",
+            key: { id: row.id, name: row.name, keyPrefix: row.keyPrefix, masked: row.masked },
+        };
+    }
+
+    // Dashboard sessions travel in the httpOnly cookie — browsers never send
+    // an Authorization header, so this check must not depend on one.
+    const cookieToken = sessionTokenFromCookies(req);
+    if (cookieToken) {
+        const session = await findSession(cookieToken);
         if (session) {
             return {
                 mode: "session",
                 session: { login: session.login, name: session.name },
             };
         }
-        return json({ error: "Unauthorized" }, 401);
     }
 
-    let row;
-    try {
-        row = await getStore().findApiKey(raw);
-    } catch {
-        return json({ error: "Auth unavailable" }, 503);
+    if (!config.bearerToken) {
+        return { mode: "open" };
     }
-    if (!row) {
-        if (!allow(`ip:${clientIp(req)}`, openRateLimitPerMin(), now)) {
-            console.warn(`[RATE_LIMIT] bucket=ip scope=auth-fail`);
-            return json({ error: "Rate limit exceeded" }, 429);
-        }
-        return json({ error: "Unauthorized" }, 401);
-    }
-
-    if (!allow(`key:${row.id}`, rateLimitPerMin(), now)) {
-        console.warn(`[RATE_LIMIT] bucket=key:${row.id} name=${row.name}`);
-        return json({ error: "Rate limit exceeded" }, 429);
-    }
-
-    emitApiCalled(row.id, req);
-    return {
-        mode: "api-key",
-        key: { id: row.id, name: row.name, keyPrefix: row.keyPrefix, masked: row.masked },
-    };
+    return json({ error: "Unauthorized" }, 401);
 }

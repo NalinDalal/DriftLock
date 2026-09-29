@@ -1,6 +1,6 @@
 import { config } from "./config";
 import { authenticate } from "./auth";
-import { badRequest, corsResponse, isCorsPreflight, notFound } from "./utils";
+import { badRequest, corsHeaders, corsResponse, isCorsPreflight, notFound } from "./utils";
 import { handleHealth } from "./routes/health";
 import { handleAccounts, handleAccountRepos, handleMe } from "./routes/accounts";
 import {
@@ -52,7 +52,7 @@ async function dispatch(req: Request, url: URL): Promise<Response> {
         return handleHealth();
     }
     if (url.pathname === "/api/auth/github" && req.method === "GET") {
-        return handleGitHubLogin();
+        return handleGitHubLogin(req);
     }
     if (url.pathname === "/api/auth/github/callback" && req.method === "GET") {
         return handleGitHubCallback(req);
@@ -134,28 +134,37 @@ async function dispatch(req: Request, url: URL): Promise<Response> {
     return notFound();
 }
 
+/** Stamp credentialed CORS headers on every response (handlers stay CORS-free). */
+function withCors(res: Response, req: Request): Response {
+    const headers = corsHeaders(req);
+    for (const [key, value] of Object.entries(headers)) {
+        res.headers.set(key, value);
+    }
+    return res;
+}
+
 const server = Bun.serve({
     port: config.port,
     async fetch(req) {
         if (isCorsPreflight(req)) {
-            return corsResponse();
+            return corsResponse(req);
         }
         const url = new URL(req.url);
 
         // Skip auth for public routes; everything else accepts the
-        // operator token or a per-key dlk_... credential.
+        // operator token, a per-key dlk_... credential, or the session cookie.
         if (!AUTH_ROUTES.has(url.pathname)) {
             const auth = await authenticate(req);
             if (auth instanceof Response) {
-                return auth;
+                return withCors(auth, req);
             }
         }
 
         try {
-            return await dispatch(req, url);
+            return withCors(await dispatch(req, url), req);
         } catch (error) {
             console.error(error);
-            return badRequest("Internal error");
+            return withCors(badRequest("Internal error"), req);
         }
     },
 });

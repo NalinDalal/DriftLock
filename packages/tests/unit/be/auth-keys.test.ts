@@ -54,6 +54,13 @@ function request(auth?: string): Request {
     });
 }
 
+function cookieRequest(token: string): Request {
+    return new Request("http://localhost/api/runs", {
+        method: "POST",
+        headers: { cookie: `driftlock_session=${token}` },
+    });
+}
+
 function ctxOf(value: AuthContext | Response): AuthContext {
     expect(value).not.toBeInstanceOf(Response);
     return value as AuthContext;
@@ -121,21 +128,39 @@ describe("authenticate", () => {
         expect(res.status).toBe(503);
     });
 
-    test("dashboard session token authenticates without a key lookup", async () => {
-        const ctx = ctxOf(await authenticate(request(`Bearer ${SESSION_TOKEN}`)));
+     test("dashboard session cookie authenticates without a key lookup", async () => {
+        const ctx = ctxOf(await authenticate(cookieRequest(SESSION_TOKEN)));
         expect(ctx.mode).toBe("session");
         expect(ctx.session).toMatchObject({ login: "octo" });
         expect(findApiKey).not.toHaveBeenCalled();
         expect(emitEvent).not.toHaveBeenCalled();
     });
 
-    test("unknown session-shaped token is 401", async () => {
-        const res = (await authenticate(request(`Bearer ${"b".repeat(64)}`))) as Response;
+     test("Bearer session tokens are retired even when valid", async () => {
+        const res = (await authenticate(request(`Bearer ${SESSION_TOKEN}`))) as Response;
         expect(res.status).toBe(401);
     });
 
-    test("expired session is rejected and cleaned up", async () => {
-        const res = (await authenticate(request(`Bearer ${EXPIRED_TOKEN}`))) as Response;
+     test("unknown session cookie is 401", async () => {
+        const res = (await authenticate(cookieRequest("b".repeat(64)))) as Response;
+        expect(res.status).toBe(401);
+    });
+
+     test("encrypted session decrypts through the middleware", async () => {
+        const { encryptSecret } = await import("@driftlock/be/src/secrets");
+        process.env.SESSION_ENC_KEY = "3".repeat(64);
+        const enc = encryptSecret("gho_live");
+        getSetting.mockImplementationOnce(async () => ({
+            ...sessionValue(),
+            accessToken: enc,
+        }));
+        const ctx = ctxOf(await authenticate(cookieRequest(SESSION_TOKEN)));
+        expect(ctx.mode).toBe("session");
+        delete process.env.SESSION_ENC_KEY;
+    });
+
+     test("expired session is rejected and cleaned up", async () => {
+        const res = (await authenticate(cookieRequest(EXPIRED_TOKEN))) as Response;
         expect(res.status).toBe(401);
         expect(deleteSetting).toHaveBeenCalledWith(`session:${EXPIRED_TOKEN}`);
         expect(emitEvent).not.toHaveBeenCalled();

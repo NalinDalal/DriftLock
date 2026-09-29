@@ -40,6 +40,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     let res: Response;
     try {
         res = await fetch(`${BASE}${path}`, {
+            // Sessions travel in the httpOnly cookie: every call carries it.
+            credentials: "include",
             headers: { "content-type": "application/json" },
             ...init,
         });

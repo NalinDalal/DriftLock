@@ -78,15 +78,15 @@ export default function InstallPage() {
     const [autoReturned, setAutoReturned] = useState(false);
 
     useEffect(() => {
-        const token = localStorage.getItem("driftlock_token");
-        if (!token) {
-            navigate({ to: "/login" });
-            return;
-        }
+        // Session rides the httpOnly cookie (credentials: include).
         fetch(`${API_URL}/api/auth/repos`, {
-            headers: { Authorization: `Bearer ${token}` },
+            credentials: "include",
         })
             .then((res) => {
+                if (res.status === 401) {
+                    navigate({ to: "/login" });
+                    throw new Error("Not signed in");
+                }
                 if (!res.ok) throw new Error("Failed to fetch repos");
                 return res.json();
             })
@@ -159,7 +159,6 @@ export default function InstallPage() {
     }
 
     async function handleInstall() {
-        const token = localStorage.getItem("driftlock_token");
         const selectedRepos = repos
             .filter((r) => selected.has(r.id))
             .map((r) => ({
@@ -171,7 +170,7 @@ export default function InstallPage() {
         const repoIds = Array.from(selected).join(",");
         try {
             const accountsRes = await fetch(`${API_URL}/api/accounts`, {
-                headers: { Authorization: `Bearer ${token}` },
+                credentials: "include",
             });
             if (accountsRes.ok) {
                 const data = (await accountsRes.json()) as { accounts: Array<{ owner: string }> };
@@ -192,9 +191,9 @@ export default function InstallPage() {
         try {
             const response = await fetch(`${API_URL}/api/installations/sync`, {
                 method: "POST",
+                credentials: "include",
                 headers: {
                     "content-type": "application/json",
-                    Authorization: `Bearer ${token}`,
                 },
                 body: JSON.stringify({ repos: selectedRepos }),
             });

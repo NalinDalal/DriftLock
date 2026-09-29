@@ -1,24 +1,26 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 
+const API_URL = import.meta.env.VITE_API_URL ?? "";
+
 export default function AuthCallbackPage() {
     const navigate = useNavigate();
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
-        const token = params.get("token");
-
-        if (token) {
-            // Store token in localStorage
-            localStorage.setItem("driftlock_token", token);
-            // Drop ?token= from history so the secret does not linger in the
-            // address bar, history, or server logs, then redirect home.
-            window.history.replaceState(null, "", window.location.pathname);
-            navigate({ to: "/" });
-        } else {
-            setError("No token received");
-        }
+        // The session now lives in an httpOnly cookie set by the backend
+        // during the OAuth redirect chain — there is no token in the URL to
+        // collect. Confirm the session, then go home.
+        fetch(`${API_URL}/api/auth/session`, { credentials: "include" })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+                if (data?.user) {
+                    navigate({ to: "/" });
+                } else {
+                    setError("No session established");
+                }
+            })
+            .catch(() => setError("Sign-in failed"));
     }, [navigate]);
 
     if (error) {
