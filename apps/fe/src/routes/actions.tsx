@@ -158,7 +158,7 @@ export default function ActionsPage() {
                     <p className="font-mono text-[11px] tracking-[0.14em] text-[var(--color-muted)]">
                         CONNECT · STEP {Math.min(step, 4)} OF 4 · RUNS ON YOUR RUNNERS
                     </p>
-                    <h1 className="mt-4 max-w-[640px] font-display text-[36px] leading-[0.95] tracking-[-0.03em] text-[var(--color-ink)] sm:text-[48px]">
+                    <h1 className="display mt-4 max-w-[640px] text-[var(--color-ink)]">
                         {step === 2 && "Which repo do we protect?"}
                         {step === 3 && "Model fixes, or deterministic?"}
                         {step === 4 && "Paste two secrets, push one file."}

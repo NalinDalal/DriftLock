@@ -265,7 +265,7 @@ export default function InstallPage() {
                 <p className="font-mono text-[11px] tracking-[0.14em] text-[var(--color-muted)]">
                     INSTALL
                 </p>
-                <h1 className="mt-1 font-display text-[24px] tracking-[-0.02em] text-[var(--color-ink)]">
+                <h1 className="heading-section mt-1 text-[var(--color-ink)]">
                     Choose repos to watch
                 </h1>
                 <p className="mt-1 font-mono text-xs leading-4 text-[var(--color-muted)]">

@@ -63,7 +63,7 @@ function DriftCard({ event, owner, name }: { event: DriftEvent; owner: string; n
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <div className="flex flex-wrap items-center gap-1.5">
-                            <p className="text-[13px] font-semibold tracking-tight text-[#0a0a0f]">{event.packageName}</p>
+                            <p className="text-[13px] font-semibold tracking-tight text-[var(--color-ink)]">{event.packageName}</p>
                             <span className="text-zinc-300">·</span>
                             <span className="font-mono text-xs text-zinc-600">{event.method}</span>
                             <Badge tone="neutral">{event.callSiteId.slice(0, 8)}</Badge>
@@ -142,7 +142,7 @@ function CallSiteRow({ site }: { site: CallSiteSummary }) {
         <Card className="p-4">
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                    <p className="truncate font-mono text-[13px] font-medium text-[#0a0a0f]">{site.method}</p>
+                    <p className="truncate font-mono text-[13px] font-medium text-[var(--color-ink)]">{site.method}</p>
                     <p className="mt-1 truncate font-mono text-xs text-[var(--color-muted)]">
                         {site.filePath}:{site.line}
                     </p>
@@ -184,7 +184,7 @@ function PullRow({ pull }: { pull: Pull }) {
                 {pull.status === "open" ? "◐" : "✓"}
             </div>
             <div className="min-w-0 flex-1">
-                <a href={pull.url} target="_blank" rel="noreferrer" className="truncate text-[13px] font-medium text-[#0a0a0f] hover:underline">
+                <a href={pull.url} target="_blank" rel="noreferrer" className="truncate text-[13px] font-medium text-[var(--color-ink)] hover:underline">
                     #{pull.number} {pull.title}
                 </a>
                 <p className="mt-0.5 font-mono text-xs text-[var(--color-muted)]">
@@ -253,19 +253,19 @@ export default function RepoPage({ owner, name }: { owner: string; name: string 
                 <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <Card className="px-4 py-3">
                         <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-muted)]">Call sites</p>
-                        <p className="mt-1 text-[20px] font-semibold tabular-nums tracking-tight text-[#0a0a0f]">{repo.stats.callSites}</p>
+                        <p className="mt-1 text-[20px] font-semibold tabular-nums tracking-tight text-[var(--color-ink)]">{repo.stats.callSites}</p>
                     </Card>
                     <Card className={`px-4 py-3 ${repo.stats.driftOpen > 0 ? "border-amber-200 bg-amber-50/50" : ""}`}>
                         <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-muted)]">Drift open</p>
-                        <p className={`mt-1 text-[20px] font-semibold tabular-nums tracking-tight ${repo.stats.driftOpen > 0 ? "text-amber-600" : "text-[#0a0a0f]"}`}>{repo.stats.driftOpen}</p>
+                        <p className={`mt-1 text-[20px] font-semibold tabular-nums tracking-tight ${repo.stats.driftOpen > 0 ? "text-amber-600" : "text-[var(--color-ink)]"}`}>{repo.stats.driftOpen}</p>
                     </Card>
                     <Card className="px-4 py-3">
                         <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-muted)]">Open PRs</p>
-                        <p className="mt-1 text-[20px] font-semibold tabular-nums tracking-tight text-[#0a0a0f]">{repo.stats.pullsOpen}</p>
+                        <p className="mt-1 text-[20px] font-semibold tabular-nums tracking-tight text-[var(--color-ink)]">{repo.stats.pullsOpen}</p>
                     </Card>
                     <Card className="px-4 py-3">
                         <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-muted)]">Pending capture</p>
-                        <p className="mt-1 text-[20px] font-semibold tabular-nums tracking-tight text-[#0a0a0f]">{repo.stats.pendingCapture}</p>
+                        <p className="mt-1 text-[20px] font-semibold tabular-nums tracking-tight text-[var(--color-ink)]">{repo.stats.pendingCapture}</p>
                         <p className="text-[11px] text-[var(--color-muted)]">last probe {timeAgo(repo.stats.lastProbeAt)}</p>
                     </Card>
                 </div>
@@ -278,7 +278,7 @@ export default function RepoPage({ owner, name }: { owner: string; name: string 
                         type="button"
                         onClick={() => setTab(id)}
                         className={`flex-1 sm:flex-none rounded-full px-4 py-1.5 text-[13px] font-medium transition-colors ${
-                            tab === id ? "bg-[var(--color-surface)] text-[#0a0a0f] shadow-sm" : "text-[var(--color-muted)] hover:text-[var(--color-ink)]"
+                            tab === id ? "bg-[var(--color-surface)] text-[var(--color-ink)] shadow-sm" : "text-[var(--color-muted)] hover:text-[var(--color-ink)]"
                         }`}
                     >
                         {label}

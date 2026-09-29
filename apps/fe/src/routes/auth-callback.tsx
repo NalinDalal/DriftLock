@@ -23,7 +23,7 @@ export default function AuthCallbackPage() {
         return (
             <div className="flex min-h-[80vh] items-center justify-center">
                 <div className="text-center">
-                    <h2 className="text-lg font-semibold text-red-600">Authentication failed</h2>
+                    <h2 className="text-lg font-semibold text-[var(--color-signal-red)]">Authentication failed</h2>
                     <p className="mt-2 text-sm text-neutral-500">{error}</p>
                     <button
                         onClick={() => navigate({ to: "/login" })}

@@ -113,7 +113,7 @@ export default function OnboardingPage() {
                     <p className="font-mono text-[11px] tracking-[0.14em] text-[var(--color-muted)]">
                         ONBOARDING · STEP {Math.min(step, 3)} OF 3 · NO TOUR, REAL OUTCOME
                     </p>
-                    <h1 className="mt-4 max-w-[640px] font-display text-[36px] leading-[0.95] tracking-[-0.03em] text-[var(--color-ink)] sm:text-[48px]">
+                    <h1 className="display mt-4 max-w-[640px] text-[var(--color-ink)]">
                         {step === 1 && "What are you protecting?"}
                         {step === 2 && "Watch it get found."}
                         {step === 3 && "That is the whole product."}

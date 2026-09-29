@@ -16,7 +16,7 @@ export default function InstallSuccessPage() {
     return (
         <div className="mx-auto max-w-[640px] text-center">
             <div className="mx-auto flex h-12 w-12 items-center justify-center border border-[var(--color-line-strong)] bg-[var(--color-ink)] text-[var(--color-paper)]">✓</div>
-            <h1 className="mt-4 font-display text-[26px] tracking-[-0.02em] text-[var(--color-ink)]">GitHub App {action === "update" ? "updated" : "installed"}</h1>
+            <h1 className="heading-section mt-4 text-[var(--color-ink)]">GitHub App {action === "update" ? "updated" : "installed"}</h1>
             <p className="mx-auto mt-2 max-w-[520px] font-mono text-xs leading-5 text-[var(--color-muted)]">
                 DriftLock{installationId ? ` installation ${installationId}` : ""} was {action === "update" ? "updated" : "installed"} for your account. Your selected repos are now watched.
             </p>

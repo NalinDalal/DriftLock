@@ -16,7 +16,7 @@ function RepoRow({ repo }: { repo: Repo }) {
                 <StatusDot tone={dirty ? "amber" : "green"} pulsing={dirty} />
                 <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate text-[14px] font-semibold tracking-tight text-[#0a0a0f]">
+                        <p className="truncate text-[14px] font-semibold tracking-tight text-[var(--color-ink)]">
                             {repo.owner}/{repo.name}
                         </p>
                         {repo.isPrivate && <Badge tone="neutral">private</Badge>}
@@ -34,15 +34,15 @@ function RepoRow({ repo }: { repo: Repo }) {
                 </div>
                 <div className="hidden items-center gap-6 sm:flex">
                     <div className="text-right leading-tight">
-                        <p className="text-[13px] font-semibold tabular-nums text-[#0a0a0f]">{repo.stats.callSites}</p>
+                        <p className="text-[13px] font-semibold tabular-nums text-[var(--color-ink)]">{repo.stats.callSites}</p>
                         <p className="text-[11px] text-[var(--color-muted)]">call sites</p>
                     </div>
                     <div className="text-right leading-tight">
-                        <p className={`text-[13px] font-semibold tabular-nums ${dirty ? "text-amber-600" : "text-[#0a0a0f]"}`}>{repo.stats.driftOpen}</p>
+                        <p className={`text-[13px] font-semibold tabular-nums ${dirty ? "text-amber-600" : "text-[var(--color-ink)]"}`}>{repo.stats.driftOpen}</p>
                         <p className="text-[11px] text-[var(--color-muted)]">drift</p>
                     </div>
                     <div className="text-right leading-tight">
-                        <p className="text-[13px] font-semibold tabular-nums text-[#0a0a0f]">{repo.stats.pullsOpen}</p>
+                        <p className="text-[13px] font-semibold tabular-nums text-[var(--color-ink)]">{repo.stats.pullsOpen}</p>
                         <p className="text-[11px] text-[var(--color-muted)]">PRs</p>
                     </div>
                     <p className="w-20 text-right text-xs tabular-nums text-[var(--color-muted)]">{timeAgo(repo.stats.lastProbeAt)}</p>

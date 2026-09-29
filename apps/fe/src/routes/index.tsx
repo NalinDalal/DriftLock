@@ -231,7 +231,7 @@ export default function LandingPage() {
                         <span className="hidden sm:inline">· STRIPE FIRST</span>
                     </div>
 
-                    <h1 className="mt-4 max-w-[680px] font-display text-[40px] leading-[0.88] tracking-[-0.035em] text-[var(--color-ink)] sm:text-[56px]" style={stagger(1)}>
+                    <h1 className="display mt-4 max-w-[680px] text-[var(--color-ink)]" style={stagger(1)}>
                         <span className="word-reveal" style={{ animationDelay: "30ms" }}>APIs</span>{" "}
                         <span className="word-reveal" style={{ animationDelay: "100ms" }}>should</span>{" "}
                         <span className="word-reveal italic font-normal" style={{ animationDelay: "170ms" }}>maintain</span>{" "}
@@ -353,7 +353,7 @@ export default function LandingPage() {
             <div className="reveal border-b border-[var(--color-line)] bg-[var(--color-surface)]">
                 <div className="mx-auto max-w-[1080px] px-6 py-10 sm:py-14">
                     <div className="mx-auto max-w-[720px]">
-                        <h2 className="font-display text-[24px] leading-[1.05] tracking-[-0.02em] text-[var(--color-ink)] sm:text-[28px]">
+                        <h2 className="heading-section text-[var(--color-ink)]">
                             Changelogs do not get read. 30 percent of <span className="text-[var(--color-signal-red)]">downtime</span> was a vendor change someone missed.
                         </h2>
                         <div className="mt-6 h-px w-full bg-[var(--color-ink)]" />
@@ -374,7 +374,7 @@ export default function LandingPage() {
             <div className="reveal border-y border-[var(--color-line-strong)] bg-[var(--color-surface)]">
                 <div className="mx-auto max-w-[1080px] px-6 py-10 sm:py-12">
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
-                        <h2 className="font-display text-[22px] tracking-[-0.02em] text-[var(--color-ink)]">Scan → Capture → Diff → Fix PR</h2>
+                        <h2 className="heading-section text-[var(--color-ink)]">Scan → Capture → Diff → Fix PR</h2>
                         <span className="font-mono text-[11px] tracking-wide text-[var(--color-muted)]">TWO SURFACES: OUTBOUND + INBOUND</span>
                     </div>
                     <div className="mt-8 relative">
@@ -414,7 +414,7 @@ export default function LandingPage() {
                 <div className="mx-auto max-w-[1080px] px-6 py-10 sm:py-14">
                     <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
                         <div>
-                            <h3 className="font-display text-[20px] tracking-[-0.02em] text-[var(--color-ink)]">They bump the version. We migrate the code.</h3>
+                            <h3 className="heading-card text-[var(--color-ink)]">They bump the version. We migrate the code.</h3>
                             <div className="mt-4 space-y-3 font-mono text-xs leading-5 text-[var(--color-ink)]/80">
                                 <p>Renovate updates package.json. When stripe.charges.create needs a new field, they do not touch it.</p>
                                 <p>Semver is a convention. Hunting every call site by hand is why teams stay vulnerable.</p>
@@ -442,7 +442,7 @@ export default function LandingPage() {
 
             <div className="border-t border-[var(--color-line-strong)] bg-[var(--color-surface)]">
                 <div className="mx-auto max-w-[1080px] px-6 py-10 text-center">
-                    <h2 className="font-display text-[22px] tracking-[-0.02em] text-[var(--color-ink)]">Stay current without the migration tax.</h2>
+                    <h2 className="heading-section text-[var(--color-ink)]">Stay current without the migration tax.</h2>
                     <p className="mx-auto mt-2 max-w-[520px] font-mono text-xs leading-4 text-[var(--color-muted)]">Install once. Watches every repo you select. Nothing merged without you.</p>
                     <div className="mt-6 flex flex-wrap justify-center gap-2">
                         <Link to="/install" className="bg-[var(--color-ink)] px-6 py-2.5 font-mono text-xs tracking-wide text-[var(--color-paper)] hover:bg-[var(--color-ink)]/90 active:scale-[0.98] transition-[transform,background]">INSTALL GITHUB APP</Link>
