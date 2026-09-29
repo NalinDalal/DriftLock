@@ -607,6 +607,9 @@ export function applyFixWork(work: FixWork, source: string): string | null {
             if (!fieldRegex.test(source)) {
                 return null;
             }
+            // Reset: .test() with /g leaves lastIndex mid-string, which
+            // would poison every per-line test below into false negatives.
+            fieldRegex.lastIndex = 0;
             // Comment out lines containing the removed field
             const lines = source.split("\n");
             const result = lines.map((line) => {

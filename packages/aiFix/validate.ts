@@ -41,6 +41,9 @@ export function isValidAIFix(
     filePath = "file.ts",
 ): boolean {
     if (fixedCode === originalCode) return false;
+    // Vacuous inputs validate vacuously: an empty original makes every
+    // check pass while meaning nothing was ever read.
+    if (!originalCode.trim() || !fixedCode.trim()) return false;
     if (/\/\/\s*Added new field/i.test(fixedCode)) return false;
     const loader = filePath.endsWith(".tsx")
         ? "tsx"
@@ -56,6 +59,46 @@ export function isValidAIFix(
         return false;
     }
     for (const work of works) {
+        if (work.kind === "custom" && work.field) {
+            // Removal fixes may only delete. The field must be gone as an
+            // access, nothing may be invented, and everything else must be
+            // preserved: a rewrite nuking the file body is the opposite of
+            // a fix, and must fall back to deterministic, not ship confident.
+            const leaf = work.field.split(".").pop()!;
+            const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const codeOnly = (code: string): string =>
+                code.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
+            const goneRe = new RegExp(
+                `(?:\\?\\.\\s*|\\.\\s*)${esc(leaf)}(?![\\w$])|\\[\\s*["']${esc(leaf)}["']\\s*\\]`,
+            );
+            if (goneRe.test(codeOnly(fixedCode))) return false;
+            const originalKeys = objectLiteralKeys(originalCode);
+            const fixedKeys = objectLiteralKeys(fixedCode);
+            for (const key of fixedKeys) {
+                if (!originalKeys.has(key)) return false;
+            }
+            for (const key of originalKeys) {
+                if (key !== leaf && !fixedKeys.has(key)) return false;
+            }
+            // Preservation: every significant original line that does not
+            // touch the removed field must survive verbatim (modulo
+            // whitespace). A rewrite nuking the file body passes every
+            // check above vacuously; this is what rejects it. Reformatting
+            // fixes get rejected too, and fall back to deterministic.
+            const leafRe = new RegExp(`\\b${esc(leaf)}\\b`);
+            const significantLines = (code: string): Set<string> =>
+                new Set(
+                    codeOnly(code)
+                        .split("\n")
+                        .map((l) => l.replace(/\s+/g, ""))
+                        .filter((l) => l.length > 0),
+                );
+            const fixedLines = significantLines(fixedCode);
+            for (const line of significantLines(originalCode)) {
+                if (leafRe.test(line)) continue;
+                if (!fixedLines.has(line)) return false;
+            }
+        }
         if (work.kind === "field_rename" && work.from && work.to) {
             const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
             const toRe = new RegExp(`\\b${esc(work.to)}\\b`);

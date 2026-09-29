@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync, writeFileSync } from "fs";
-import { join } from "path";
+import { isAbsolute, join, relative, resolve } from "path";
 import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
@@ -414,15 +414,25 @@ Examples:
                     fix: Fix;
                 }> = [];
                 for (const drift of drifts) {
-                    const file = join(
-                        repoPath,
-                        drift.callSite.filePath,
-                    );
+                    // Extractor filePaths may be absolute or repo-relative;
+                    // join() on an absolute second half silently builds a
+                    // nonexistent path, so resolve absolutely first.
+                    const file = isAbsolute(drift.callSite.filePath)
+                        ? drift.callSite.filePath
+                        : join(repoPath, drift.callSite.filePath);
                     let content: string;
                     try {
                         content = readFileSync(file, "utf8");
                     } catch {
                         content = "";
+                    }
+                    if (!content.trim()) {
+                        console.log(
+                            chalk.yellow(
+                                `  ${drift.callSite.filePath}:${drift.callSite.line}: cannot read source, skipping fix`,
+                            ),
+                        );
+                        continue;
                     }
                     const applied = await applyDriftFix(drift, content, { ai });
                     if (!applied) {
@@ -531,6 +541,13 @@ Examples:
                     number: number;
                 }> = [];
 
+                // PR surfaces are repo-relative: absolute disk paths would
+                // leak local layout into titles and create stray files.
+                const repoRoot = resolve(repoPath);
+                const displayPath = (p: string): string => {
+                    const rel = relative(repoRoot, p).replace(/\\/g, "/");
+                    return rel && !rel.startsWith("..") ? rel : p;
+                };
                 for (const { callSite, drift, fix } of fixes) {
                     const driftEvent = buildDriftEvent(drift);
                     driftEvent.suggestedFix = fix;
@@ -538,6 +555,11 @@ Examples:
                     console.log(
                         `[EVENT] type=drift_detected ${JSON.stringify({ driftId: driftEvent.id, callSiteId: callSite.id, method: callSite.method })}`,
                     );
+                    const displaySite = { ...callSite, filePath: displayPath(callSite.filePath) };
+                    const displayFiles = fix.files.map((f) => ({
+                        path: displayPath(f.path),
+                        content: f.changes,
+                    }));
 
                     const result = await prRunner.run({
                         owner,
@@ -546,15 +568,12 @@ Examples:
                         branch: fixBranchName(callSite.id),
                         title: buildFixPRTitle({
                             driftEvent,
-                            callSite,
+                            callSite: displaySite,
                             fix,
                         }),
-                        body: buildFixPRBody({ driftEvent, callSite, fix }, fix.files),
+                        body: buildFixPRBody({ driftEvent, callSite: displaySite, fix }, displayFiles),
                         commitMessage: `driftlock: apply fix for ${callSite.method}`,
-                        files: fix.files.map((f) => ({
-                            path: f.path,
-                            content: f.changes,
-                        })),
+                        files: displayFiles,
                     });
 
                     if (result.status === "merged") {

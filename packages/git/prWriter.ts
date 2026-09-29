@@ -33,6 +33,19 @@ export interface WordlessPRResult {
 
 const FILE_MODE = "100644";
 
+/**
+ * The tree API takes repo-relative posix paths. Callers hand over
+ * call-site paths, which are absolute on disk, so normalize at this
+ * boundary instead of trusting every producer. Rejects escapes.
+ */
+function normalizeRepoPath(path: string): string {
+    const clean = path.replace(/\\/g, "/").replace(/^(?:\.\/)+/, "").replace(/^\/+/, "");
+    if (!clean || clean === "." || clean.split("/").includes("..")) {
+        throw new Error(`Refusing to write out-of-repo path: ${path}`);
+    }
+    return clean;
+}
+
 export class PRWriter {
     private octokit: Octokit;
 
@@ -71,7 +84,7 @@ export class PRWriter {
             repo,
             base_tree: baseCommit.treeSha,
             tree: blobs.map(({ file, sha }) => ({
-                path: file.path,
+                path: normalizeRepoPath(file.path),
                 mode: FILE_MODE,
                 type: "blob",
                 sha,

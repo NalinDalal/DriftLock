@@ -133,6 +133,11 @@ export async function applyDriftFix(
     if (drift.works.length === 0) {
         return null;
     }
+    // No source, no fix: an unreadable file must never be "fixed" into an
+    // empty blob, by model or by deterministic path.
+    if (!source.trim()) {
+        return null;
+    }
     // Single fix path (see @driftlock/aiFix): deterministic works, upgraded
     // to a model fix when configured, confident (>= 60), and valid.
     const primaryDiff =
