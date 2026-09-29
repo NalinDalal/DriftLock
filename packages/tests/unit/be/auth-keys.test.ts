@@ -28,16 +28,16 @@ const getSetting = mock(async (key: string) =>
         : null,
 );
 
-mock.module("../src/store", () => ({
+mock.module("@driftlock/be/src/store", () => ({
     getStore: () => ({ findApiKey, emitEvent, getSetting }),
 }));
 
-mock.module("../src/config", () => ({
+mock.module("@driftlock/be/src/config", () => ({
     config: { bearerToken: "op-token", port: 8787, corsOrigins: [] as string[] },
 }));
 
-import { authenticate, resetRateLimits, type AuthContext } from "../src/auth";
-import { config } from "../src/config";
+import { authenticate, resetRateLimits, type AuthContext } from "@driftlock/be/src/auth";
+import { config } from "@driftlock/be/src/config";
 
 function request(auth?: string): Request {
     return new Request("http://localhost/api/runs", {
@@ -92,7 +92,10 @@ describe("authenticate", () => {
         expect(ctx.key).toMatchObject({ id: "key-1", name: "ci" });
         expect(findApiKey).toHaveBeenCalledWith("dlk_valid");
         expect(emitEvent).toHaveBeenCalledTimes(1);
-        const [type, detail] = emitEvent.mock.calls[0] as [string, Record<string, unknown>];
+        const [type, detail] = emitEvent.mock.calls[0] as unknown as [
+            string,
+            Record<string, unknown>,
+        ];
         expect(type).toBe("api_called");
         expect(detail).toMatchObject({ keyId: "key-1", path: "/api/runs" });
     });

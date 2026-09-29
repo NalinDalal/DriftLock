@@ -91,10 +91,10 @@ jobs:
         name: Test Webhook Capture
       - run: bun test packages/aiFix/
         name: Test AI Fix
-      - run: bun test packages/migrations/
-        name: Test Migrations
-      - run: bun test packages/rulesEngine/
-        name: Test Rules Engine
+      - run: bun test packages/tests/unit/be/
+        name: Test BE
+      - run: bun test packages/tests/unit/cli/
+        name: Test CLI
 
   build:
     name: Build

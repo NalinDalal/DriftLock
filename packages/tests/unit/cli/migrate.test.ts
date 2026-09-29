@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { buildFixContext, isRemoteRef } from "../migrate";
-import type { ProviderChange } from "../migrate";
+import { buildFixContext, isRemoteRef } from "@driftlock/cli/migrate";
+import type { ProviderChange } from "@driftlock/cli/migrate";
 
 describe("migrate repo classification", () => {
     // A local path must never be handed to `git clone` as owner/repo, because

@@ -2,15 +2,28 @@ import { expect, mock } from "bun:test";
 import { createHash } from "crypto";
 
 const mockStore = {
-    ensureRepository: mock(async () => ({ id: "repo-1", owner: "acme", name: "payments" })),
-    recordRun: mock(async () => ({ id: "run-1", status: "running" })),
-    upsertCallSite: mock(async () => {}),
-    deleteObsoleteCallSites: mock(async () => {}),
-    saveSnapshot: mock(async () => ({ id: "snap-1" })),
-    getLatestSnapshot: mock(async () => null),
-    recordDrift: mock(async () => {}),
-    setCallSiteSnapshotState: mock(async () => {}),
-    finishRun: mock(async () => {}),
+    ensureRepository: mock(
+        async (_input: { owner: string; name: string; fullName: string }) => ({
+            id: "repo-1",
+            owner: "acme",
+            name: "payments",
+        }),
+    ),
+    recordRun: mock(
+        async (_input: { repositoryId: string; status: string }) => ({
+            id: "run-1",
+            status: "running",
+        }),
+    ),
+    upsertCallSite: mock(async (_repositoryId: string, _site: { id: string }) => {}),
+    deleteObsoleteCallSites: mock(async (_repositoryId: string, _ids: string[]) => {}),
+    saveSnapshot: mock(async (_site: { callSiteId: string }) => ({ id: "snap-1" })),
+    getLatestSnapshot: mock(async (_callSiteId: string) => null),
+    recordDrift: mock(
+        async (_input: { id: string; suggestedFix: { driftEventId: string } }) => {},
+    ),
+    setCallSiteSnapshotState: mock(async (_callSiteId: string, _state: string) => {}),
+    finishRun: mock(async (_input: { id: string; status: string }) => {}),
 };
 
 const mockClone = {
@@ -23,11 +36,11 @@ mock.module("@driftlock/db", () => ({
     createStore: mock(() => mockStore),
 }));
 
-mock.module("../src/store", () => ({
+mock.module("@driftlock/be/src/store", () => ({
     getStore: () => mockStore,
 }));
 
-mock.module("../src/clone", () => ({
+mock.module("@driftlock/be/src/clone", () => ({
     cloneRepo: mock(async () => mockClone),
 }));
 
@@ -91,7 +104,7 @@ mock.module("@driftlock/pipeline", () => ({
     }),
 }));
 
-import { handleRun } from "../src/routes/run";
+import { handleRun } from "@driftlock/be/src/routes/run";
 
 function makeRequest(body: unknown): Request {
     return new Request("http://localhost:8787/api/runs", {
@@ -132,10 +145,10 @@ async function run() {
     out("traffic", d4.run.trafficCaptured);
 
     // 5. Store interactions
-    out("ensure-repo", mockStore.ensureRepository.mock.calls[0][0].fullName);
-    out("record-run", mockStore.recordRun.mock.calls[0][0].status);
-    out("upsert-callsite", mockStore.upsertCallSite.mock.calls[0][1].id);
-    out("finish-run", mockStore.finishRun.mock.calls[0][0].status);
+    out("ensure-repo", mockStore.ensureRepository.mock.calls[0]![0].fullName);
+    out("record-run", mockStore.recordRun.mock.calls[0]![0].status);
+    out("upsert-callsite", mockStore.upsertCallSite.mock.calls[0]![1].id);
+    out("finish-run", mockStore.finishRun.mock.calls[0]![0].status);
 
     // 6. Default command
     const { analyzeAndCompare } = await import("@driftlock/pipeline");
@@ -151,7 +164,7 @@ async function run() {
     out("forward-filter", (analyzeAndCompare as ReturnType<typeof mock>).mock.calls[3][0].forward.length);
 
     // 9. Base branch
-    const { cloneRepo } = await import("../src/clone");
+    const { cloneRepo } = await import("@driftlock/be/src/clone");
     const cloneBefore = (cloneRepo as ReturnType<typeof mock>).mock.calls.length;
     await handleRun(makeRequest({ owner: "acme", repo: "payments", base: "develop" }));
     const lastCloneCall = (cloneRepo as ReturnType<typeof mock>).mock.calls[cloneBefore];

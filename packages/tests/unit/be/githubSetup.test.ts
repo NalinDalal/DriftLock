@@ -15,7 +15,7 @@ afterAll(() => {
     consoleErrorSpy.mockRestore();
 });
 
-const { handleGitHubSetup } = await import("../src/routes/githubSetup");
+const { handleGitHubSetup } = await import("@driftlock/be/src/routes/githubSetup");
 
 function workingDb() {
     getDbSpy.mockReturnValue({

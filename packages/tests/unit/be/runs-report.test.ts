@@ -1,7 +1,7 @@
 import { afterAll, afterEach, describe, expect, spyOn, test } from "bun:test";
-import * as storeModule from "../src/store";
-import { handleReportRun } from "../src/routes/report";
-import { handleActionsTemplate } from "../src/routes/templates";
+import * as storeModule from "@driftlock/be/src/store";
+import { handleReportRun } from "@driftlock/be/src/routes/report";
+import { handleActionsTemplate } from "@driftlock/be/src/routes/templates";
 
 const storeSpy = spyOn(storeModule, "getStore");
 afterEach(() => storeSpy.mockReset());

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { aiConfigFromEnv } from "../aiEnv";
+import { aiConfigFromEnv } from "@driftlock/cli/aiEnv";
 
 describe("aiConfigFromEnv", () => {
     test("undefined when no provider is set", () => {

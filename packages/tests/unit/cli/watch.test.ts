@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { VendorContract } from "@driftlock/agent";
-import { runWatch } from "../watch";
+import { runWatch } from "@driftlock/cli/watch";
 
 function stub(members: string[], version = "2") {
     return async () => ({
