@@ -24,6 +24,14 @@ export interface SessionValue {
     avatarUrl: string;
     accessToken: string;
     orgs: Array<{ login: string; id: number }>;
+    createdAt: number;
+    expiresAt: number;
+}
+
+/** Session lifetime. Overridable for tests via SESSION_TTL_DAYS. */
+export function sessionTtlMs(): number {
+    const days = Number(process.env.SESSION_TTL_DAYS ?? 7);
+    return Number.isFinite(days) && days > 0 ? Math.floor(days) * 86_400_000 : 7 * 86_400_000;
 }
 
 export interface SessionIdentity {
@@ -38,12 +46,29 @@ export function isSessionTokenFormat(raw: string): boolean {
 
 /**
  * Look up a dashboard session by token. Format-checked before any DB touch,
- * and resolved through the store (parameterized) — never string-interpolated.
+ * resolved through the store (parameterized) — never string-interpolated —
+ * and rejected past expiresAt. Expired rows are deleted best-effort.
+ * Sessions written before expiry existed have no expiresAt and are treated
+ * as expired (one re-login on upgrade).
  */
 export async function findSession(raw: string): Promise<SessionValue | null> {
     if (!isSessionTokenFormat(raw)) return null;
     try {
-        return await getStore().getSetting<SessionValue>(`session:${raw}`);
+        const session = await getStore().getSetting<SessionValue>(`session:${raw}`);
+        if (!session) return null;
+        if (
+            typeof session.expiresAt !== "number" ||
+            !Number.isFinite(session.expiresAt) ||
+            session.expiresAt <= Date.now()
+        ) {
+            try {
+                await getStore().deleteSetting(`session:${raw}`);
+            } catch {
+                // Cleanup must not mask the rejection.
+            }
+            return null;
+        }
+        return session;
     } catch {
         return null;
     }

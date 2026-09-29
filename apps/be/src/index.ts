@@ -61,7 +61,7 @@ async function dispatch(req: Request, url: URL): Promise<Response> {
         return handleGetSession(req);
     }
     if (url.pathname === "/api/auth/logout" && req.method === "POST") {
-        return handleLogout();
+        return handleLogout(req);
     }
     if (url.pathname === "/api/auth/repos") {
         return handleGitHubRepos(req);

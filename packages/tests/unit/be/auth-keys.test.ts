@@ -15,21 +15,29 @@ const findApiKey = mock(async (raw: string) =>
 const emitEvent = mock(() => {});
 
 const SESSION_TOKEN = "a".repeat(64);
-const getSetting = mock(async (key: string) =>
-    key === `session:${SESSION_TOKEN}`
-        ? {
-              userId: 1,
-              login: "octo",
-              name: "Octo",
-              avatarUrl: "https://x/y.png",
-              accessToken: "gho_x",
-              orgs: [],
-          }
-        : null,
-);
+const EXPIRED_TOKEN = "e".repeat(64);
+const sessionValue = (overrides: Record<string, unknown> = {}) => ({
+    userId: 1,
+    login: "octo",
+    name: "Octo",
+    avatarUrl: "https://x/y.png",
+    accessToken: "gho_x",
+    orgs: [],
+    createdAt: Date.now() - 1000,
+    expiresAt: Date.now() + 3600_000,
+    ...overrides,
+});
+const getSetting = mock(async (key: string) => {
+    if (key === `session:${SESSION_TOKEN}`) return sessionValue();
+    if (key === `session:${EXPIRED_TOKEN}`) {
+        return sessionValue({ expiresAt: Date.now() - 1000 });
+    }
+    return null;
+});
+const deleteSetting = mock(async (_key: string) => {});
 
 mock.module("@driftlock/be/src/store", () => ({
-    getStore: () => ({ findApiKey, emitEvent, getSetting }),
+    getStore: () => ({ findApiKey, emitEvent, getSetting, deleteSetting }),
 }));
 
 mock.module("@driftlock/be/src/config", () => ({
@@ -56,6 +64,7 @@ afterEach(() => {
     findApiKey.mockClear();
     emitEvent.mockClear();
     getSetting.mockClear();
+    deleteSetting.mockClear();
     delete process.env.RATE_LIMIT_PER_MINUTE;
     (config as { bearerToken: string | null }).bearerToken = "op-token";
 });
@@ -123,6 +132,13 @@ describe("authenticate", () => {
     test("unknown session-shaped token is 401", async () => {
         const res = (await authenticate(request(`Bearer ${"b".repeat(64)}`))) as Response;
         expect(res.status).toBe(401);
+    });
+
+    test("expired session is rejected and cleaned up", async () => {
+        const res = (await authenticate(request(`Bearer ${EXPIRED_TOKEN}`))) as Response;
+        expect(res.status).toBe(401);
+        expect(deleteSetting).toHaveBeenCalledWith(`session:${EXPIRED_TOKEN}`);
+        expect(emitEvent).not.toHaveBeenCalled();
     });
 
     test("non-hex bearer is 401 without touching the DB", async () => {

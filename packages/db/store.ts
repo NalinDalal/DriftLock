@@ -539,6 +539,10 @@ export function createStore(db: Database) {
       });
   }
 
+  async function deleteSetting(key: string) {
+    await db.delete(settings).where(eq(settings.key, key));
+  }
+
   async function listApiKeys() {
     return db
       .select({
@@ -665,6 +669,7 @@ export function createStore(db: Database) {
     listRecentRuns,
     getSetting,
     setSetting,
+    deleteSetting,
     listApiKeys,
     createApiKey,
     rotateApiKey,

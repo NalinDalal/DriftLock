@@ -12,7 +12,9 @@ export default function AuthCallbackPage() {
         if (token) {
             // Store token in localStorage
             localStorage.setItem("driftlock_token", token);
-            // Redirect to home
+            // Drop ?token= from history so the secret does not linger in the
+            // address bar, history, or server logs, then redirect home.
+            window.history.replaceState(null, "", window.location.pathname);
             navigate({ to: "/" });
         } else {
             setError("No token received");

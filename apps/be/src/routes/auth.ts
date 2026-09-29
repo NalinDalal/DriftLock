@@ -1,5 +1,7 @@
+import { timingSafeEqual } from "crypto";
 import { getDb, settings } from "@driftlock/db";
-import { findSession } from "../auth";
+import { findSession, sessionTtlMs } from "../auth";
+import { getStore } from "../store";
 
 function json(data: unknown, status = 200): Response {
     return new Response(JSON.stringify(data, null, 2), {
@@ -18,10 +20,53 @@ const GITHUB_APP_SLUG = process.env.GITHUB_APP_SLUG || "";
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8787";
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 
+function randomHex(bytes: number): string {
+    const buf = new Uint8Array(bytes);
+    crypto.getRandomValues(buf);
+    return Array.from(buf, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 function generateSessionToken(): string {
-    const bytes = new Uint8Array(32);
-    crypto.getRandomValues(bytes);
-    return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+    return randomHex(32);
+}
+
+const OAUTH_STATE_COOKIE = "driftlock_oauth_state";
+
+function isSecureContext(): boolean {
+    return BACKEND_URL.startsWith("https://");
+}
+
+function parseCookies(req: Request): Map<string, string> {
+    const out = new Map<string, string>();
+    const header = req.headers.get("cookie");
+    if (!header) return out;
+    for (const part of header.split(";")) {
+        const idx = part.indexOf("=");
+        if (idx <= 0) continue;
+        out.set(part.slice(0, idx).trim(), decodeURIComponent(part.slice(idx + 1).trim()));
+    }
+    return out;
+}
+
+function setStateCookie(state: string): string {
+    return (
+        `${OAUTH_STATE_COOKIE}=${state}; HttpOnly; SameSite=Lax; Path=/; Max-Age=600` +
+        (isSecureContext() ? "; Secure" : "")
+    );
+}
+
+function clearStateCookie(): string {
+    return (
+        `${OAUTH_STATE_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0` +
+        (isSecureContext() ? "; Secure" : "")
+    );
+}
+
+function validState(provided: string | null, expected: string | undefined): boolean {
+    if (!provided || !expected || provided.length !== expected.length) {
+        return false;
+    }
+    return timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
 }
 
 export async function handleGitHubLogin(): Promise<Response> {
@@ -31,22 +76,35 @@ export async function handleGitHubLogin(): Promise<Response> {
 
     const redirectUri = `${BACKEND_URL}/api/auth/github/callback`;
 
+    // CSRF defense: unguessable state, verified and single-used on callback.
+    const state = randomHex(16);
     const params = new URLSearchParams({
         client_id: GITHUB_CLIENT_ID,
         redirect_uri: redirectUri,
         scope: "read:user user:email read:org repo",
+        state,
     });
 
-    return redirect(`https://github.com/login/oauth/authorize?${params.toString()}`);
+    const res = redirect(`https://github.com/login/oauth/authorize?${params.toString()}`);
+    res.headers.set("Set-Cookie", setStateCookie(state));
+    return res;
 }
 
 export async function handleGitHubCallback(req: Request): Promise<Response> {
     const url = new URL(req.url);
     const code = url.searchParams.get("code");
-    const _state = url.searchParams.get("state");
 
     if (!code) {
         return json({ error: "Missing code parameter" }, 400);
+    }
+
+    // Reject login-CSRF: the state returned by GitHub must match the cookie
+    // set at login time. The cookie is cleared either way (single-use).
+    const cookies = parseCookies(req);
+    if (!validState(url.searchParams.get("state"), cookies.get(OAUTH_STATE_COOKIE))) {
+        const denied = json({ error: "Invalid OAuth state" }, 400);
+        denied.headers.set("Set-Cookie", clearStateCookie());
+        return denied;
     }
 
     // Exchange code for access token
@@ -109,11 +167,15 @@ export async function handleGitHubCallback(req: Request): Promise<Response> {
             avatarUrl: user.avatar_url,
             accessToken: tokenData.access_token,
             orgs: orgs.map((o) => ({ login: o.login, id: o.id })),
+            createdAt: Date.now(),
+            expiresAt: Date.now() + sessionTtlMs(),
         },
     });
 
-    // Redirect to frontend with session token
-    return redirect(`${FRONTEND_URL}/auth/callback?token=${sessionToken}`);
+    // Redirect to frontend with session token; the state cookie is single-use.
+    const done = redirect(`${FRONTEND_URL}/auth/callback?token=${sessionToken}`);
+    done.headers.set("Set-Cookie", clearStateCookie());
+    return done;
 }
 
 export async function handleGetSession(req: Request): Promise<Response> {
@@ -242,6 +304,16 @@ export function handleInstallUrl(req: Request): Response {
     return redirect(installUrl);
 }
 
-export async function handleLogout(): Promise<Response> {
+export async function handleLogout(req: Request): Promise<Response> {
+    const authHeader = req.headers.get("authorization");
+    const token =
+        authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (token) {
+        try {
+            await getStore().deleteSetting(`session:${token}`);
+        } catch {
+            // Revocation is best-effort; the response stays the same either way.
+        }
+    }
     return json({ ok: true });
 }
