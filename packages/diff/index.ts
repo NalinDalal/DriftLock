@@ -565,6 +565,48 @@ export function fixWorksForDiff(result: ShapeDiffResult): FixWork[] {
     return works;
 }
 
+/**
+ * Upgrade `custom` removal works using vendor-declared replacements.
+ *
+ * A traffic diff can only say "field X is gone"; the vendor spec says what
+ * superseded it. Given hints like `{ from: "payment_intents.source",
+ * to: "payment_intents.payment_method" }`, a removal work for leaf `source`
+ * becomes a `field_rename` the deterministic fixer and the validator
+ * already understand. Matching is by leaf: traffic works carry no parent
+ * context. First hint wins on leaf collision; unmatched works pass
+ * through untouched.
+ *
+ * Structural hint type (satisfied by `ReplacementHint` in vendorWatch)
+ * keeps this package free of a watcher dependency.
+ */
+export function applyVendorHints(
+    works: FixWork[],
+    hints: Array<{ from: string; to: string }>,
+): FixWork[] {
+    if (hints.length === 0) return works;
+    const byLeaf = new Map<string, string>();
+    for (const hint of hints) {
+        const fromLeaf = hint.from.split(".").pop() ?? hint.from;
+        const toLeaf = hint.to.split(".").pop() ?? hint.to;
+        if (!byLeaf.has(fromLeaf)) byLeaf.set(fromLeaf, toLeaf);
+    }
+    return works.map((work) => {
+        if (work.kind !== "custom" || !work.field) return work;
+        const replacement = byLeaf.get(work.field);
+        if (!replacement || replacement === work.field) return work;
+        const upgraded: FixWork = {
+            kind: "field_rename",
+            field: work.field,
+            from: work.field,
+            to: replacement,
+            description: `Rename '${work.field}' to '${replacement}' (vendor-declared replacement)`,
+            template: `rename '${work.field}' to '${replacement}'`,
+            confidence: work.confidence,
+        };
+        return upgraded;
+    });
+}
+
 export function applyFixWork(work: FixWork, source: string): string | null {
     switch (work.kind) {
         case "field_rename": {
