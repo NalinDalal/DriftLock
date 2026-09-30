@@ -37,7 +37,7 @@
       "name": "@driftlock/cli",
       "version": "0.1.0",
       "bin": {
-        "driftlock": "./dist/index.js",
+        "driftlock": "./index.ts",
       },
       "dependencies": {
         "@driftlock/agent": "workspace:*",

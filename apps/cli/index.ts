@@ -1,3 +1,4 @@
+#!/usr/bin/env bun
 import { readdirSync, readFileSync, writeFileSync } from "fs";
 import { isAbsolute, join, relative, resolve } from "path";
 import { Command } from "commander";

@@ -6,10 +6,9 @@
     "types": "./index.ts",
     "type": "module",
     "bin": {
-        "driftlock": "./dist/index.js"
+        "driftlock": "./index.ts"
     },
     "scripts": {
-        "build": "bun build ./index.ts --outdir ./dist --target node --external @driftlock/* --external ssh2 --external cpu-features",
         "typecheck": "tsc --noEmit",
         "lint": "eslint . --ext .ts"
     },
