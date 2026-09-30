@@ -1,6 +1,6 @@
 import { config } from "./config";
-import { requireBearer } from "./auth";
-import { badRequest, corsResponse, isCorsPreflight, notFound } from "./utils";
+import { authenticate } from "./auth";
+import { badRequest, corsHeaders, corsResponse, isCorsPreflight, notFound } from "./utils";
 import { handleHealth } from "./routes/health";
 import { handleAccounts, handleAccountRepos, handleMe } from "./routes/accounts";
 import {
@@ -16,6 +16,8 @@ import {
     handleUpdateSettings,
 } from "./routes/settings";
 import { handleRun } from "./routes/run";
+import { handleReportRun } from "./routes/report";
+import { handleActionsTemplate } from "./routes/templates";
 import {
     handleWebhookEndpoints,
     handleWebhookSchemas,
@@ -32,8 +34,11 @@ import {
 import { handleGitHubSetup } from "./routes/githubSetup";
 import { handleInstallationsSync } from "./routes/installations";
 
-// Auth routes don't require bearer token
+// Auth routes don't require credentials. /api/health stays public so
+// orchestrators and load balancers can probe without a token.
 const AUTH_ROUTES = new Set([
+    "/api/health",
+    "/api/templates/actions",
     "/api/auth/github",
     "/api/auth/github/callback",
     // GitHub redirects the browser here after an App install, so there is no
@@ -47,7 +52,7 @@ async function dispatch(req: Request, url: URL): Promise<Response> {
         return handleHealth();
     }
     if (url.pathname === "/api/auth/github" && req.method === "GET") {
-        return handleGitHubLogin();
+        return handleGitHubLogin(req);
     }
     if (url.pathname === "/api/auth/github/callback" && req.method === "GET") {
         return handleGitHubCallback(req);
@@ -56,7 +61,7 @@ async function dispatch(req: Request, url: URL): Promise<Response> {
         return handleGetSession(req);
     }
     if (url.pathname === "/api/auth/logout" && req.method === "POST") {
-        return handleLogout();
+        return handleLogout(req);
     }
     if (url.pathname === "/api/auth/repos") {
         return handleGitHubRepos(req);
@@ -95,6 +100,12 @@ async function dispatch(req: Request, url: URL): Promise<Response> {
     if (url.pathname === "/api/runs" && req.method === "POST") {
         return handleRun(req);
     }
+    if (url.pathname === "/api/runs/report" && req.method === "POST") {
+        return handleReportRun(req);
+    }
+    if (url.pathname === "/api/templates/actions" && req.method === "GET") {
+        return handleActionsTemplate();
+    }
     if (url.pathname === "/api/webhooks/endpoints") {
         return handleWebhookEndpoints(url);
     }
@@ -123,27 +134,37 @@ async function dispatch(req: Request, url: URL): Promise<Response> {
     return notFound();
 }
 
+/** Stamp credentialed CORS headers on every response (handlers stay CORS-free). */
+function withCors(res: Response, req: Request): Response {
+    const headers = corsHeaders(req);
+    for (const [key, value] of Object.entries(headers)) {
+        res.headers.set(key, value);
+    }
+    return res;
+}
+
 const server = Bun.serve({
     port: config.port,
     async fetch(req) {
         if (isCorsPreflight(req)) {
-            return corsResponse();
+            return corsResponse(req);
         }
         const url = new URL(req.url);
 
-        // Skip auth for public routes
+        // Skip auth for public routes; everything else accepts the
+        // operator token, a per-key dlk_... credential, or the session cookie.
         if (!AUTH_ROUTES.has(url.pathname)) {
-            const denied = requireBearer(req);
-            if (denied) {
-                return denied;
+            const auth = await authenticate(req);
+            if (auth instanceof Response) {
+                return withCors(auth, req);
             }
         }
 
         try {
-            return await dispatch(req, url);
+            return withCors(await dispatch(req, url), req);
         } catch (error) {
             console.error(error);
-            return badRequest("Internal error");
+            return withCors(badRequest("Internal error"), req);
         }
     },
 });

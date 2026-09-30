@@ -78,15 +78,15 @@ export default function InstallPage() {
     const [autoReturned, setAutoReturned] = useState(false);
 
     useEffect(() => {
-        const token = localStorage.getItem("driftlock_token");
-        if (!token) {
-            navigate({ to: "/login" });
-            return;
-        }
+        // Session rides the httpOnly cookie (credentials: include).
         fetch(`${API_URL}/api/auth/repos`, {
-            headers: { Authorization: `Bearer ${token}` },
+            credentials: "include",
         })
             .then((res) => {
+                if (res.status === 401) {
+                    navigate({ to: "/login" });
+                    throw new Error("Not signed in");
+                }
                 if (!res.ok) throw new Error("Failed to fetch repos");
                 return res.json();
             })
@@ -127,7 +127,7 @@ export default function InstallPage() {
         const onReturn = () => {
             if (document.visibilityState === "visible" && !autoReturned) {
                 setAutoReturned(true);
-                toast(`Repo${pendingCount !== 1 ? "s" : ""} added — ${pendingCount} selected. Click Back to DriftLock to continue.`);
+                toast(`Repo${pendingCount !== 1 ? "s" : ""} added, ${pendingCount} selected. Click Back to DriftLock to continue.`);
             }
         };
         window.addEventListener("focus", onReturn);
@@ -159,7 +159,6 @@ export default function InstallPage() {
     }
 
     async function handleInstall() {
-        const token = localStorage.getItem("driftlock_token");
         const selectedRepos = repos
             .filter((r) => selected.has(r.id))
             .map((r) => ({
@@ -171,7 +170,7 @@ export default function InstallPage() {
         const repoIds = Array.from(selected).join(",");
         try {
             const accountsRes = await fetch(`${API_URL}/api/accounts`, {
-                headers: { Authorization: `Bearer ${token}` },
+                credentials: "include",
             });
             if (accountsRes.ok) {
                 const data = (await accountsRes.json()) as { accounts: Array<{ owner: string }> };
@@ -186,15 +185,15 @@ export default function InstallPage() {
                 }
             }
         } catch {
-            // Fall through to local sync — a failed check must not block install.
+            // Fall through to local sync, a failed check must not block install.
         }
         setSyncError(null);
         try {
             const response = await fetch(`${API_URL}/api/installations/sync`, {
                 method: "POST",
+                credentials: "include",
                 headers: {
                     "content-type": "application/json",
-                    Authorization: `Bearer ${token}`,
                 },
                 body: JSON.stringify({ repos: selectedRepos }),
             });
@@ -215,17 +214,32 @@ export default function InstallPage() {
         // We no longer navigate away to https://github.com/settings/installations/163556203 on every add.
         const count = selectedRepos.length;
         setPendingCount(count);
-        toast(`Repo${count !== 1 ? "s" : ""} added — ${count} selected. Watching on DriftLock.`);
         setGithubOpened(false);
         setAutoReturned(false);
-        navigate({ to: "/accounts" });
+        // Hand off to the Actions funnel: watching alone detects nothing
+        // until the workflow is pushed. A single pick preselects the repo
+        // (step 3); several drop at the picker (step 2).
+        const [firstPick] = selectedRepos;
+        if (count === 1 && firstPick) {
+            toast(`Repo added. Next: paste 2 secrets, push 1 file.`);
+            navigate({ to: "/actions", search: { repo: firstPick.fullName } });
+        } else {
+            toast(`Repo${count !== 1 ? "s" : ""} added, ${count} selected. Connect one to CI.`);
+            navigate({ to: "/actions", search: { repo: undefined } });
+        }
     }
 
     if (loading) {
         return (
             <div className="flex min-h-[50vh] items-center justify-center">
                 <div className="text-center">
-                    <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-[var(--color-line)] border-t-[#0F172A]" />
+                    <div
+                        role="status"
+                        aria-live="polite"
+                        className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-[var(--color-line)] border-t-[var(--color-ink)]"
+                    >
+                        <span className="sr-only">Loading your repositories</span>
+                    </div>
                     <p className="mt-3 font-mono text-xs tracking-wide text-[var(--color-muted)]">
                         LOADING REPOS…
                     </p>
@@ -265,7 +279,7 @@ export default function InstallPage() {
                 <p className="font-mono text-[11px] tracking-[0.14em] text-[var(--color-muted)]">
                     INSTALL
                 </p>
-                <h1 className="mt-1 font-display text-[24px] tracking-[-0.02em] text-[var(--color-ink)]">
+                <h1 className="heading-section mt-1 text-[var(--color-ink)]">
                     Choose repos to watch
                 </h1>
                 <p className="mt-1 font-mono text-xs leading-4 text-[var(--color-muted)]">
@@ -298,7 +312,7 @@ export default function InstallPage() {
             {githubOpened && (
                 <div className="mt-4 border border-[var(--color-line-strong)] bg-[var(--color-ink)] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
                     <div>
-                        <p className="font-mono text-xs tracking-wide text-[var(--color-paper)]">GitHub opened — if you need to grant access to a private repo not listed here, do it on GitHub, then return.</p>
+                        <p className="font-mono text-xs tracking-wide text-[var(--color-paper)]">GitHub opened. If you need to grant access to a private repo not listed here, do it on GitHub, then return.</p>
                         <p className="font-mono text-[11px] tracking-wide text-[var(--color-paper)]/60">For repos you already see here, no GitHub step is needed. Just add and we watch them.</p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -307,12 +321,19 @@ export default function InstallPage() {
                             onClick={() => {
                                 setGithubOpened(false);
                                 setAutoReturned(false);
-                                toast(`Repo${pendingCount !== 1 ? "s" : ""} added — ${pendingCount} selected`);
-                                navigate({ to: "/accounts" });
+                                const picked = repos.filter((r) => selected.has(r.id));
+                                const [firstPick] = picked;
+                                if (picked.length === 1 && firstPick) {
+                                    toast(`Repo added. Next: paste 2 secrets, push 1 file.`);
+                                    navigate({ to: "/actions", search: { repo: firstPick.fullName } });
+                                } else {
+                                    toast(`Repo${pendingCount !== 1 ? "s" : ""} added, ${pendingCount} selected. Connect one to CI.`);
+                                    navigate({ to: "/actions", search: { repo: undefined } });
+                                }
                             }}
                             className="bg-[var(--color-surface)] text-[var(--color-ink)] hover:bg-[var(--color-paper)] font-mono text-[11px] tracking-wide"
                         >
-                            View repos ✓
+                            Connect actions →
                         </Button>
                         <button onClick={() => { setGithubOpened(false); setAutoReturned(false); }} className="font-mono text-[11px] tracking-wide text-[var(--color-paper)]/70 hover:text-[var(--color-paper)]">Dismiss</button>
                     </div>
@@ -325,7 +346,7 @@ export default function InstallPage() {
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                         placeholder="Search repos…"
-                        className="w-full border border-[var(--color-line-strong)]/15 bg-[var(--color-surface)] px-3 py-2 pl-8 font-mono text-xs text-[var(--color-ink)] placeholder:text-[var(--color-muted)] focus:border-[var(--color-line-strong)] focus:outline-none"
+                        className="w-full border border-[var(--color-line-strong)]/15 bg-[var(--color-surface)] px-3 py-2 pl-8 font-mono text-xs text-[var(--color-ink)] placeholder:text-[var(--color-muted)] focus:border-[var(--color-line-strong)]"
                     />
                     <span className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 font-mono text-xs text-[var(--color-muted)]">
                         ⌕

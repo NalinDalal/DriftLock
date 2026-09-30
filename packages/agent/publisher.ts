@@ -18,6 +18,8 @@ export type PublishInput = {
     branch: string;
     files: PublishFile[];
     commitMessage: string;
+    /** Open as a draft PR. The agent sets this when no contract gates the run. */
+    draft?: boolean;
 };
 
 export type PullRequestInfo = {
@@ -66,6 +68,7 @@ export function createGitHubPublisher(
                 body: input.body,
                 commitMessage: input.commitMessage,
                 files: input.files,
+                draft: input.draft,
             });
             return {
                 status: result.status,

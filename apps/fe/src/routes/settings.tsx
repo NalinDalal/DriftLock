@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { cloneElement, useEffect, useId, useRef, useState } from "react";
 import { getAccounts, getAccountRepos, getSettings, rotateApiKey, updateRepoPolicy, updateSettings } from "../api/client";
 import type { Permission, Repo } from "../api/types";
 import { Badge } from "../components/Badge";
@@ -18,16 +18,58 @@ function SectionLabel({ title, hint }: { title: string; hint?: string }) {
     );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+// The label is programmatically tied to the control it names. A bare <label>
+// sibling with no htmlFor renders the same pixels but leaves the control with
+// no accessible name, so placeholders become the only label a screen reader
+// gets, and Confidence Threshold has no placeholder at all.
+function Field({
+    label,
+    hint,
+    id: forcedId,
+    children,
+}: {
+    label: string;
+    hint?: string;
+    /** Set this for a custom control that must own its own id (the provider
+     *  dropdown nests its trigger inside a positioned wrapper). */
+    id?: string;
+    children: React.ReactElement;
+}) {
+    const autoId = useId();
+    const id = forcedId ?? autoId;
+    const hintId = hint ? `${id}-hint` : undefined;
     return (
         <div>
-            <label className="mb-1.5 block font-mono text-[11px] tracking-[0.08em] text-[var(--color-ink)]">{label}</label>
-            {children}
+            <label
+                htmlFor={id}
+                className="mb-1.5 block font-mono text-[11px] tracking-[0.08em] text-[var(--color-ink)]"
+            >
+                {label}
+            </label>
+            {forcedId
+                ? children
+                : cloneElement(children, {
+                      id,
+                      ...(hint ? { "aria-describedby": hintId } : {}),
+                  })}
+            {hint && (
+                <p id={hintId} className="mt-1 text-[11px] leading-4 text-[var(--color-muted)]">
+                    {hint}
+                </p>
+            )}
         </div>
     );
 }
 
-const inputBase = "w-full border border-[var(--color-line-strong)]/15 bg-[var(--color-surface)] px-3 py-2 font-mono text-xs text-[var(--color-ink)] placeholder:text-[var(--color-muted)] focus:border-[var(--color-line-strong)] focus:outline-none";
+const inputBase = "w-full border border-[var(--color-line-strong)]/15 bg-[var(--color-surface)] px-3 py-2 font-mono text-xs text-[var(--color-ink)] placeholder:text-[var(--color-muted)] focus:border-[var(--color-line-strong)]";
+
+const PROVIDERS = [
+    { v: "", l: "NONE, DETERMINISTIC ONLY" },
+    { v: "openai", l: "OPENAI" },
+    { v: "anthropic", l: "ANTHROPIC" },
+    { v: "gemini", l: "GEMINI" },
+    { v: "cloudflare", l: "CLOUDFLARE" },
+];
 
 function RepoPolicyRow({ repo }: { repo: Repo }) {
     async function patch(p: Partial<{ watched: boolean; permission: Permission; schedule: string }>) {
@@ -48,9 +90,14 @@ function RepoPolicyRow({ repo }: { repo: Repo }) {
             </div>
             <label className="flex items-center gap-2 font-mono text-[11px] tracking-wide text-[var(--color-ink)]">
                 WATCH
-                <Toggle checked={repo.watched} onChange={(watched) => patch({ watched })} label="Watch repo" />
+                <Toggle checked={repo.watched} onChange={(watched) => patch({ watched })} label={`Watch ${repo.owner}/${repo.name}`} />
             </label>
-            <select value={repo.permission} onChange={(e) => patch({ permission: e.target.value as Permission })} className="border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 font-mono text-[11px] tracking-wide text-[var(--color-ink)] focus:border-[var(--color-line-strong)] focus:outline-none">
+            <select
+                value={repo.permission}
+                onChange={(e) => patch({ permission: e.target.value as Permission })}
+                aria-label={`Permission for ${repo.owner}/${repo.name}`}
+                className="border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 font-mono text-[11px] tracking-wide text-[var(--color-ink)] focus:border-[var(--color-line-strong)]"
+            >
                 <option value="read">READ</option>
                 <option value="read-write">READ + WRITE</option>
                 <option value="suggest-only">SUGGEST ONLY</option>
@@ -60,7 +107,8 @@ function RepoPolicyRow({ repo }: { repo: Repo }) {
                 onChange={(e) => patch({ schedule: e.target.value })}
                 onBlur={() => toast("Schedule saved")}
                 placeholder="cron: 0 * * * *"
-                className="w-28 border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 font-mono text-[11px] tracking-wide text-[var(--color-ink)] placeholder:text-[var(--color-muted)] focus:border-[var(--color-line-strong)] focus:outline-none"
+                aria-label={`Scan schedule for ${repo.owner}/${repo.name}, cron expression`}
+                className="w-28 border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 font-mono text-[11px] tracking-wide text-[var(--color-ink)] placeholder:text-[var(--color-muted)] focus:border-[var(--color-line-strong)]"
             />
         </div>
     );
@@ -86,22 +134,89 @@ function WebhookSettings({
     });
 
     const [providerOpen, setProviderOpen] = useState(false);
+    const [activeIndex, setActiveIndex] = useState(0);
     const providerRef = useRef<HTMLDivElement>(null);
+    const providerId = useId();
+    const triggerId = `${providerId}-trigger`;
+    const listId = `${providerId}-list`;
+
+    const selectedIndex = Math.max(
+        0,
+        PROVIDERS.findIndex((p) => p.v === form.aiProvider),
+    );
+    const activeId = `${providerId}-opt-${activeIndex}`;
+
+    // Opening always lands on the current value, so a keyboard user who
+    // reopens the list is not thrown back to the top.
+    function openProvider() {
+        setActiveIndex(selectedIndex);
+        setProviderOpen(true);
+    }
+
+    function closeProvider(focusTrigger = true) {
+        setProviderOpen(false);
+        if (focusTrigger) {
+            document.getElementById(triggerId)?.focus();
+        }
+    }
+
+    function chooseProvider(v: string) {
+        handleChange("aiProvider", v);
+        closeProvider();
+    }
+
+    function onProviderKey(e: React.KeyboardEvent) {
+        const last = PROVIDERS.length - 1;
+        const move = (next: number) => {
+            e.preventDefault();
+            setActiveIndex(next);
+            // Keep the highlighted option inside the scroll area.
+            requestAnimationFrame(() => {
+                document
+                    .getElementById(`${providerId}-opt-${next}`)
+                    ?.scrollIntoView({ block: "nearest" });
+            });
+        };
+
+        switch (e.key) {
+            case "ArrowDown":
+                move(activeIndex >= last ? 0 : activeIndex + 1);
+                break;
+            case "ArrowUp":
+                move(activeIndex <= 0 ? last : activeIndex - 1);
+                break;
+            case "Home":
+                move(0);
+                break;
+            case "End":
+                move(last);
+                break;
+            case "Enter":
+            case " ":
+                e.preventDefault();
+                chooseProvider(PROVIDERS[activeIndex].v);
+                break;
+            case "Escape":
+                if (providerOpen) {
+                    e.preventDefault();
+                    closeProvider();
+                }
+                break;
+            case "Tab":
+                if (providerOpen) setProviderOpen(false);
+                break;
+        }
+    }
 
     useEffect(() => {
         if (!providerOpen) return;
-        function onKey(e: KeyboardEvent) {
-            if (e.key === "Escape") setProviderOpen(false);
-        }
         function onClick(e: MouseEvent) {
             if (providerRef.current && !providerRef.current.contains(e.target as Node)) {
                 setProviderOpen(false);
             }
         }
-        document.addEventListener("keydown", onKey);
         document.addEventListener("mousedown", onClick);
         return () => {
-            document.removeEventListener("keydown", onKey);
             document.removeEventListener("mousedown", onClick);
         };
     }, [providerOpen]);
@@ -139,40 +254,54 @@ function WebhookSettings({
                 <Field label="Forward URL"><input value={form.forwardUrl} onChange={(e) => handleChange("forwardUrl", e.target.value)} placeholder="https://your-app.com/webhooks/stripe" className={inputBase} /></Field>
                 <Field label="Repository Owner"><input value={form.repoOwner} onChange={(e) => handleChange("repoOwner", e.target.value)} placeholder="your-org" className={inputBase} /></Field>
                 <Field label="Repository Name"><input value={form.repoName} onChange={(e) => handleChange("repoName", e.target.value)} placeholder="your-repo" className={inputBase} /></Field>
-                <Field label="AI Provider">
+                <Field label="AI Provider" id={triggerId}>
                     <div className="relative" ref={providerRef}>
                         <button
                             type="button"
-                            onClick={() => setProviderOpen((v) => !v)}
-                            className="flex w-full items-center justify-between border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-3 py-2 font-mono text-xs tracking-wide text-[var(--color-ink)] hover:bg-[var(--color-paper)]"
+                            id={triggerId}
+                            onClick={() => (providerOpen ? closeProvider() : openProvider())}
+                            onKeyDown={onProviderKey}
+                            role="combobox"
                             aria-haspopup="listbox"
                             aria-expanded={providerOpen}
+                            aria-controls={listId}
+                            aria-activedescendant={providerOpen ? activeId : undefined}
+                            className="flex w-full items-center justify-between border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-3 py-2 font-mono text-xs tracking-wide text-[var(--color-ink)] hover:bg-[var(--color-paper)]"
                         >
-                            <span>{form.aiProvider ? form.aiProvider.toUpperCase() : "NONE — DETERMINISTIC ONLY"}</span>
+                            <span>{form.aiProvider ? form.aiProvider.toUpperCase() : "NONE, DETERMINISTIC ONLY"}</span>
                             <span className="ml-2 text-[var(--color-muted)]">▾</span>
                         </button>
                         {providerOpen && (
-                            <div id="ai-provider-list" role="listbox" className="absolute z-10 mt-1 w-full border border-[var(--color-line-strong)] bg-[var(--color-surface)] shadow-[3px_3px_0_var(--color-line-strong)]">
-                                {[
-                                    { v: "", l: "NONE — DETERMINISTIC ONLY" },
-                                    { v: "openai", l: "OPENAI" },
-                                    { v: "anthropic", l: "ANTHROPIC" },
-                                    { v: "gemini", l: "GEMINI" },
-                                    { v: "cloudflare", l: "CLOUDFLARE" },
-                                ].map((o) => (
-                                    <button
+                            <div
+                                id={listId}
+                                role="listbox"
+                                aria-label="AI provider"
+                                className="absolute z-10 mt-1 w-full border border-[var(--color-line-strong)] bg-[var(--color-surface)] shadow-[3px_3px_0_var(--color-line-strong)]"
+                            >
+                                {PROVIDERS.map((o, i) => (
+                                    <div
                                         key={o.v}
-                                        type="button"
+                                        id={`${providerId}-opt-${i}`}
                                         role="option"
                                         aria-selected={form.aiProvider === o.v}
-                                        onClick={() => {
-                                            handleChange("aiProvider", o.v);
-                                            setProviderOpen(false);
+                                        // mousedown, not click: a click handler would
+                                        // never fire because the outside-click
+                                        // listener closes the list first.
+                                        onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            chooseProvider(o.v);
                                         }}
-                                        className={`flex w-full px-3 py-2 text-left font-mono text-xs tracking-wide hover:bg-[var(--color-paper)] ${form.aiProvider === o.v ? "bg-[var(--color-ink)] text-[var(--color-paper)]" : "text-[var(--color-ink)]"}`}
+                                        onMouseEnter={() => setActiveIndex(i)}
+                                        className={`flex w-full cursor-pointer px-3 py-2 text-left font-mono text-xs tracking-wide ${
+                                            form.aiProvider === o.v
+                                                ? "bg-[var(--color-ink)] text-[var(--color-paper)]"
+                                                : i === activeIndex
+                                                  ? "bg-[var(--color-paper)] text-[var(--color-ink)]"
+                                                  : "text-[var(--color-ink)]"
+                                        }`}
                                     >
                                         {o.l}
-                                    </button>
+                                    </div>
                                 ))}
                             </div>
                         )}
@@ -181,7 +310,7 @@ function WebhookSettings({
                 <Field label="AI API Key"><input type="password" value={form.aiApiKey} onChange={(e) => handleChange("aiApiKey", e.target.value)} placeholder={form.aiProvider === "cloudflare" ? "cfat_..." : form.aiProvider === "gemini" ? "Gemini API key" : "sk-..."} className={inputBase} /></Field>
                 <Field label="AI Model"><input value={form.aiModel} onChange={(e) => handleChange("aiModel", e.target.value)} placeholder={form.aiProvider === "cloudflare" ? "@cf/google/gemma-4-26b-a4b-it" : form.aiProvider === "gemini" ? "gemini-2.5-flash" : "Provider default"} className={inputBase} /></Field>
                 {form.aiProvider === "cloudflare" && <Field label="Cloudflare Account ID"><input value={form.cloudflareAccountId} onChange={(e) => handleChange("cloudflareAccountId", e.target.value)} placeholder="Cloudflare account ID" className={inputBase} /></Field>}
-                <Field label="Confidence Threshold"><input type="number" min="0" max="1" step="0.1" value={form.confidenceThreshold} onChange={(e) => handleChange("confidenceThreshold", e.target.value)} className={inputBase} /></Field>
+                <Field label="Confidence Threshold" hint="Drift below this score is recorded but no fix PR is opened."><input type="number" min="0" max="1" step="0.1" value={form.confidenceThreshold} onChange={(e) => handleChange("confidenceThreshold", e.target.value)} className={inputBase} /></Field>
             </div>
             <div className="flex items-center justify-between border-t border-[var(--color-line)] bg-[var(--color-paper)] px-4 py-3">
                 <p className="font-mono text-[11px] tracking-wide text-[var(--color-muted)]">Server clone is managed via GitHub token, not a local path. No server filesystem is exposed.</p>
@@ -251,7 +380,7 @@ export default function SettingsPage() {
                 setCopied(true);
                 toast(`Copied ${key.keyMasked} to clipboard`);
             } catch {
-                toast(`New ${key.keyMasked} — copy it now, shown once`);
+                toast(`New ${key.keyMasked}, copy it now, shown once`);
             }
         } catch (err) {
             toast(err instanceof Error ? err.message : "Failed to rotate");
@@ -328,7 +457,7 @@ export default function SettingsPage() {
                             )}
                         </div>
                         <form className="mt-3 flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); const value = whitelistDraft.trim(); if (!value || whitelist.includes(value)) return; void saveWhitelist([...whitelist, value]); setWhitelistDraft(""); }}>
-                            <input value={whitelistDraft} onChange={(e) => setWhitelistDraft(e.target.value)} placeholder="POST /v3/mail/send" className="w-64 border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 font-mono text-xs text-[var(--color-ink)] placeholder:text-[var(--color-muted)] focus:border-[var(--color-line-strong)] focus:outline-none" />
+                            <input value={whitelistDraft} onChange={(e) => setWhitelistDraft(e.target.value)} placeholder="POST /v3/mail/send" className="w-64 border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 font-mono text-xs text-[var(--color-ink)] placeholder:text-[var(--color-muted)] focus:border-[var(--color-line-strong)]" />
                             <Button size="sm" variant="secondary" type="submit" className="border border-[var(--color-line-strong)] bg-[var(--color-surface)] text-[var(--color-ink)] hover:bg-[var(--color-paper)]">
                                 ADD
                             </Button>
@@ -343,11 +472,11 @@ export default function SettingsPage() {
                     {newKey && (
                         <div className="mb-3 border border-[var(--color-line-strong)] bg-[var(--color-paper)]">
                             <div className="flex items-center justify-between border-b border-[var(--color-line-strong)] bg-[var(--color-ink)] px-3 py-1.5">
-                                <p className="font-mono text-[11px] tracking-[0.08em] text-[var(--color-paper)]">NEW KEY — COPY NOW, SHOWN ONCE</p>
+                                <p className="font-mono text-[11px] tracking-[0.08em] text-[var(--color-paper)]">NEW KEY, COPY NOW, SHOWN ONCE</p>
                                 <button onClick={() => setNewKey(null)} className="font-mono text-[11px] tracking-wide text-[var(--color-paper)]/70 hover:text-[var(--color-paper)]">DISMISS ×</button>
                             </div>
                             <div className="flex items-center gap-2 p-3">
-                                <input readOnly value={newKey} className="flex-1 border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-3 py-2 font-mono text-xs text-[var(--color-ink)] focus:outline-none" onFocus={(e) => e.target.select()} />
+                                <input readOnly value={newKey} className="flex-1 border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-3 py-2 font-mono text-xs text-[var(--color-ink)]" onFocus={(e) => e.target.select()} />
                                 <Button
                                     size="sm"
                                     onClick={async () => {

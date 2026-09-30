@@ -137,7 +137,11 @@ code references something the contract cannot place.
 A contract is `{ provider, version, source, authority, origin, capturedAt,
 members[], removed[] }`. `members` are dotted paths (`payment_method`,
 `charges.data[].id`), and `removed` is what a diff against a baseline showed the
-vendor dropped.
+vendor dropped. Builders: `contractFromHar` (replayed traffic), `contractFromSpec`
+(published declarations), `probeLiveContract` (one real GET), and
+`contractFromWebhookAlert` (one webhook baseline/current pair — each key
+contributes its full path and its leaf, since handler code reads leaves off a
+receiver).
 
 `authority` is the whole point. A `live` or `spec` contract is authoritative, so
 a missing member is a real finding. A `recorded` contract is sampled, so the
@@ -163,8 +167,8 @@ migration's problem.
 The gate runs inside `createPullRequest`, after the command check, and
 `decideOutcome` will not return `auto_pr` while any finding stands. A green test
 suite with an unresolved vendor symbol is `review_pr` at best. A green suite
-with no contract at all is `review_pr` (`draft_pr` with `prMode: "draft"`) at
-best, for the same reason: nothing verified the edits against the vendor.
+with no contract at all is `draft_pr`, for the same reason: nothing verified
+the edits against the vendor.
 
 ### Why receiver discovery matters
 
@@ -227,19 +231,82 @@ and the installed version of the library being migrated, and injects both those
 facts and the vendor's real API surface into the opening message. It then finds
 the affected call sites, reads them, applies minimal edits, runs a whitelisted
 verification command, checks those edits against the contract, and reports one
-of three outcomes (four when the caller prefers drafts):
+of four outcomes:
 
 | Outcome      | Meaning                                                              |
 | ------------ | -------------------------------------------------------------------- |
 | `auto_pr`    | Files changed, verification passed, and a vendor contract gates it   |
-| `review_pr`  | Files changed but needs a human: validation failed, never ran, or no contract |
-| `draft_pr`   | Same as `review_pr`, when the caller passed `prMode: "draft"`        |
+| `review_pr`  | Files changed but validation failed, or never ran                   |
+| `draft_pr`   | Files changed and verification passed, but no contract gates it     |
 | `no_action`  | Nothing changed, usually the API is not used                        |
 
 `auto_pr` means the diff is ready for a human. It never means merged.
-Without a vendor contract the outcome is capped at `review_pr` (or `draft_pr`
-with `prMode: "draft"`): passing tests prove the code runs, but nothing checked
-the edits against the vendor's real API surface, so the diff is never automatic.
+Without a vendor contract the outcome is `draft_pr`, and the publish gate
+enforces the same policy where the PR is opened: a contractless run publishes
+a draft, never a mergeable PR. Passing tests prove the code runs, but nothing
+checked the edits against the vendor's real API surface, so the diff is never
+automatic.
+
+## [shipped] Retry is enforced, not requested
+
+A failed `editFile` or `replaceInFile` used to end with a FAILED tool result
+and a prompt line saying "fix the hunk and retry". The model sometimes did
+something else instead — usually running verification on a tree that was
+missing the intended change, which then passed and looked finished.
+
+The harness now owns the retry. A failed edit sets `pendingEditRetry` to that
+path, and while it is set `runCommand` and `createPullRequest` are refused
+with the path and the attempt count named. The refusal names the exact next
+action: rewrite the same file successfully. A successful edit to that path
+clears the gate; anything else (including editing a different file) does not.
+`decideOutcome` treats an outstanding retry as review-only by construction,
+so a stale pass from before the failed edit can never read as `auto_pr`.
+
+## [shipped] Unknown symbols resolve to a cited answer
+
+The gate could refuse `p.keyIsCurrentlyDown`, but refusal alone left the model
+with one move: another guess. `lookupVendorSymbol` is the other half of the
+gate. Given the name the model is considering, it answers from the captured
+contract — `exists` (safe to reference), `removed` (do not read it), or
+`unknown` with the closest recorded names — each cited to the contract's
+origin. "I do not know what replaced this" is now a tool call, and the tool
+descriptions say so: guess nothing that is not in the returned list.
+
+## [shipped] Completeness is checked before verification, not only at the PR
+
+The stale sweep ran inside `createPullRequest`, which meant the model learned
+about the third untouched file only after verification had already passed.
+`checkCompleteness` runs the same sweep on demand (changed files get the full
+check, untouched files the stale-only sweep), and a passing `runCommand` now
+appends a `COMPLETENESS WARNING` with the remaining `file:line` items while
+the model can still act. Findings are stored on state either way, so the
+outcome and the receipt reflect them even when the model never opens a PR.
+Without a contract there is nothing authoritative to sweep; the tool then
+reports which queries were searched and which files changed, so the gap is
+explicit rather than silent.
+
+## [shipped] Confidence beyond pass/fail
+
+`assessConfidence(state)` names every reason the run is not auto-mergable: no
+passing verification on the current tree, an outstanding edit retry, unresolved
+symbol findings, an unchecked or absent contract, edits with no preceding
+search. `high` requires a passing verification plus a clean checked contract
+with no pending retry; a passing verification with zero findings but a lesser
+guarantee (no contract, unchecked gate) is `medium`; anything else is `low`.
+The receipt carries `confidence` and `confidenceReasons`, both PR outputs
+echo them, and `decideOutcome` can never return `auto_pr` while a retry is
+outstanding.
+
+## [shipped] Sandbox network is opt-in, not impossible
+
+`createSandboxCommandRunner` still defaults to `NetworkMode: none`, and that
+default is still the right one for untrusted build scripts. But a migration
+whose verification must reach a registry mid-run (e.g. an install step) is no
+longer unsupported: pass `networkEnabled: true` with an explicit
+`allowedEndpoints` allowlist such as `["registry.npmjs.org:443"]`, and the
+allowlist is forwarded to the sandbox runner (traffic still flows through the
+capture proxy when networking is on). Enabling the network without an
+allowlist throws, so the open-network footgun has no terse spelling.
 
 ## Files
 
@@ -350,11 +417,22 @@ result.outcome;         // "auto_pr" | "review_pr" | "draft_pr" | "no_action"
 result.filesChanged;    // ["src/client.ts"]
 result.state.pullRequest; // { status, url, number, branch } when a PR exists
 result.state.transcript;  // full tool conversation
+result.receipt;         // one audit line: runId, outcome, files, proof, PR
 ```
 
 Pass `client` to supply your own OpenAI-compatible client, `model` to override
 the default `gpt-4o-mini`, and `publisher` plus `target` to actually open a pull
 request. With no publisher, `createPullRequest` returns a preview and says so.
+
+## Resilience
+
+Model calls have a 120s timeout and 2 retries with backoff on transient
+failures (429, 5xx, timeouts, dropped connections); override with
+`modelTimeoutMs`, `modelMaxRetries`, `modelRetryBaseMs`. Anything else —
+a dead endpoint, an exhausted budget, five tool failures in a row — ends the
+run with an outcome (`review_pr`/`draft_pr`/`no_action`) instead of throwing,
+so edits on disk are always reported rather than lost. Every run carries a
+`runId` echoed in its receipt for log correlation.
 
 ## Running against a non-OpenAI provider
 
@@ -425,17 +503,12 @@ example a local `CommandRunner` that skips Docker entirely.
 ## [planned] Not done yet
 
 - The agent does not create the temporary branch yet. It assumes one exists.
-- No confidence signal beyond pass/fail. A richer verdict would feed the
-  `auto_pr` threshold rather than hardcode "tests passed".
 - The loop has only been proven against Cloudflare Workers AI
   (`@cf/meta/llama-3.3-70b-instruct-fp8-fast`). A representative run against two
   throwaway repositories is recorded in [Real repository runs](#real-repository-runs);
-  a wider model sweep is not done.
-- The sandbox uses `SandboxRunner`'s proxy allowlist model, but the agent always
-  disables the network. A migration that must reach a registry mid-run is not
-  supported yet.
-- After a failed edit the model sometimes moves on to verification instead of
-  fixing the edit. The prompt tells it to retry; nothing enforces it.
+  a wider model sweep is not done. Those runs predate the retry gate, the
+  `lookupVendorSymbol`/`checkCompleteness` tools, and the inline completeness
+  warning, so their 3/4- and 1/2-site edits describe the old harness.
 - `discoverVendorReceivers` is a regex heuristic. It catches a value assigned
   from a vendor client call or a webhook payload chain, and misses anything
   routed through a factory, a class field, or a rename. Pass
@@ -446,11 +519,12 @@ example a local `CommandRunner` that skips Docker entirely.
 - `probeLiveContract` is not called from inside `runMigrationAgent`. A caller
   builds the contract and passes it in. That keeps credentials out of the model
   loop, but it also means nobody is probing on a schedule.
-- The agent has no way to resolve a vendor symbol it has not been told about. The
-  contract gate will correctly refuse `p.keyIsCurrentlyDown`, but the model has
-  no tool that turns "I do not know what replaced this" into a cited answer, so
-  its only remaining move is another guess. This is the next stage and it is the
-  reason the gate currently grades honesty on a board the agent was never given.
+- The contract gate grades honesty on a board the agent was given: refusal cites
+  the contract, and `lookupVendorSymbol` resolves the replacement from the same
+  source. What remains is the deeper case — a symbol that is absent from the
+  contract itself (a sampled recording, a version skew). There the lookup
+  correctly says "unknown with candidates", and the model must still decide
+  between the candidates and leaving the site for review.
 - `fingerprintRepo` reads the top-level manifest only. Workspaces, monorepo
   members, and nested packages are not resolved, so a monorepo reports the root
   manifest's scripts and misses a package that has its own. `alsoDetected` is the

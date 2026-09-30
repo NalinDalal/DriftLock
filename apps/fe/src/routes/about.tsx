@@ -123,23 +123,23 @@ export default function AboutPage() {
                 <Link to="/" className="hover:text-[var(--color-ink)] hover:underline underline-offset-2">
                     Home
                 </Link>{" "}
-                <span className="text-[#CBD5E1]">/</span> About
+                <span className="text-[var(--color-muted-2)]">/</span> About
             </nav>
 
             {/* Section 1: Entity Definition */}
-            <h1 className="font-display text-[34px] leading-[0.95] tracking-[-0.03em] text-[var(--color-ink)] sm:text-[42px]">About DriftLock</h1>
+            <h1 className="display text-[var(--color-ink)]">About DriftLock</h1>
             <p className="mt-4 max-w-[65ch] font-mono text-[14px] leading-6 text-[var(--color-ink)]/80">
                 DriftLock is a self-maintaining API platform that detects vendor drift and opens a GitHub PR with the fix for engineering teams.
             </p>
-            <p className="mt-3 max-w-[65ch] text-[14px] leading-6 text-[#475569]">
+            <p className="mt-3 max-w-[65ch] text-[14px] leading-6 text-[var(--color-muted)]">
                 DriftLock scans your codebase for API call sites, captures vendor traffic to build shape snapshots, diffs new payloads against the baseline, and creates a PR with a deterministic fix. It supports both outbound drift for APIs you call and inbound drift for webhooks you receive. The first vendor is Stripe, with Twilio and Shopify on the roadmap.
             </p>
-            <p className="mt-3 max-w-[65ch] text-[14px] leading-6 text-[#475569]">
+            <p className="mt-3 max-w-[65ch] text-[14px] leading-6 text-[var(--color-muted)]">
                 The product is built for teams that maintain Stripe integrations in TypeScript and JavaScript codebases and want to stay current without hand editing every call site.
             </p>
 
             {/* Section 2: Core Services */}
-            <h2 className="mt-12 border-t border-[var(--color-line-strong)] pt-6 font-display text-[22px] tracking-[-0.02em] text-[var(--color-ink)]">What DriftLock Does</h2>
+            <h2 className="mt-12 border-t border-[var(--color-line-strong)] pt-6 heading-section text-[var(--color-ink)]">What DriftLock Does</h2>
             <div className="mt-6 grid gap-6 sm:grid-cols-2">
                 <div className="border-l-2 border-[var(--color-line-strong)] pl-4">
                     <h3 className="font-mono text-xs font-semibold tracking-[0.08em] text-[var(--color-ink)]">OUTBOUND CALL SITE SCANNING</h3>
@@ -174,7 +174,7 @@ export default function AboutPage() {
             </div>
 
             {/* Section 3: Differentiators */}
-            <h2 className="mt-12 border-t border-[var(--color-line-strong)] pt-6 font-display text-[22px] tracking-[-0.02em] text-[var(--color-ink)]">What Makes DriftLock Different</h2>
+            <h2 className="mt-12 border-t border-[var(--color-line-strong)] pt-6 heading-section text-[var(--color-ink)]">What Makes DriftLock Different</h2>
             <div className="mt-6 space-y-6">
                 <div>
                     <h3 className="font-mono text-xs font-semibold tracking-[0.08em] text-[var(--color-ink)]">MIGRATES CODE, NOT JUST VERSIONS</h3>
@@ -199,7 +199,7 @@ export default function AboutPage() {
             </div>
 
             {/* Section 4: Who Uses */}
-            <h2 className="mt-12 border-t border-[var(--color-line-strong)] pt-6 font-display text-[22px] tracking-[-0.02em] text-[var(--color-ink)]">Who Uses DriftLock</h2>
+            <h2 className="mt-12 border-t border-[var(--color-line-strong)] pt-6 heading-section text-[var(--color-ink)]">Who Uses DriftLock</h2>
             <ul className="mt-4 list-disc space-y-2 pl-5 font-mono text-xs leading-5 text-[var(--color-ink)]/80">
                 <li>Engineering teams at seed to growth stage startups that maintain Stripe integrations in TypeScript or JavaScript</li>
                 <li>Platform teams at 50 to 800 employee companies that own checkout, billing, and webhook handlers</li>
@@ -209,7 +209,7 @@ export default function AboutPage() {
             <p className="mt-4 font-mono text-xs leading-4 text-[var(--color-muted)]">Industries served: fintech, marketplaces, B2B SaaS, developer tools. The CLI ships as @driftlock/cli on npm. Source is at github.com/nerdev-co/DriftLock.</p>
 
             {/* Section 5: Team & Origin */}
-            <h2 className="mt-12 border-t border-[var(--color-line-strong)] pt-6 font-display text-[22px] tracking-[-0.02em] text-[var(--color-ink)]">The Team Behind DriftLock</h2>
+            <h2 className="mt-12 border-t border-[var(--color-line-strong)] pt-6 heading-section text-[var(--color-ink)]">The Team Behind DriftLock</h2>
             <p className="mt-3 max-w-[65ch] text-sm leading-5 text-[var(--color-ink)]/80">DriftLock was founded by Nalin Dalal in 2024.</p>
             <p className="mt-2 max-w-[65ch] text-sm leading-5 text-[var(--color-ink)]/80">
                 The origin was a Prisma 7 breaking change that nearly shipped to production before interviews. Dependabot told him a dependency was out of date but did not touch the code. He built DriftLock to make APIs self-maintaining.
@@ -218,13 +218,13 @@ export default function AboutPage() {
                 DriftLock is built by Nalin and contributors at github.com/nerdev-co/DriftLock. Headquarters is remote with an India base. Primary contact is nalin@nerdev.in. Community is at discord.gg/driftlock.
             </p>
             <p className="mt-3 font-mono text-xs">
-                <a href="https://www.linkedin.com/in/nalindalal" target="_blank" rel="noreferrer" className="underline decoration-[#CBD5E1] underline-offset-2 hover:decoration-[#0F172A] hover:text-[var(--color-ink)] text-[var(--color-ink)]">
+                <a href="https://www.linkedin.com/in/nalindalal" target="_blank" rel="noreferrer" className="underline decoration-[var(--color-line-strong)] underline-offset-2 hover:decoration-[var(--color-ink)] hover:text-[var(--color-ink)] text-[var(--color-ink)]">
                     Nalin Dalal on LinkedIn
                 </a>
             </p>
 
             {/* Section 6: How it Works */}
-            <h2 className="mt-12 border-t border-[var(--color-line-strong)] pt-6 font-display text-[22px] tracking-[-0.02em] text-[var(--color-ink)]">How DriftLock Works</h2>
+            <h2 className="mt-12 border-t border-[var(--color-line-strong)] pt-6 heading-section text-[var(--color-ink)]">How DriftLock Works</h2>
             <div className="mt-4 grid gap-4 sm:grid-cols-2 font-mono text-xs leading-5">
                 <div className="border border-[var(--color-line)] bg-[var(--color-surface)] p-4">
                     <p className="font-semibold tracking-[0.08em] text-[var(--color-ink)]">OUTBOUND</p>
@@ -238,10 +238,10 @@ export default function AboutPage() {
             <p className="mt-4 max-w-[65ch] text-sm leading-5 text-[var(--color-ink)]/80">Communication is via GitHub PRs. Support is via Discord and GitHub issues. Onboarding is GitHub OAuth plus repo selection at /install. Turnaround is the PR creation after drift is detected.</p>
 
             {/* Section 7: Key Facts */}
-            <h2 className="mt-12 border-t border-[var(--color-line-strong)] pt-6 font-display text-[22px] tracking-[-0.02em] text-[var(--color-ink)]">Key Facts</h2>
+            <h2 className="mt-12 border-t border-[var(--color-line-strong)] pt-6 heading-section text-[var(--color-ink)]">Key Facts</h2>
             <div className="mt-4 overflow-x-auto border border-[var(--color-line-strong)]">
                 <table className="w-full border-collapse font-mono text-xs">
-                    <tbody className="divide-y divide-[#E6E7EE]">
+                    <tbody className="divide-y divide-[var(--color-line)]">
                         <tr><th className="bg-[var(--color-paper)] px-3 py-2 text-left font-semibold tracking-wide text-[var(--color-ink)]">Company Name</th><td className="px-3 py-2 text-[var(--color-ink)]/80">DriftLock</td></tr>
                         <tr><th className="bg-[var(--color-paper)] px-3 py-2 text-left font-semibold tracking-wide text-[var(--color-ink)]">Type</th><td className="px-3 py-2 text-[var(--color-ink)]/80">Self-maintaining API platform for drift detection and fix PRs</td></tr>
                         <tr><th className="bg-[var(--color-paper)] px-3 py-2 text-left font-semibold tracking-wide text-[var(--color-ink)]">Founded</th><td className="px-3 py-2 text-[var(--color-ink)]/80">2024</td></tr>
@@ -262,7 +262,7 @@ export default function AboutPage() {
             </div>
 
             {/* Section 8: FAQ */}
-            <h2 className="mt-12 border-t border-[var(--color-line-strong)] pt-6 font-display text-[22px] tracking-[-0.02em] text-[var(--color-ink)]">Frequently Asked Questions</h2>
+            <h2 className="mt-12 border-t border-[var(--color-line-strong)] pt-6 heading-section text-[var(--color-ink)]">Frequently Asked Questions</h2>
             <div className="mt-6 space-y-6">
                 <div>
                     <h3 className="font-mono text-xs font-semibold tracking-[0.08em] text-[var(--color-ink)]">WHAT IS DRIFTLOCK?</h3>

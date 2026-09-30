@@ -17,6 +17,19 @@
     --color-red-bg-strong: #FECACA;
     --color-green-bg: #F0FDF4;
     --color-green-bg-strong: #DCFCE7;
+    /* status system: badges, stat highlights, error boxes */
+    --color-success-bg: #ECFDF5;
+    --color-success-border: #A7F3D0;
+    --color-success-text: #047857;
+    --color-warning-bg: #FFFBEB;
+    --color-warning-border: #FDE68A;
+    --color-warning-text: #B45309;
+    --color-danger-bg: #FEF2F2;
+    --color-danger-border: #FECACA;
+    --color-danger-text: #B91C1C;
+    --color-info-bg: #F0F9FF;
+    --color-info-border: #BAE6FD;
+    --color-info-text: #0369A1;
     /* code */
     --color-code-keyword: #7C3AED;
     --color-code-type: #0284C7;
@@ -45,7 +58,7 @@ html.dark {
     color-scheme: dark;
 }
 
-/* dark: deliberately designed, not inverted — tinted navy, 3-level hierarchy, subtle borders */
+/* dark: deliberately designed, not inverted, tinted navy, 3-level hierarchy, subtle borders */
 html.dark {
     --color-paper: #0C1220;
     --color-surface: #111B2F;
@@ -62,12 +75,24 @@ html.dark {
     --color-red-bg-strong: #2A1A1C;
     --color-green-bg: #0F1E16;
     --color-green-bg-strong: #162A1C;
+    --color-success-bg: #0F1E16;
+    --color-success-border: #1E3A2A;
+    --color-success-text: #34D399;
+    --color-warning-bg: #1F180B;
+    --color-warning-border: #3D2F14;
+    --color-warning-text: #FCD34D;
+    --color-danger-bg: #1A1315;
+    --color-danger-border: #3A2023;
+    --color-danger-text: #F87171;
+    --color-info-bg: #0D1B28;
+    --color-info-border: #1D3A52;
+    --color-info-text: #7DD3FC;
     --color-code-keyword: #A78BFA;
     --color-code-type: #38BDF8;
     --color-code-string: #34D399;
     --color-code-number: #F87171;
 }
-/* dark typography tune — white on dark needs looser tracking and lighter optical weight */
+/* dark typography tune, white on dark needs looser tracking and lighter optical weight */
 html.dark body {
     font-weight: 380;
     letter-spacing: 0.01em;
@@ -93,9 +118,21 @@ body {
     background: var(--color-paper);
     color: var(--color-ink);
     -webkit-font-smoothing: antialiased;
-    text-rendering: optimizeLegibility;
     font-size: var(--step-0);
     line-height: 1.6;
+}
+
+/* Focus ring. --color-ink is the inverse of the page in both themes, so a ring
+   built from it clears 3:1 against whatever it lands on without a per-theme
+   second value. Kept at one rule so no component can opt out by accident:
+   never set outline-none, remove the class and this takes over. */
+:focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+}
+/* Keep the ring off pointer clicks but never off keyboard. */
+:focus:not(:focus-visible) {
+    outline: none;
 }
 
 ::selection {
@@ -103,7 +140,7 @@ body {
     color: var(--color-paper);
 }
 
-/* blueprint grid — subtle, more subtle in dark */
+/* blueprint grid, subtle, more subtle in dark */
 .bg-grid {
     background-image:
         linear-gradient(to right, var(--color-cyan) 1px, transparent 1px),
@@ -178,13 +215,16 @@ html.dark .bg-grid {
     animation: word-in 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-/* scroll reveals — one authored moment per section, transform/opacity only */
+/* scroll reveals: one authored moment per section, transform/opacity only.
+   Hidden state lives behind html.js so dead JS (or no JS) never hides content. */
 .reveal {
-    opacity: 0;
-    transform: translateY(8px);
     transition: opacity 420ms cubic-bezier(0.16, 1, 0.3, 1), transform 420ms cubic-bezier(0.16, 1, 0.3, 1);
 }
-.reveal.in {
+html.js .reveal {
+    opacity: 0;
+    transform: translateY(8px);
+}
+html.js .reveal.in {
     opacity: 1;
     transform: translateY(0);
 }

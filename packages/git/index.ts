@@ -1,8 +1,6 @@
 import simpleGit, { SimpleGit, StatusResult } from "simple-git";
 import { CallSite } from "@driftlock/core";
 
-export { PRGenerator } from "./prGenerator";
-export type { PRResult, PRMetadata } from "./prGenerator";
 export {
     PRWriter,
     FixPRRunner,

@@ -113,13 +113,13 @@ function TryPlayground() {
     return (
         <div className="overflow-hidden border border-[var(--color-line-strong)] bg-[var(--color-surface)]">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--color-line-strong)] bg-[var(--color-ink)] px-4 py-2.5">
-                <p className="font-mono text-[11px] tracking-wide text-[var(--color-paper)]">TRY — NO INSTALL · SAME EXTRACTOR THE CLI USES</p>
+                <p className="font-mono text-[11px] tracking-wide text-[var(--color-paper)]">TRY, NO INSTALL · SAME EXTRACTOR THE CLI USES</p>
                 <span className="font-mono text-[10px] tracking-wide text-[var(--color-paper)]/60">NO DATA LEAVES BROWSER</span>
             </div>
             <div className="grid lg:grid-cols-[1.15fr_0.85fr]">
                 <div className="border-r border-[var(--color-line)] bg-[var(--color-paper)] p-3 sm:p-4">
                     <div className="flex items-center justify-between pb-2">
-                        <p className="font-mono text-[11px] tracking-wide text-[var(--color-ink)]">src/payments.ts — 00{String(sites.length).padStart(2, "0")}</p>
+                        <p className="font-mono text-[11px] tracking-wide text-[var(--color-ink)]">src/payments.ts rev 00{String(sites.length).padStart(2, "0")}</p>
                         <button onClick={run} className="border border-[var(--color-line-strong)] bg-[var(--color-ink)] px-3 py-1 font-mono text-[11px] tracking-wide text-[var(--color-paper)] transition-[transform,background] hover:bg-[var(--color-ink)]/90 active:scale-[0.98]">
                             DETECT
                         </button>
@@ -141,8 +141,8 @@ function TryPlayground() {
                                 }
                             }}
                             spellCheck={false}
-                            className="absolute inset-0 h-full w-full resize-none bg-transparent p-3 font-mono text-xs leading-5 caret-[var(--color-ink)] text-transparent selection:bg-[var(--color-line)] focus:outline-none overflow-auto whitespace-pre-wrap break-words"
-                            style={{ color: "transparent", caretColor: "#0F172A" }}
+                            aria-label="Editable code sample. Vendor call sites are detected as you type."
+                            className="absolute inset-0 h-full w-full resize-none overflow-auto whitespace-pre-wrap break-words bg-transparent p-3 font-mono text-xs leading-5 text-transparent caret-[var(--color-ink)] selection:bg-[var(--color-line)]"
                         />
                     </div>
                     <p className="mt-2 font-mono text-[11px] text-[var(--color-muted)]">Like VS Code. Keywords purple, types blue, strings green.</p>
@@ -166,7 +166,7 @@ function TryPlayground() {
                                         <p className="font-mono text-xs font-medium text-[var(--color-ink)]">{s.method}</p>
                                         <p className="font-mono text-[11px] text-[var(--color-muted)]">{s.endpoint} · L{s.line}</p>
                                     </div>
-                                    <span className="font-mono text-[11px] tracking-wide text-[var(--color-ink)]">—</span>
+                                    <span className="font-mono text-[11px] tracking-wide text-[var(--color-ink)]">→</span>
                                 </div>
                             ))
                         )}
@@ -231,7 +231,7 @@ export default function LandingPage() {
                         <span className="hidden sm:inline">· STRIPE FIRST</span>
                     </div>
 
-                    <h1 className="mt-4 max-w-[680px] font-display text-[40px] leading-[0.88] tracking-[-0.035em] text-[var(--color-ink)] sm:text-[56px]" style={stagger(1)}>
+                    <h1 className="display mt-4 max-w-[680px] text-[var(--color-ink)]" style={stagger(1)}>
                         <span className="word-reveal" style={{ animationDelay: "30ms" }}>APIs</span>{" "}
                         <span className="word-reveal" style={{ animationDelay: "100ms" }}>should</span>{" "}
                         <span className="word-reveal italic font-normal" style={{ animationDelay: "170ms" }}>maintain</span>{" "}
@@ -332,8 +332,8 @@ export default function LandingPage() {
                                 </span>
                                 <span className="ml-2 flex h-6 w-6 items-center justify-center border border-[var(--color-line-strong)] bg-[var(--color-surface)]">
                                     <svg width="12" height="12" viewBox="0 0 14 14" fill="none" aria-hidden>
-                                        <rect x="3" y="6" width="8" height="6" rx="1" stroke="#0F172A" strokeWidth="1.2" />
-                                        <path d="M4.5 6V4.2a2.5 2.5 0 0 1 5 0V6" stroke="#0F172A" strokeWidth="1.2" />
+                                        <rect x="3" y="6" width="8" height="6" rx="1" stroke="var(--color-ink)" strokeWidth="1.2" />
+                                        <path d="M4.5 6V4.2a2.5 2.5 0 0 1 5 0V6" stroke="var(--color-ink)" strokeWidth="1.2" />
                                     </svg>
                                 </span>
                             </span>
@@ -353,7 +353,7 @@ export default function LandingPage() {
             <div className="reveal border-b border-[var(--color-line)] bg-[var(--color-surface)]">
                 <div className="mx-auto max-w-[1080px] px-6 py-10 sm:py-14">
                     <div className="mx-auto max-w-[720px]">
-                        <h2 className="font-display text-[24px] leading-[1.05] tracking-[-0.02em] text-[var(--color-ink)] sm:text-[28px]">
+                        <h2 className="heading-section text-[var(--color-ink)]">
                             Changelogs do not get read. 30 percent of <span className="text-[var(--color-signal-red)]">downtime</span> was a vendor change someone missed.
                         </h2>
                         <div className="mt-6 h-px w-full bg-[var(--color-ink)]" />
@@ -362,7 +362,7 @@ export default function LandingPage() {
                             <p className="text-[var(--color-ink)]/80">Semver is a convention, not a guarantee. Many APIs do not follow it strictly.</p>
                             <p className="text-[var(--color-ink)]/80">Mocked tests cannot catch drift. DriftLock classifies real versus mocked traffic.</p>
                         </div>
-                        <p className="mt-6 border-l-2 border-[var(--color-line-strong)] pl-4 font-mono text-xs leading-4 text-[var(--color-muted)]">I built DriftLock because Prisma 7 broke my app before interviews. What I needed was not a version bump but a code migration. <span className="text-[var(--color-muted)]"> — README</span></p>
+                        <p className="mt-6 border-l-2 border-[var(--color-line-strong)] pl-4 font-mono text-xs leading-4 text-[var(--color-muted)]">I built DriftLock because Prisma 7 broke my app before interviews. What I needed was not a version bump but a code migration. <span className="text-[var(--color-muted)]"> · README</span></p>
                     </div>
                 </div>
             </div>
@@ -374,7 +374,7 @@ export default function LandingPage() {
             <div className="reveal border-y border-[var(--color-line-strong)] bg-[var(--color-surface)]">
                 <div className="mx-auto max-w-[1080px] px-6 py-10 sm:py-12">
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
-                        <h2 className="font-display text-[22px] tracking-[-0.02em] text-[var(--color-ink)]">Scan → Capture → Diff → Fix PR</h2>
+                        <h2 className="heading-section text-[var(--color-ink)]">Scan → Capture → Diff → Fix PR</h2>
                         <span className="font-mono text-[11px] tracking-wide text-[var(--color-muted)]">TWO SURFACES: OUTBOUND + INBOUND</span>
                     </div>
                     <div className="mt-8 relative">
@@ -414,7 +414,7 @@ export default function LandingPage() {
                 <div className="mx-auto max-w-[1080px] px-6 py-10 sm:py-14">
                     <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
                         <div>
-                            <h3 className="font-display text-[20px] tracking-[-0.02em] text-[var(--color-ink)]">They bump the version. We migrate the code.</h3>
+                            <h3 className="heading-card text-[var(--color-ink)]">They bump the version. We migrate the code.</h3>
                             <div className="mt-4 space-y-3 font-mono text-xs leading-5 text-[var(--color-ink)]/80">
                                 <p>Renovate updates package.json. When stripe.charges.create needs a new field, they do not touch it.</p>
                                 <p>Semver is a convention. Hunting every call site by hand is why teams stay vulnerable.</p>
@@ -442,7 +442,7 @@ export default function LandingPage() {
 
             <div className="border-t border-[var(--color-line-strong)] bg-[var(--color-surface)]">
                 <div className="mx-auto max-w-[1080px] px-6 py-10 text-center">
-                    <h2 className="font-display text-[22px] tracking-[-0.02em] text-[var(--color-ink)]">Stay current without the migration tax.</h2>
+                    <h2 className="heading-section text-[var(--color-ink)]">Stay current without the migration tax.</h2>
                     <p className="mx-auto mt-2 max-w-[520px] font-mono text-xs leading-4 text-[var(--color-muted)]">Install once. Watches every repo you select. Nothing merged without you.</p>
                     <div className="mt-6 flex flex-wrap justify-center gap-2">
                         <Link to="/install" className="bg-[var(--color-ink)] px-6 py-2.5 font-mono text-xs tracking-wide text-[var(--color-paper)] hover:bg-[var(--color-ink)]/90 active:scale-[0.98] transition-[transform,background]">INSTALL GITHUB APP</Link>

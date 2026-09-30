@@ -4,11 +4,13 @@ import {
     collectBoundNames,
     contractFromHar,
     contractFromSpec,
+    contractFromWebhookAlert,
     describeContract,
     diffContracts,
     discoverVendorReceivers,
     flattenMembers,
     isConstantName,
+    lookupVendorSymbol,
     probeLiveContract,
     resolveVendorContract,
     verifyVendorSymbols,
@@ -131,6 +133,59 @@ describe("contractFromHar", () => {
         expect(() =>
             contractFromHar("stripe", "x", { log: { entries: [] } }, "empty.har"),
         ).toThrow(/empty/i);
+    });
+});
+
+describe("contractFromWebhookAlert", () => {
+    const previous = {
+        "data.object.id": "string",
+        "data.object.amount": "number",
+        "data.object.source": "string",
+    };
+    const current = {
+        "data.object.id": "string",
+        "data.object.amount": "number",
+        "data.object.payment_method": "string",
+    };
+
+    test("builds members and removed leaves from one baseline/current pair", () => {
+        const built = contractFromWebhookAlert({
+            provider: "stripe",
+            eventType: "payment_intent.succeeded",
+            previous,
+            current,
+        });
+
+        expect(built.source).toBe("recorded");
+        expect(built.authority).toBe("sampled");
+        expect(built.members).toContain("payment_method");
+        expect(built.members).toContain("data.object.payment_method");
+        expect(built.removed).toContain("source");
+        // Unchanged leaves are evidence of nothing.
+        expect(built.removed.some((member) => member === "id")).toBe(false);
+    });
+
+    test("drives the gate's stale check on handler code", () => {
+        const built = contractFromWebhookAlert({
+            provider: "stripe",
+            eventType: "payment_intent.succeeded",
+            previous,
+            current,
+        });
+        const handler = `async function handleWebhook(event) {
+  const paymentIntent = event.data.object;
+  return {
+    source: paymentIntent.source,
+  };
+}
+`;
+        const findings = verifyVendorSymbols(built, new Map([["webhook.js", handler]]), {
+            vendor: STRIPE_VENDOR,
+        });
+
+        expect(findings).toHaveLength(1);
+        expect(findings[0].kind).toBe("stale");
+        expect(findings[0].line).toBe(4);
     });
 });
 
@@ -502,5 +557,39 @@ describe("resolveVendorContract", () => {
                 version: "1.0.0",
             }),
         ).rejects.toThrow(/No contract source/);
+    });
+});
+
+describe("lookupVendorSymbol", () => {
+    const base = contract({
+        provider: "stripe",
+        members: ["id", "payment_method", "status"],
+        removed: ["source"],
+    });
+
+    test("exists for a member the contract captured", () => {
+        const found = lookupVendorSymbol(base, "payment_method");
+        expect(found.status).toBe("exists");
+        expect(found.suggestions).toContain("payment_method");
+    });
+
+    test("removed for a field the vendor dropped, with real candidates", () => {
+        const found = lookupVendorSymbol(base, "source");
+        expect(found.status).toBe("removed");
+        expect(found.suggestions.length).toBeGreaterThan(0);
+        expect(found.suggestions).not.toContain("source");
+    });
+
+    test("unknown for an invented name, with closest names instead of a guess", () => {
+        const found = lookupVendorSymbol(base, "paymentMethodId");
+        expect(found.status).toBe("unknown");
+        expect(found.detail).toContain("has no member");
+        expect(found.detail).toContain("Do not guess");
+        expect(found.suggestions.length).toBeGreaterThan(0);
+    });
+
+    test("resolves the leaf of a dotted path", () => {
+        const found = lookupVendorSymbol(base, "intent.payment_method");
+        expect(found.status).toBe("exists");
     });
 });

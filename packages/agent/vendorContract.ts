@@ -456,6 +456,50 @@ export function contractFromHar(
     };
 }
 
+/**
+ * A contract assembled from one webhook drift observation: the flattened
+ * baseline schema and the flattened current schema.
+ *
+ * Flat keys are envelope-relative (`data.object.source`), while handler code
+ * reads fields off a receiver (`paymentIntent.source`), so each key
+ * contributes both its full path and its leaf name. The leaf is what the
+ * completeness half of the gate matches on: a read of a removed leaf is a
+ * missed call site wherever it lives. Authority is `sampled` for the same
+ * reason as a HAR recording — one payload is a narrow sample, so only the
+ * explicit `removed` list (leaves of fields the baseline had and the current
+ * payload lacks) counts as evidence of removal.
+ */
+export function contractFromWebhookAlert(input: {
+    provider: string;
+    version?: string;
+    eventType: string;
+    previous: Record<string, string>;
+    current: Record<string, string>;
+}): VendorContract {
+    const leaves = (schema: Record<string, string>): string[] =>
+        Object.keys(schema).flatMap((path) => {
+            const leaf = path.split(".").pop();
+            return leaf ? [path, leaf] : [path];
+        });
+    const removedLeaves = Object.keys(input.previous)
+        .filter((path) => !(path in input.current))
+        .flatMap((path) => {
+            const leaf = path.split(".").pop();
+            return leaf ? [path, leaf] : [path];
+        });
+    return {
+        ...emptyContract(
+            input.provider,
+            input.version ?? "unversioned",
+            "recorded",
+            "sampled",
+            `webhook ${input.eventType} observed payload`,
+        ),
+        members: uniqueSorted(leaves(input.current)),
+        removed: uniqueSorted(removedLeaves),
+    };
+}
+
 function isOpenApiSpec(value: unknown): value is { components?: { schemas?: Record<string, unknown> } } {
     return (
         typeof value === "object" &&
@@ -678,23 +722,42 @@ export function changePacketFromDrift(drift: ObservedDrift): {
     removed: string[];
     added: string[];
 } {
+    // Observed fields arrive as envelope paths (`data.object.source`) but
+    // handler code reads the leaf (`paymentIntent.source`), and a model told
+    // only the full path searches the codebase for the literal dotted string
+    // and finds nothing. Name the leaf first, keep the path as provenance,
+    // and spell out the exact searchCode calls: weaker models follow explicit
+    // tool directives they would never derive from prose.
+    const leafOf = (field: string): string => field.split(".").pop() ?? field;
+    const readable = (field: string): string => {
+        const leaf = leafOf(field);
+        return leaf === field ? field : `${leaf} (observed at ${field})`;
+    };
+    const searchTerms = uniqueSorted(
+        [...drift.removed, ...drift.added].map(leafOf).filter((leaf) => leaf.length > 0),
+    );
     const lines: string[] = [
         `Observed on the wire between ${drift.fromVersion} and ${drift.toVersion}.`,
     ];
 
     if (drift.removed.length > 0) {
         lines.push(
-            `The vendor stopped sending these fields: ${drift.removed.join(", ")}. Remove every read of them.`,
+            `The vendor stopped sending these fields: ${drift.removed.map(readable).join(", ")}. Remove every read of them; search for the leaf names, not the dotted paths.`,
         );
     }
     if (drift.added.length > 0) {
         lines.push(
-            `The vendor started sending these fields: ${drift.added.join(", ")}. They are the replacements.`,
+            `The vendor started sending these fields: ${drift.added.map(readable).join(", ")}. They are the replacements.`,
         );
     }
     for (const change of drift.typeChanged) {
         lines.push(
-            `${change.field} changed type from ${change.from} to ${change.to}. Update any code that assumed the old type.`,
+            `${readable(change.field)} changed type from ${change.from} to ${change.to}. Update any code that assumed the old type.`,
+        );
+    }
+    if (searchTerms.length > 0) {
+        lines.push(
+            `Start with these searches, one call each: ${searchTerms.map((term) => `searchCode "${term}"`).join(", ")}. Do not guess file paths before searching.`,
         );
     }
     if (
@@ -924,6 +987,69 @@ export function verifyVendorSymbols(
     }
 
     return findings;
+}
+
+/**
+ * Grounding for a vendor symbol the model does not know.
+ *
+ * The contract gate can only refuse an invented name; refusal alone leaves
+ * the model with exactly one move — another guess. This lookup is the other
+ * half of the gate: given a symbol the model is considering, it answers from
+ * the captured contract whether the member exists, was removed (with the
+ * replacement leaves when the packet named them), or is unknown (with the
+ * closest recorded names). The answer is cited from the contract's origin,
+ * so "I do not know" becomes a tool call instead of a guess.
+ */
+export interface SymbolLookup {
+    status: "exists" | "removed" | "unknown";
+    symbol: string;
+    detail: string;
+    suggestions: string[];
+}
+
+export function lookupVendorSymbol(
+    contract: VendorContract,
+    symbol: string,
+): SymbolLookup {
+    const members = contractMembers(contract);
+    const removed = new Set(contract.removed);
+    const query = symbol.trim();
+    if (!query) {
+        return {
+            status: "unknown",
+            symbol: query,
+            detail: "Empty symbol. Name the member you want to use, e.g. payment_method or p.UP_ARROW.",
+            suggestions: [],
+        };
+    }
+    const leaf = query.split(".").pop() ?? query;
+    if (members.has(query) || members.has(leaf)) {
+        const hit = members.has(query) ? query : leaf;
+        return {
+            status: "exists",
+            symbol: query,
+            detail: `${hit} exists in the ${contract.provider} contract captured from ${contract.origin}. Safe to reference.`,
+            suggestions: [hit],
+        };
+    }
+    if (removed.has(query) || removed.has(leaf)) {
+        const hit = removed.has(query) ? query : leaf;
+        return {
+            status: "removed",
+            symbol: query,
+            detail: `The vendor removed ${hit}. Do not read it; use a member from the contract instead.`,
+            suggestions: closest(leaf, members, 5),
+        };
+    }
+    return {
+        status: "unknown",
+        symbol: query,
+        detail:
+            `${contract.provider} has no member ${query} in the contract captured from ` +
+            `${contract.origin} (${contract.source}, ${contract.authority}). ` +
+            `Do not guess a replacement; pick from the suggestions or leave the call site for review.`,
+        suggestions: closest(leaf, members, 5),
+    };
 }
 
 function closest(target: string, pool: Set<string>, limit: number): string[] {

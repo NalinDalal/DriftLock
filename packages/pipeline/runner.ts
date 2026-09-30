@@ -25,6 +25,12 @@ export interface AnalyzeResult {
     shapes: Map<string, CapturedShapes>;
     baselines: CallSite[];
     drifts: DriftResult[];
+    /**
+     * Found statically but with no captured traffic shape: no baseline was
+     * written and no comparison was possible. Callers must report these as
+     * not-yet-observable, never as healthy.
+     */
+    pendingCapture: CallSite[];
     exitCode: number;
     duration: number;
     trafficCaptured: number;
@@ -41,6 +47,7 @@ export async function analyzeAndCompare(
             shapes: new Map(),
             baselines: [],
             drifts: [],
+            pendingCapture: [],
             exitCode: 0,
             duration: 0,
             trafficCaptured: 0,
@@ -79,6 +86,7 @@ export async function analyzeAndCompare(
 
     const baselines: CallSite[] = [];
     const drifts: DriftResult[] = [];
+    const pendingCapture: CallSite[] = [];
     const meta = {
         testCommand: input.command,
         exitCode: sandbox.exitCode,
@@ -88,6 +96,7 @@ export async function analyzeAndCompare(
     for (const callSite of callSites) {
         const current = shapes.get(callSite.id);
         if (!current) {
+            pendingCapture.push(callSite);
             continue;
         }
         const previous = await input.snapshotStore.load(callSite.id);
@@ -108,6 +117,7 @@ export async function analyzeAndCompare(
         shapes,
         baselines,
         drifts,
+        pendingCapture,
         exitCode: sandbox.exitCode,
         duration: sandbox.duration,
         trafficCaptured: sandbox.trafficCaptured.length,

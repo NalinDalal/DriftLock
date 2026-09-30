@@ -57,12 +57,6 @@ describe("CLI structure", () => {
         expect(pkg.name).toBe("@driftlock/cli");
     });
 
-    test("CLI package.json has build script", async () => {
-        const pkgPath = path.join(REPO_ROOT, "apps/cli/package.json");
-        const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
-        expect(pkg.scripts?.build).toBeDefined();
-    });
-
     test("CLI package.json has all required dependencies", async () => {
         const pkgPath = path.join(REPO_ROOT, "apps/cli/package.json");
         const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
@@ -81,14 +75,14 @@ describe("CLI structure", () => {
         const pkgPath = path.join(REPO_ROOT, "apps/cli/package.json");
         const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
         expect(pkg.bin).toBeDefined();
-        expect(pkg.bin.driftlock).toBe("./dist/index.js");
+        expect(pkg.bin.driftlock).toBe("./index.ts");
     });
 
-    test("CLI dist/index.js is built", async () => {
-        const distPath = path.join(REPO_ROOT, "apps/cli/dist/index.js");
-        expect(fs.existsSync(distPath)).toBe(true);
-        const stat = fs.statSync(distPath);
-        expect(stat.size).toBeGreaterThan(0);
+    test("CLI bin target exists with a bun shebang", async () => {
+        const binPath = path.join(REPO_ROOT, "apps/cli/index.ts");
+        expect(fs.existsSync(binPath)).toBe(true);
+        const firstLine = fs.readFileSync(binPath, "utf-8").split("\n")[0];
+        expect(firstLine).toBe("#!/usr/bin/env bun");
     });
 });
 

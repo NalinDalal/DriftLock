@@ -1,5 +1,6 @@
 import { describeContract, type SymbolFinding, type VendorContract } from "./vendorContract";
 import { describeRepoFacts, type RepoFacts } from "./repoFacts";
+import type { ToolName } from "./tools";
 
 export type ChangePacket = {
     provider: string;
@@ -11,17 +12,10 @@ export type ChangePacket = {
 
 export type Outcome = "auto_pr" | "review_pr" | "draft_pr" | "no_action";
 
-/**
- * What the caller wants when the migration cannot be fully verified against
- * a vendor contract. `review` reports `review_pr` (a human must review the
- * diff); `draft` reports `draft_pr` (open it as a draft, if the entry point
- * supports drafts, rather than requesting review).
- */
-export type PrMode = "review" | "draft";
-
 export type ToolCall = {
     id: string;
-    name: string;
+    /** Always a validated tool name; `parseToolCalls` drops anything else. */
+    name: ToolName;
     args: Record<string, unknown>;
 };
 
@@ -34,6 +28,8 @@ export type TranscriptEntry = {
 };
 
 export type AgentState = {
+    /** Correlation id for logs and run receipts (pguso: never debug without one). */
+    runId: string;
     iteration: number;
     maxIterations: number;
     maxCommands: number;
@@ -44,6 +40,21 @@ export type AgentState = {
     toolsUsed: string[];
     transcript: TranscriptEntry[];
     lastTestResult?: { passed: boolean; output: string };
+    /** Consecutive tool failures. Resets on any success; hit the limit and the
+     * run stops early instead of looping on a stuck strategy. */
+    consecutiveFailures: number;
+    /**
+     * Repo-relative path whose last edit failed and has not been retried
+     * successfully yet. While set, verification and PR tools are refused by
+     * the harness (not merely discouraged by the prompt), so a failed edit
+     * cannot be silently abandoned for a green build on a half-changed tree.
+     * Cleared by a successful edit to the same path.
+     */
+    pendingEditRetry: string | null;
+    /** How many consecutive edit attempts failed for `pendingEditRetry`. */
+    editRetryAttempts: number;
+    /** Every literal `searchCode` query issued, for completeness accounting. */
+    searchedQueries: string[];
     /** Vendor symbols the edits introduced that the contract could not resolve. */
     symbolFindings?: SymbolFinding[];
     contractChecked?: boolean;
@@ -54,8 +65,6 @@ export type AgentState = {
      * draft-only.
      */
     hasContract: boolean;
-    /** The caller's preference for the contract-absent outcome. */
-    prMode: PrMode;
     pullRequest?: {
         status: "opened" | "already_open" | "merged";
         url: string;
@@ -70,6 +79,12 @@ export const limits = {
     MAX_ITERATIONS: 15,
     MAX_COMMANDS: 30,
     MAX_FILES_CHANGED: 20,
+    /**
+     * Failure threshold (OpenAI: escalate to a human instead of looping).
+     * That many tool failures in a row ends the run as `review_pr`/`draft_pr`
+     * rather than burning the remaining iterations on a stuck strategy.
+     */
+    MAX_CONSECUTIVE_FAILURES: 5,
 };
 
 export function createInitialState(
@@ -106,6 +121,7 @@ export function createInitialState(
     opening.push("", describeNextStep("locate", facts));
 
     return {
+        runId: crypto.randomUUID(),
         iteration: 0,
         maxIterations: limits.MAX_ITERATIONS,
         maxCommands: limits.MAX_COMMANDS,
@@ -113,14 +129,17 @@ export function createInitialState(
         maxFilesChanged: limits.MAX_FILES_CHANGED,
         filesChanged: [],
         toolsUsed: [],
+        lastTestResult: undefined,
+        consecutiveFailures: 0,
+        pendingEditRetry: null,
+        editRetryAttempts: 0,
+        searchedQueries: [],
         transcript: [{ role: "user", content: opening.join("\n") }],
         done: false,
         outcome: null,
-        // The runner sets these from its options after creation: a contract
-        // plus vendor config means the contract gate can run, and prMode
-        // records whether the caller wants review or draft when it cannot.
+        // The runner sets this from its options after creation: a contract
+        // plus vendor config means the contract gate can run.
         hasContract: false,
-        prMode: "review",
     };
 }
 
@@ -185,11 +204,13 @@ export function describeNextStep(stage: MigrationStage, facts?: RepoFacts): stri
             ].join("\n");
         case "verify":
             return [
-                "Step 4: verify.",
+                "Step 4: check completeness, then verify.",
+                "Call checkCompleteness first: it lists stale reads of removed fields anywhere in the repo, including files you never touched.",
                 facts?.verificationCommands.length
-                    ? `Run exactly one of: ${facts.verificationCommands.join(", ")}. Copy it exactly.`
+                    ? `Then run exactly one of: ${facts.verificationCommands.join(", ")}. Copy it exactly.`
                     : "There is no verification command in this repository, so say that verification is unavailable. Do not invent one.",
                 "A migration is not done until it passes. If it fails, read the output, fix the cause, and run it again.",
+                "If an edit failed, retry that same file first: verification stays refused until the retry succeeds.",
             ].join("\n");
         case "pr":
             return [
@@ -205,6 +226,94 @@ export function recordFileChanged(state: AgentState, path: string): void {
     if (!state.filesChanged.includes(path)) state.filesChanged.push(path);
 }
 
+/**
+ * Records a failed edit. The harness — not the prompt — now owns the retry:
+ * until this path is successfully rewritten, `runCommand` and
+ * `createPullRequest` are refused with the failing path named.
+ */
+export function noteEditFailure(state: AgentState, path: string): void {
+    if (state.pendingEditRetry === path) {
+        state.editRetryAttempts += 1;
+    } else {
+        state.pendingEditRetry = path;
+        state.editRetryAttempts = 1;
+    }
+}
+
+/** Clears the retry gate after the pending path is successfully rewritten. */
+export function noteEditSuccess(state: AgentState, path: string): void {
+    if (state.pendingEditRetry === path || state.pendingEditRetry === null) {
+        state.pendingEditRetry = null;
+        state.editRetryAttempts = 0;
+    }
+}
+
+/** Refusal text while an edit retry is outstanding, naming the exact path. */
+export function pendingEditRefusal(state: AgentState): string {
+    return (
+        `Refusing: the last edit to ${state.pendingEditRetry} failed and has not been retried ` +
+        `(attempts: ${state.editRetryAttempts}). Fix the hunk or snippet and call ` +
+        `editFile or replaceInFile for ${state.pendingEditRetry} again. ` +
+        `Verification on a tree with a known-bad edit proves nothing, so it stays ` +
+        `disabled until that retry succeeds.`
+    );
+}
+
+export function recordSearch(state: AgentState, query: string): void {
+    const normalized = query.trim().toLowerCase();
+    if (normalized && !state.searchedQueries.includes(normalized)) {
+        state.searchedQueries.push(normalized);
+    }
+}
+
+export type ConfidenceLevel = "high" | "medium" | "low";
+
+export interface ConfidenceAssessment {
+    level: ConfidenceLevel;
+    reasons: string[];
+}
+
+/**
+ * Confidence beyond pass/fail. A green build alone used to read as success;
+ * the real runs showed a green build on a 2-of-3-sites edit and a green build
+ * with an invented vendor symbol. Every downgrade reason is named so the
+ * receipt (and the PR body) can say *why* the run is not auto-mergable.
+ */
+export function assessConfidence(state: AgentState): ConfidenceAssessment {
+    const reasons: string[] = [];
+    if (state.filesChanged.length === 0) reasons.push("no files changed");
+    if (state.lastTestResult?.passed !== true) reasons.push("no passing verification on the current tree");
+    if (state.pendingEditRetry) {
+        reasons.push(`unresolved failed edit on ${state.pendingEditRetry} (${state.editRetryAttempts} attempt(s))`);
+    }
+    const findings = state.symbolFindings?.length ?? 0;
+    if (findings > 0) reasons.push(`${findings} vendor symbol finding(s) unresolved`);
+    if (state.hasContract && !state.contractChecked) {
+        reasons.push("vendor contract not yet checked");
+    }
+    if (!state.hasContract && state.filesChanged.length > 0) {
+        reasons.push("no vendor contract gated this run");
+    }
+    if (state.searchedQueries.length === 0 && state.filesChanged.length > 0) {
+        reasons.push("no searchCode call preceded the edits");
+    }
+
+    let level: ConfidenceLevel;
+    if (reasons.length === 0) {
+        level = "high";
+    } else if (
+        state.lastTestResult?.passed === true &&
+        !state.pendingEditRetry &&
+        findings === 0
+    ) {
+        level = "medium";
+    } else {
+        level = "low";
+    }
+    if (level === "high") reasons.push("verification passed on the current tree with a clean contract check");
+    return { level, reasons };
+}
+
 export function canChangeMoreFiles(state: AgentState): boolean {
     return state.filesChanged.length < state.maxFilesChanged;
 }
@@ -218,17 +327,111 @@ export function canRunMoreCommands(state: AgentState): boolean {
  * symbols it could not resolve, the migration is unverified no matter what the
  * build says, so it can never reach `auto_pr`. Likewise, without a vendor
  * contract there is nothing checking the edits against the vendor's real API
- * surface, so the best a verified diff can get is `review_pr` — or `draft_pr`
- * when the caller prefers drafts.
+ * surface: the publish gate opens a draft in that case, and the outcome says
+ * `draft_pr` to match.
  */
 export function decideOutcome(state: AgentState): Outcome {
     const contractClean = !state.symbolFindings || state.symbolFindings.length === 0;
+    // A failed edit with no successful retry means the tree is missing an
+    // intended change, even when the last verification passed (the failure
+    // itself changed nothing, so the old pass still describes the tree but
+    // not the intent). That is review-only by construction.
+    if (state.pendingEditRetry) {
+        return state.filesChanged.length > 0 || state.lastTestResult ? "review_pr" : "no_action";
+    }
     if (state.lastTestResult?.passed && state.filesChanged.length > 0 && contractClean) {
         if (!state.hasContract) {
-            return state.prMode === "draft" ? "draft_pr" : "review_pr";
+            return "draft_pr";
         }
         return "auto_pr";
     }
     if (state.filesChanged.length > 0 || state.lastTestResult) return "review_pr";
     return "no_action";
+}
+
+/**
+ * One structured line per run (API-Drift-Sentinel: append-only audit trail).
+ * Everything a human needs to answer "what changed, what proved it, where is
+ * the PR" without replaying the transcript. Callers persist these; the agent
+ * itself stays side-effect free.
+ */
+export type RunReceipt = {
+    runId: string;
+    provider: string;
+    fromVersion: string;
+    toVersion: string;
+    model: string;
+    outcome: Outcome;
+    iterations: number;
+    commandsRun: number;
+    filesChanged: string[];
+    verificationPassed?: boolean;
+    contractChecked: boolean;
+    findingCount: number;
+    /** Confidence beyond pass/fail; feeds the auto_pr threshold. */
+    confidence: ConfidenceLevel;
+    confidenceReasons: string[];
+    prUrl?: string;
+    prNumber?: number;
+    /** True when the published PR is a draft (no contract gated the run). */
+    draft?: boolean;
+};
+
+export function buildReceipt(
+    state: AgentState,
+    packet: ChangePacket,
+    model: string,
+    outcome: Outcome,
+): RunReceipt {
+    const confidence = assessConfidence(state);
+    return {
+        runId: state.runId,
+        provider: packet.provider,
+        fromVersion: packet.fromVersion,
+        toVersion: packet.toVersion,
+        model,
+        outcome,
+        iterations: state.iteration,
+        commandsRun: state.commandsRun,
+        filesChanged: [...state.filesChanged],
+        verificationPassed: state.lastTestResult?.passed,
+        contractChecked: state.contractChecked ?? false,
+        findingCount: state.symbolFindings?.length ?? 0,
+        confidence: confidence.level,
+        confidenceReasons: confidence.reasons,
+        prUrl: state.pullRequest?.url,
+        prNumber: state.pullRequest?.number,
+        draft: state.pullRequest ? !state.hasContract : undefined,
+    };
+}
+
+/** Tool results newer than this are never compacted: the model needs its
+ * immediate context intact to act on the last thing it saw. */
+const PROTECTED_RECENT_TOOLS = 3;
+
+/**
+ * Bounds transcript growth (SDK compaction, without a compaction model).
+ * While the transcript serializes past `budgetChars`, the oldest `tool`
+ * results beyond the protected recent window are replaced with a one-line
+ * omission note. Assistant/tool-call skeletons are never touched: dropping
+ * them would break the tool_call_id chain the API expects. Returns how many
+ * entries were compacted.
+ */
+export function trimTranscript(state: AgentState, budgetChars = 120_000): number {
+    let compacted = 0;
+    const size = (): number => JSON.stringify(state.transcript).length;
+    if (size() <= budgetChars) return compacted;
+
+    const toolIndices: number[] = [];
+    for (let i = 0; i < state.transcript.length; i += 1) {
+        if (state.transcript[i].role === "tool") toolIndices.push(i);
+    }
+    const compactable = toolIndices.slice(0, Math.max(0, toolIndices.length - PROTECTED_RECENT_TOOLS));
+    for (const index of compactable) {
+        if (size() <= budgetChars) break;
+        const entry = state.transcript[index];
+        entry.content = `[omitted: ${entry.toolName ?? "tool"} result dropped to bound context]`;
+        compacted += 1;
+    }
+    return compacted;
 }

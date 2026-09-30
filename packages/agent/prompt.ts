@@ -20,9 +20,17 @@ How to edit:
 - Use editFile only when one contiguous hunk is genuinely the clearest option.
   A hunk must be an unbroken slice of the file: if you skip a line, a closing
   brace, or a blank line between context lines, git rejects the whole patch.
+- A failed edit blocks verification and PRs until you retry the same file
+  successfully. The harness refuses runCommand and createPullRequest while a
+  retry is outstanding. Fix the hunk or snippet and retry; do not switch to
+  verification to route around it.
 - Do not invent API names. If you are not certain what the new API is called,
-  re-read the contract and search the repository first. A plausible guess that
-  does not exist is worse than no edit.
+  call lookupVendorSymbol with the name you are considering before editing.
+  It answers from the captured contract (exists, removed, or unknown with
+  real candidates). A plausible guess that does not exist is worse than no edit.
+- After your last edit, call checkCompleteness before verifying. It sweeps
+  files you never touched for reads of removed fields; a green build on 2 of
+  3 call sites still leaves the third broken.
 
 Hard rules:
 - Never read or write .env files, private keys, certificates, or .git/config.

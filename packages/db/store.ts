@@ -331,6 +331,66 @@ export function createStore(db: Database) {
       });
   }
 
+  type DriftStatus =
+    | "detected"
+    | "fix_generated"
+    | "pr_opened"
+    | "merged"
+    | "closed"
+    | "false_positive";
+
+  function emitEvent(
+    type:
+      | "drift_detected"
+      | "pr_opened"
+      | "pr_merged"
+      | "false_positive"
+      | "api_called",
+    detail: Record<string, unknown>,
+  ) {
+    // Structured, greppable event log. This is the measurement seam for
+    // PR opened/merged rates and false-positive precision until a
+    // PostHog/OTel sink lands.
+    console.log(`[EVENT] type=${type} ${JSON.stringify(detail)}`);
+  }
+
+  async function updateDriftStatus(
+    id: string,
+    status: DriftStatus,
+    prNumber?: number | null,
+  ) {
+    const patch: Partial<typeof driftEvents.$inferInsert> = { status };
+    if (prNumber !== undefined) patch.prNumber = prNumber;
+    await db
+      .update(driftEvents)
+      .set(patch)
+      .where(eq(driftEvents.id, id));
+  }
+
+  async function updateDriftStatusByPrNumber(
+    repositoryId: string,
+    prNumber: number,
+    status: DriftStatus,
+  ) {
+    const rows = await db
+      .select({ id: driftEvents.id })
+      .from(driftEvents)
+      .innerJoin(callSites, eq(driftEvents.callSiteId, callSites.id))
+      .where(
+        and(
+          eq(callSites.repositoryId, repositoryId),
+          eq(driftEvents.prNumber, prNumber),
+        ),
+      );
+    for (const row of rows) {
+      await db
+        .update(driftEvents)
+        .set({ status })
+        .where(eq(driftEvents.id, row.id));
+    }
+    return rows.length;
+  }
+
   async function listDriftEventsByRepo(
     repositoryId: string,
   ): Promise<DriftEventRow[]> {
@@ -479,6 +539,10 @@ export function createStore(db: Database) {
       });
   }
 
+  async function deleteSetting(key: string) {
+    await db.delete(settings).where(eq(settings.key, key));
+  }
+
   async function listApiKeys() {
     return db
       .select({
@@ -592,6 +656,9 @@ export function createStore(db: Database) {
     getLatestSnapshot,
     getSnapshotById,
     recordDrift,
+    updateDriftStatus,
+    updateDriftStatusByPrNumber,
+    emitEvent,
     listDriftEventsByRepo,
     listOpenDriftsByRepo,
     listPullsByRepo,
@@ -602,6 +669,7 @@ export function createStore(db: Database) {
     listRecentRuns,
     getSetting,
     setSetting,
+    deleteSetting,
     listApiKeys,
     createApiKey,
     rotateApiKey,

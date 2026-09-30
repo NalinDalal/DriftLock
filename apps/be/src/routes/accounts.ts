@@ -1,30 +1,21 @@
-import { getDb } from "@driftlock/db";
 import { getStore } from "../store";
+import { findSession } from "../auth";
+import { sessionTokenFromCookies } from "../cookies";
 import { repoDto, type AccountDto, type RepoDto } from "../dto";
 import { json, notFound } from "../utils";
 
 export async function handleMe(req: Request): Promise<Response> {
-    const authHeader = req.headers.get("authorization");
-    if (authHeader?.startsWith("Bearer ")) {
-        const token = authHeader.slice(7);
-        const db = getDb();
-        try {
-            const result = await db.execute(
-                `SELECT value FROM settings WHERE key = 'session:${token}'`
-            );
-            if (result.length > 0) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const session = (result[0] as { value: any }).value;
-                return json({
-                    user: {
-                        name: session.name || session.login,
-                        handle: session.login,
-                        avatarUrl: session.avatarUrl,
-                    },
-                });
-            }
-        } catch (_e) {
-            // ignore — fallback to unauthenticated
+    const token = sessionTokenFromCookies(req);
+    if (token) {
+        const session = await findSession(token);
+        if (session) {
+            return json({
+                user: {
+                    name: session.name || session.login,
+                    handle: session.login,
+                    avatarUrl: session.avatarUrl,
+                },
+            });
         }
     }
 

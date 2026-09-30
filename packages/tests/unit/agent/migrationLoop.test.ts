@@ -1,14 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import {
+    buildReceipt,
     canChangeMoreFiles,
     canRunMoreCommands,
     createInitialState,
     decideOutcome,
+    isRetryableModelError,
     isToolName,
     limits,
     recordFileChanged,
     tools,
     toOpenAITools,
+    trimTranscript,
     type ChangePacket,
     type AgentState,
 } from "@driftlock/agent";
@@ -29,13 +32,15 @@ function state(overrides: Partial<AgentState> = {}): AgentState {
 }
 
 describe("tools", () => {
-    test("exposes exactly the seven migration tools", () => {
+    test("exposes exactly the nine migration tools", () => {
         expect(tools.map((tool) => tool.name)).toEqual([
             "inspectRepo",
             "searchCode",
             "readFile",
             "editFile",
             "replaceInFile",
+            "lookupVendorSymbol",
+            "checkCompleteness",
             "runCommand",
             "createPullRequest",
         ]);
@@ -88,6 +93,19 @@ describe("createInitialState", () => {
         expect(initial.filesChanged).toEqual([]);
     });
 
+    test("seeds a unique run id and a zeroed failure count", () => {
+        const first = createInitialState(packet());
+        const second = createInitialState(packet());
+        expect(first.runId).toBeTruthy();
+        expect(second.runId).toBeTruthy();
+        expect(first.runId).not.toBe(second.runId);
+        expect(first.consecutiveFailures).toBe(0);
+    });
+
+    test("caps consecutive failures below the iteration ceiling", () => {
+        expect(limits.MAX_CONSECUTIVE_FAILURES).toBeLessThan(limits.MAX_ITERATIONS);
+    });
+
     test("embeds the ChangePacket in the first user message", () => {
         const initial = createInitialState(packet());
         const first = initial.transcript[0];
@@ -137,31 +155,12 @@ describe("decideOutcome", () => {
         expect(decideOutcome(current)).toBe("auto_pr");
     });
 
-    test("review_pr when verified but no contract gates the run", () => {
+    test("draft_pr when verified but no contract gates the run", () => {
         const current = state({
             filesChanged: ["src/client.ts"],
             lastTestResult: { passed: true, output: "exit code: 0" },
-        });
-        expect(decideOutcome(current)).toBe("review_pr");
-    });
-
-    test("draft_pr when the caller prefers drafts and no contract gates the run", () => {
-        const current = state({
-            filesChanged: ["src/client.ts"],
-            lastTestResult: { passed: true, output: "exit code: 0" },
-            prMode: "draft",
         });
         expect(decideOutcome(current)).toBe("draft_pr");
-    });
-
-    test("auto_pr despite a draft preference when a contract gates the run", () => {
-        const current = state({
-            filesChanged: ["src/client.ts"],
-            lastTestResult: { passed: true, output: "exit code: 0" },
-            hasContract: true,
-            prMode: "draft",
-        });
-        expect(decideOutcome(current)).toBe("auto_pr");
     });
 
     test("review_pr when validation failed", () => {
@@ -191,5 +190,124 @@ describe("decideOutcome", () => {
     test("not auto_pr when tests pass but nothing changed", () => {
         const current = state({ lastTestResult: { passed: true, output: "ok" } });
         expect(decideOutcome(current)).toBe("review_pr");
+    });
+});
+
+describe("isRetryableModelError", () => {
+    test("retries rate limits, server errors, timeouts, and dropped connections", () => {
+        expect(isRetryableModelError(Object.assign(new Error("slow down"), { status: 429 }))).toBe(
+            true,
+        );
+        expect(isRetryableModelError(Object.assign(new Error("overloaded"), { status: 503 }))).toBe(
+            true,
+        );
+        expect(isRetryableModelError(new DOMException("aborted", "AbortError"))).toBe(true);
+        expect(isRetryableModelError(new TypeError("fetch failed"))).toBe(true);
+    });
+
+    test("does not retry auth, bad requests, or plain failures", () => {
+        expect(isRetryableModelError(Object.assign(new Error("nope"), { status: 401 }))).toBe(
+            false,
+        );
+        expect(isRetryableModelError(Object.assign(new Error("bad"), { status: 400 }))).toBe(false);
+        expect(isRetryableModelError(new Error("invalid key"))).toBe(false);
+        expect(isRetryableModelError("string failure")).toBe(false);
+    });
+});
+
+describe("buildReceipt", () => {
+    test("summarises the run for audit without the transcript", () => {
+        const current = state({
+            filesChanged: ["src/client.ts"],
+            lastTestResult: { passed: true, output: "exit code: 0" },
+            hasContract: true,
+            commandsRun: 1,
+            iteration: 4,
+            contractChecked: true,
+            pullRequest: {
+                status: "opened",
+                url: "https://github.com/acme/widgets/pull/7",
+                number: 7,
+                branch: "driftlock/p5-2-3",
+            },
+        });
+        const receipt = buildReceipt(current, packet(), "gpt-4o-mini", "auto_pr");
+
+        expect(receipt.runId).toBe(current.runId);
+        expect(receipt.provider).toBe("p5");
+        expect(receipt.outcome).toBe("auto_pr");
+        expect(receipt.filesChanged).toEqual(["src/client.ts"]);
+        expect(receipt.verificationPassed).toBe(true);
+        expect(receipt.findingCount).toBe(0);
+        expect(receipt.prNumber).toBe(7);
+        expect(receipt.draft).toBe(false);
+    });
+
+    test("marks the PR as a draft when no contract gated the run", () => {
+        const current = state({
+            filesChanged: ["src/client.ts"],
+            lastTestResult: { passed: true, output: "exit code: 0" },
+            pullRequest: {
+                status: "opened",
+                url: "https://github.com/acme/widgets/pull/7",
+                number: 7,
+                branch: "driftlock/p5-2-3",
+            },
+        });
+        expect(buildReceipt(current, packet(), "gpt-4o-mini", "draft_pr").draft).toBe(true);
+    });
+});
+
+describe("tool ACI", () => {
+    test("refusal paths tell the model how to recover", () => {
+        const pr = tools.find((tool) => tool.name === "createPullRequest")!;
+        expect(pr.description).toContain("never ends the run");
+        expect(pr.description).toContain("draft");
+        const run = tools.find((tool) => tool.name === "runCommand")!;
+        expect(run.description).toContain("&&");
+        const replace = tools.find((tool) => tool.name === "replaceInFile")!;
+        expect(replace.description).toContain("default edit tool");
+    });
+});
+
+describe("trimTranscript", () => {
+    function toolEntry(id: string, content: string) {
+        return {
+            role: "tool" as const,
+            content,
+            toolCallId: id,
+            toolName: "readFile",
+        };
+    }
+
+    test("returns 0 and changes nothing under budget", () => {
+        const current = state();
+        expect(trimTranscript(current, 120_000)).toBe(0);
+        expect(current.transcript).toHaveLength(1);
+    });
+
+    test("compacts oldest tool results but keeps skeleton and recency", () => {
+        const current = state();
+        for (let i = 0; i < 5; i += 1) {
+            current.transcript.push({
+                role: "assistant",
+                content: "",
+                toolCalls: [{ id: `c${i}`, name: "readFile", args: {} }],
+            });
+            current.transcript.push(toolEntry(`c${i}`, "x".repeat(5000)));
+        }
+
+        const compacted = trimTranscript(current, 8000);
+
+        expect(compacted).toBe(2);
+        // Skeleton intact: requests still pair with answers.
+        expect(current.transcript.flatMap((e) => e.toolCalls ?? [])).toHaveLength(5);
+        expect(current.transcript.filter((e) => e.role === "tool")).toHaveLength(5);
+        // Oldest compacted, newest three untouched.
+        const tools = current.transcript.filter((e) => e.role === "tool");
+        expect(tools[0].content).toContain("[omitted:");
+        expect(tools[1].content).toContain("[omitted:");
+        expect(tools[2].content).toHaveLength(5000);
+        expect(tools[4].content).toHaveLength(5000);
     });
 });

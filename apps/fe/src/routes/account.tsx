@@ -16,7 +16,7 @@ function RepoRow({ repo }: { repo: Repo }) {
                 <StatusDot tone={dirty ? "amber" : "green"} pulsing={dirty} />
                 <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate text-[14px] font-semibold tracking-tight text-[#0a0a0f]">
+                        <p className="truncate text-[14px] font-semibold tracking-tight text-[var(--color-ink)]">
                             {repo.owner}/{repo.name}
                         </p>
                         {repo.isPrivate && <Badge tone="neutral">private</Badge>}
@@ -28,26 +28,26 @@ function RepoRow({ repo }: { repo: Repo }) {
                     {/* mobile stats */}
                     <div className="mt-2 flex gap-3 text-xs text-[var(--color-muted)] sm:hidden">
                         <span className="tabular-nums font-medium text-[var(--color-ink)]">{repo.stats.callSites} calls</span>
-                        <span className={dirty ? "font-medium text-amber-600" : ""}>{repo.stats.driftOpen} drift</span>
+                        <span className={dirty ? "font-medium text-[var(--color-warning-text)]" : ""}>{repo.stats.driftOpen} drift</span>
                         <span>{repo.stats.pullsOpen} PRs</span>
                     </div>
                 </div>
                 <div className="hidden items-center gap-6 sm:flex">
                     <div className="text-right leading-tight">
-                        <p className="text-[13px] font-semibold tabular-nums text-[#0a0a0f]">{repo.stats.callSites}</p>
+                        <p className="text-[13px] font-semibold tabular-nums text-[var(--color-ink)]">{repo.stats.callSites}</p>
                         <p className="text-[11px] text-[var(--color-muted)]">call sites</p>
                     </div>
                     <div className="text-right leading-tight">
-                        <p className={`text-[13px] font-semibold tabular-nums ${dirty ? "text-amber-600" : "text-[#0a0a0f]"}`}>{repo.stats.driftOpen}</p>
+                        <p className={`text-[13px] font-semibold tabular-nums ${dirty ? "text-[var(--color-warning-text)]" : "text-[var(--color-ink)]"}`}>{repo.stats.driftOpen}</p>
                         <p className="text-[11px] text-[var(--color-muted)]">drift</p>
                     </div>
                     <div className="text-right leading-tight">
-                        <p className="text-[13px] font-semibold tabular-nums text-[#0a0a0f]">{repo.stats.pullsOpen}</p>
+                        <p className="text-[13px] font-semibold tabular-nums text-[var(--color-ink)]">{repo.stats.pullsOpen}</p>
                         <p className="text-[11px] text-[var(--color-muted)]">PRs</p>
                     </div>
                     <p className="w-20 text-right text-xs tabular-nums text-[var(--color-muted)]">{timeAgo(repo.stats.lastProbeAt)}</p>
                 </div>
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-muted)] transition-colors group-hover:border-[var(--color-line)] group-hover:text-zinc-600">→</span>
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-muted)] transition-colors group-hover:border-[var(--color-line)] group-hover:text-[var(--color-muted)]">→</span>
             </Card>
         </Link>
     );
@@ -75,7 +75,7 @@ export default function AccountPage({ owner }: { owner: string }) {
                     <div className="h-[86px] animate-pulse rounded-[10px] border border-[var(--color-line)] bg-[var(--color-surface)]" />
                 </div>
             ) : error ? (
-                <div className="rounded-[10px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+                <div className="rounded-[10px] border border-[var(--color-danger-border)] bg-[var(--color-danger-bg)] px-4 py-3 text-sm text-[var(--color-danger-text)]">{error}</div>
             ) : (
                 <div className="flex flex-col gap-3">
                     {data?.repos.map((repo) => (

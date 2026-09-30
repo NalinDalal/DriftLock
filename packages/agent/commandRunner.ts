@@ -17,6 +17,15 @@ export type SandboxCommandRunnerOptions = {
     cpuLimit?: number;
     copyNodeModules?: boolean;
     runner?: SandboxRunnerLike;
+    /**
+     * Opt-in network for migrations that must reach a registry mid-run
+     * (e.g. `npm install` inside verification). Defaults to false: the
+     * container runs with `NetworkMode: none`. Set true only with an
+     * explicit `allowedEndpoints` allowlist (e.g. `["registry.npmjs.org:443"]`);
+     * traffic still flows through the capture proxy when enabled.
+     */
+    networkEnabled?: boolean;
+    allowedEndpoints?: string[];
 };
 
 export const DEFAULT_SANDBOX_IMAGE = "node:22-alpine";
@@ -49,9 +58,12 @@ async function isDirectory(path: string): Promise<boolean> {
 
 /**
  * Runs a whitelisted verification command in a Docker container against a
- * throwaway copy of the repository, with no network. The real checkout is
- * never mounted writable, so a build script cannot modify the user's files,
- * read the host home directory, or reach the internet.
+ * throwaway copy of the repository. The network stays off by default; the
+ * real checkout is never mounted writable, so a build script cannot modify
+ * the user's files, read the host home directory, or reach the internet.
+ * Pass `networkEnabled: true` with an explicit `allowedEndpoints` allowlist
+ * only for the narrow case of a migration whose verification must reach a
+ * registry mid-run.
  */
 export function createSandboxCommandRunner(
     options: SandboxCommandRunnerOptions = {},
@@ -62,6 +74,13 @@ export function createSandboxCommandRunner(
     const cpuLimit = options.cpuLimit ?? 2;
     const shareNodeModules = options.copyNodeModules ?? true;
     const runner = options.runner ?? new SandboxRunner();
+    const networkEnabled = options.networkEnabled ?? false;
+    const allowedEndpoints = options.allowedEndpoints ?? [];
+    if (networkEnabled && allowedEndpoints.length === 0) {
+        throw new Error(
+            "createSandboxCommandRunner: networkEnabled requires an explicit allowedEndpoints allowlist, e.g. [\"registry.npmjs.org:443\"]",
+        );
+    }
 
     return {
         run: async (root, command) => {
@@ -92,14 +111,16 @@ export function createSandboxCommandRunner(
                     timeout,
                     memoryLimit,
                     cpuLimit,
-                    networkEnabled: false,
-                    allowedEndpoints: [],
+                    networkEnabled,
+                    allowedEndpoints,
                     readOnly: false,
                     extraBinds,
                 });
 
                 const output = [
-                    `sandbox: ${image}, network disabled`,
+                    networkEnabled
+                        ? `sandbox: ${image}, network restricted to ${allowedEndpoints.join(", ")}`
+                        : `sandbox: ${image}, network disabled`,
                     `exit code: ${result.exitCode}`,
                     result.stdout,
                     result.stderr,

@@ -27,7 +27,7 @@ function DriftCard({ drift }: { drift: WebhookDrift }) {
         <Card className="overflow-hidden p-0">
             <div className="p-5">
                 <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-mono text-[13px] font-semibold text-[#0a0a0f]">{drift.eventType}</p>
+                    <p className="font-mono text-[13px] font-semibold text-[var(--color-ink)]">{drift.eventType}</p>
                     <span className="rounded bg-[var(--color-surface)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--color-muted)]">{drift.endpointId.slice(0, 8)}</span>
                     <Badge tone={STATUS_TONE[drift.status] ?? "neutral"}>{drift.status}</Badge>
                 </div>
@@ -45,7 +45,7 @@ function DriftCard({ drift }: { drift: WebhookDrift }) {
                 </div>
                 <p className="mt-3 text-xs text-[var(--color-muted)]">{timeAgo(drift.detectedAt)}</p>
             </div>
-            <div className="h-1 w-full bg-amber-400" />
+            <div className="h-1 w-full bg-[var(--color-warning-text)]" />
         </Card>
     );
 }
@@ -54,7 +54,7 @@ function EndpointRow({ endpoint }: { endpoint: WebhookEndpoint }) {
     return (
         <Card className="flex items-center justify-between gap-3 p-4">
             <div className="min-w-0">
-                <p className="truncate text-[13px] font-semibold text-[#0a0a0f]">{endpoint.name}</p>
+                <p className="truncate text-[13px] font-semibold text-[var(--color-ink)]">{endpoint.name}</p>
                 <p className="mt-0.5 truncate font-mono text-xs text-[var(--color-muted)]">{endpoint.url}</p>
                 <p className="mt-1 text-xs text-[var(--color-muted)]">created {timeAgo(endpoint.createdAt)}</p>
             </div>
@@ -68,7 +68,7 @@ function SchemaRow({ schema }: { schema: WebhookSchema }) {
     return (
         <Card className="flex items-center justify-between gap-3 p-4">
             <div className="min-w-0">
-                <p className="truncate font-mono text-[13px] font-medium text-[#0a0a0f]">{schema.eventType}</p>
+                <p className="truncate font-mono text-[13px] font-medium text-[var(--color-ink)]">{schema.eventType}</p>
                 <p className="mt-0.5 text-xs text-[var(--color-muted)]">{fieldCount} fields · flattened dot-notation</p>
             </div>
             <p className="shrink-0 text-xs tabular-nums text-[var(--color-muted)]">{timeAgo(schema.capturedAt)}</p>
@@ -101,17 +101,17 @@ export default function WebhookDashboard() {
                 <div className="mb-6 grid grid-cols-3 gap-3">
                     <Card className="px-4 py-3">
                         <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-muted)]">Endpoints</p>
-                        <p className="mt-1 text-[20px] font-semibold tracking-tight text-[#0a0a0f]">{endpoints.data.endpoints.length}</p>
+                        <p className="mt-1 text-[20px] font-semibold tracking-tight text-[var(--color-ink)]">{endpoints.data.endpoints.length}</p>
                     </Card>
-                    <Card className={`px-4 py-3 ${(drifts.data?.drifts.length ?? 0) > 0 ? "border-amber-200 bg-amber-50/50" : ""}`}>
+                    <Card className={`px-4 py-3 ${(drifts.data?.drifts.length ?? 0) > 0 ? "border-[var(--color-warning-border)] bg-[var(--color-warning-bg)]" : ""}`}>
                         <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-muted)]">Drifts</p>
-                        <p className={`mt-1 text-[20px] font-semibold tracking-tight ${(drifts.data?.drifts.length ?? 0) > 0 ? "text-amber-600" : "text-[#0a0a0f]"}`}>
+                        <p className={`mt-1 text-[20px] font-semibold tracking-tight ${(drifts.data?.drifts.length ?? 0) > 0 ? "text-[var(--color-warning-text)]" : "text-[var(--color-ink)]"}`}>
                             {drifts.data?.drifts.length ?? 0}
                         </p>
                     </Card>
                     <Card className="px-4 py-3">
                         <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-muted)]">Schemas</p>
-                        <p className="mt-1 text-[20px] font-semibold tracking-tight text-[#0a0a0f]">{schemas.data?.schemas.length ?? 0}</p>
+                        <p className="mt-1 text-[20px] font-semibold tracking-tight text-[var(--color-ink)]">{schemas.data?.schemas.length ?? 0}</p>
                     </Card>
                 </div>
             )}
@@ -123,7 +123,7 @@ export default function WebhookDashboard() {
                         type="button"
                         onClick={() => setTab(id)}
                         className={`flex-1 sm:flex-none rounded-full px-4 py-1.5 text-[13px] font-medium transition-colors ${
-                            tab === id ? "bg-[var(--color-surface)] text-[#0a0a0f] shadow-sm" : "text-[var(--color-muted)] hover:text-[var(--color-ink)]"
+                            tab === id ? "bg-[var(--color-surface)] text-[var(--color-ink)] shadow-sm" : "text-[var(--color-muted)] hover:text-[var(--color-ink)]"
                         }`}
                     >
                         {label}
@@ -135,7 +135,7 @@ export default function WebhookDashboard() {
                 (drifts.loading ? (
                     <p className="text-sm text-[var(--color-muted)]">Loading drifts...</p>
                 ) : drifts.error ? (
-                    <div className="rounded-[10px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{drifts.error}</div>
+                    <div className="rounded-[10px] border border-[var(--color-danger-border)] bg-[var(--color-danger-bg)] px-4 py-3 text-sm text-[var(--color-danger-text)]">{drifts.error}</div>
                 ) : (drifts.data?.drifts ?? []).length === 0 ? (
                     <EmptyState title="No webhook drifts detected" hint="Payload shape changes will appear here as soon as a vendor changes a field." />
                 ) : (
@@ -150,7 +150,7 @@ export default function WebhookDashboard() {
                 (endpoints.loading ? (
                     <p className="text-sm text-[var(--color-muted)]">Loading endpoints...</p>
                 ) : endpoints.error ? (
-                    <div className="rounded-[10px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{endpoints.error}</div>
+                    <div className="rounded-[10px] border border-[var(--color-danger-border)] bg-[var(--color-danger-bg)] px-4 py-3 text-sm text-[var(--color-danger-text)]">{endpoints.error}</div>
                 ) : (endpoints.data?.endpoints ?? []).length === 0 ? (
                     <EmptyState title="No webhook endpoints" hint="Register endpoints to start capturing schemas." />
                 ) : (
@@ -167,7 +167,7 @@ export default function WebhookDashboard() {
                         <select
                             value={selectedEndpoint ?? ""}
                             onChange={(e) => setSelectedEndpoint(e.target.value || null)}
-                            className="rounded-full border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium text-[var(--color-ink)] focus:border-[var(--color-line)] focus:outline-none"
+                            className="rounded-full border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium text-[var(--color-ink)]"
                         >
                             <option value="">Select an endpoint to view schemas</option>
                             {endpoints.data?.endpoints.map((ep) => (
@@ -180,7 +180,7 @@ export default function WebhookDashboard() {
                     {schemas.loading ? (
                         <p className="text-sm text-[var(--color-muted)]">Loading schemas...</p>
                     ) : schemas.error ? (
-                        <div className="rounded-[10px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{schemas.error}</div>
+                        <div className="rounded-[10px] border border-[var(--color-danger-border)] bg-[var(--color-danger-bg)] px-4 py-3 text-sm text-[var(--color-danger-text)]">{schemas.error}</div>
                     ) : !selectedEndpoint ? (
                         <EmptyState title="Pick an endpoint" hint="Schema snapshots are stored per endpoint and event type." />
                     ) : (schemas.data?.schemas ?? []).length === 0 ? (

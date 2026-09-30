@@ -70,15 +70,32 @@ export class DbSchemaStore implements SchemaStore {
         diff: unknown;
         previousSchema: FlatSchema;
         currentSchema: FlatSchema;
-    }): Promise<void> {
+        status?: string;
+    }): Promise<string> {
         const db = getDb();
-        await db.insert(webhookDrifts).values({
-            endpointId: params.endpointId,
-            eventType: params.eventType,
-            diff: params.diff,
-            previousSchema: params.previousSchema,
-            newSchema: params.currentSchema,
-        });
+        const rows = await db
+            .insert(webhookDrifts)
+            .values({
+                endpointId: params.endpointId,
+                eventType: params.eventType,
+                diff: params.diff,
+                previousSchema: params.previousSchema,
+                newSchema: params.currentSchema,
+                status: params.status ?? "detected",
+            })
+            .returning({ id: webhookDrifts.id });
+        console.log(
+            `[EVENT] type=drift_detected ${JSON.stringify({ endpointId: params.endpointId, eventType: params.eventType, driftId: rows[0].id })}`,
+        );
+        return rows[0].id;
+    }
+
+    async updateDriftStatus(id: string, status: string): Promise<void> {
+        const db = getDb();
+        await db
+            .update(webhookDrifts)
+            .set({ status })
+            .where(eq(webhookDrifts.id, id));
     }
 
     async ensureEndpoint(

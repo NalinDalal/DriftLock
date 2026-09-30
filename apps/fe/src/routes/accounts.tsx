@@ -42,7 +42,7 @@ export default function AccountsPage() {
             <div className="mx-auto max-w-[720px]">
                 <div className="border-b border-[var(--color-line-strong)] pb-4">
                     <p className="font-mono text-[11px] tracking-[0.14em] text-[var(--color-muted)]">ACCOUNTS</p>
-                    <h1 className="mt-1 font-display text-[24px] tracking-[-0.02em] text-[var(--color-ink)]">Where DriftLock is installed</h1>
+                    <h1 className="mt-1 heading-section text-[var(--color-ink)]">Where DriftLock is installed</h1>
                 </div>
                 <div className="mt-0">
                     <SkeletonRow />
@@ -56,7 +56,7 @@ export default function AccountsPage() {
     if (error) {
         return (
             <div className="mx-auto max-w-[720px]">
-                <h1 className="font-display text-[24px] tracking-[-0.02em] text-[var(--color-ink)]">Where DriftLock is installed</h1>
+                <h1 className="heading-section text-[var(--color-ink)]">Where DriftLock is installed</h1>
                 <div className="mt-4 border border-[var(--color-signal-red)] bg-[var(--color-red-bg)] px-4 py-3 font-mono text-xs text-[var(--color-signal-red)]">{error}</div>
                 <p className="mt-3 font-mono text-xs text-[var(--color-muted)]">
                     No connection to API at <span className="text-[var(--color-ink)]">{import.meta.env.VITE_API_URL ?? "/api"}</span>. Start the backend or view the landing at <Link to="/" className="underline">/</Link>.
@@ -69,7 +69,7 @@ export default function AccountsPage() {
         return (
             <div className="mx-auto max-w-[720px] text-center">
                 <p className="font-mono text-[11px] tracking-[0.14em] text-[var(--color-muted)]">ACCOUNTS</p>
-                <h1 className="mt-2 font-display text-[24px] tracking-[-0.02em] text-[var(--color-ink)]">No accounts connected</h1>
+                <h1 className="mt-2 heading-section text-[var(--color-ink)]">No accounts connected</h1>
                 <p className="mt-2 font-mono text-xs text-[var(--color-muted)]">Install the GitHub App to start watching repos.</p>
                 <Link to="/install" className="mt-4 inline-flex bg-[var(--color-ink)] px-4 py-2 font-mono text-xs tracking-wide text-[var(--color-paper)] hover:bg-[var(--color-ink)]/90">INSTALL GITHUB APP</Link>
             </div>
@@ -80,7 +80,7 @@ export default function AccountsPage() {
         <div className="mx-auto max-w-[720px]">
             <div className="border-b border-[var(--color-line-strong)] pb-4">
                 <p className="font-mono text-[11px] tracking-[0.14em] text-[var(--color-muted)]">ACCOUNTS</p>
-                <h1 className="mt-1 font-display text-[24px] tracking-[-0.02em] text-[var(--color-ink)]">Where DriftLock is installed</h1>
+                <h1 className="mt-1 heading-section text-[var(--color-ink)]">Where DriftLock is installed</h1>
                 <p className="mt-1 font-mono text-xs text-[var(--color-muted)]">Every drift lands as a GitHub PR. Pick an account to see watched repos.</p>
             </div>
             <div className="mt-0">

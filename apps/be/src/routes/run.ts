@@ -116,7 +116,7 @@ export async function handleRun(req: Request): Promise<Response> {
                 responseShape: current.response,
             });
             const source = readSource(clone.path, drift.callSite.filePath);
-            const applied = source ? applyDriftFix(drift, source) : null;
+            const applied = source ? await applyDriftFix(drift, source) : null;
             const driftId = `drift-${dbCallSiteId}`.slice(0, 128);
             if (applied) {
                 applied.fix.driftEventId = driftId;
@@ -134,6 +134,12 @@ export async function handleRun(req: Request): Promise<Response> {
                 confidence: driftConfidence(drift),
                 prNumber: null,
                 status: "detected",
+            });
+            store.emitEvent?.("drift_detected", {
+                driftId,
+                repo: `${owner}/${name}`,
+                callSiteId: dbCallSiteId,
+                method: drift.callSite.method,
             });
             await store.setCallSiteSnapshotState(dbCallSiteId, "drifted");
             driftCount += 1;

@@ -5,7 +5,7 @@
     "": {
       "name": "driftlock",
       "dependencies": {
-        "@nerdev/skillset": "^0.2.3",
+        "@nerdev/skillset": "^0.2.4",
       },
       "devDependencies": {
         "@types/inquirer": "^9.0.10",
@@ -15,7 +15,7 @@
         "eslint": "^8.56.0",
         "eslint-config-prettier": "^9.1.0",
         "prettier": "^3.2.0",
-        "turbo": "^1.12.0",
+        "turbo": "^2.11.5",
         "typescript": "^5.3.0",
       },
     },
@@ -37,7 +37,7 @@
       "name": "@driftlock/cli",
       "version": "0.1.0",
       "bin": {
-        "driftlock": "./dist/index.js",
+        "driftlock": "./index.ts",
       },
       "dependencies": {
         "@driftlock/agent": "workspace:*",
@@ -48,6 +48,7 @@
         "@driftlock/parser": "workspace:*",
         "@driftlock/pipeline": "workspace:*",
         "@driftlock/sandbox": "workspace:*",
+        "@driftlock/vendorWatch": "workspace:*",
         "@driftlock/webhookCapture": "workspace:*",
         "chalk": "^5.3.0",
         "commander": "^12.0.0",
@@ -85,9 +86,11 @@
         "@driftlock/db": "workspace:*",
         "@driftlock/git": "workspace:*",
         "@driftlock/parser": "workspace:*",
+        "@driftlock/pipeline": "workspace:*",
         "@driftlock/webhookCapture": "workspace:*",
         "drizzle-orm": "^0.45.2",
         "octokit": "^4.1.0",
+        "simple-git": "^3.23.0",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -107,10 +110,6 @@
         "@types/bun": "latest",
         "typescript": "^5.3.0",
       },
-    },
-    "packages/agentGuard": {
-      "name": "@driftlock/agentGuard",
-      "version": "0.1.0",
     },
     "packages/aiFix": {
       "name": "@driftlock/aiFix",
@@ -171,30 +170,6 @@
         "typescript": "^5.3.0",
       },
     },
-    "packages/githubApp": {
-      "name": "@driftlock/githubApp",
-      "version": "0.1.0",
-      "dependencies": {
-        "@driftlock/diff": "workspace:*",
-        "@driftlock/rulesEngine": "workspace:*",
-      },
-      "devDependencies": {
-        "typescript": "^5.3.0",
-      },
-    },
-    "packages/migrations": {
-      "name": "@driftlock/migrations",
-      "version": "0.1.0",
-      "dependencies": {
-        "@driftlock/aiFix": "workspace:*",
-        "@driftlock/diff": "workspace:*",
-      },
-      "devDependencies": {
-        "@types/bun": "latest",
-        "@types/node": "^20.11.0",
-        "typescript": "^5.3.0",
-      },
-    },
     "packages/parser": {
       "name": "@driftlock/parser",
       "version": "0.1.0",
@@ -213,6 +188,7 @@
       "name": "@driftlock/pipeline",
       "version": "0.1.0",
       "dependencies": {
+        "@driftlock/aiFix": "workspace:*",
         "@driftlock/core": "workspace:*",
         "@driftlock/db": "workspace:*",
         "@driftlock/diff": "workspace:*",
@@ -221,21 +197,6 @@
       },
       "devDependencies": {
         "@types/bun": "latest",
-        "@types/node": "^20.11.0",
-        "typescript": "^5.3.0",
-      },
-    },
-    "packages/rulesEngine": {
-      "name": "@driftlock/rulesEngine",
-      "version": "0.1.0",
-      "dependencies": {
-        "@driftlock/diff": "workspace:*",
-        "@driftlock/migrations": "workspace:*",
-        "js-yaml": "^4.3.2",
-      },
-      "devDependencies": {
-        "@types/bun": "latest",
-        "@types/js-yaml": "^4.0.9",
         "@types/node": "^20.11.0",
         "typescript": "^5.3.0",
       },
@@ -260,15 +221,34 @@
       "version": "0.1.0",
       "dependencies": {
         "@driftlock/agent": "workspace:*",
+        "@driftlock/be": "workspace:*",
+        "@driftlock/cli": "workspace:*",
         "@driftlock/core": "workspace:*",
+        "@driftlock/db": "workspace:*",
         "@driftlock/diff": "workspace:*",
         "@driftlock/git": "workspace:*",
         "@driftlock/parser": "workspace:*",
+        "@driftlock/pipeline": "workspace:*",
         "@driftlock/sandbox": "workspace:*",
+        "@driftlock/vendorWatch": "workspace:*",
         "@driftlock/webhookCapture": "workspace:*",
+        "openai": "^4.73.0",
       },
       "devDependencies": {
         "@types/bun": "latest",
+        "typescript": "^5.3.0",
+      },
+    },
+    "packages/vendorWatch": {
+      "name": "@driftlock/vendorWatch",
+      "version": "0.1.0",
+      "dependencies": {
+        "@driftlock/agent": "workspace:*",
+        "@driftlock/core": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "@types/node": "^20.11.0",
         "typescript": "^5.3.0",
       },
     },
@@ -276,6 +256,7 @@
       "name": "@driftlock/webhookCapture",
       "version": "0.1.0",
       "dependencies": {
+        "@driftlock/agent": "workspace:*",
         "@driftlock/aiFix": "workspace:*",
         "@driftlock/core": "workspace:*",
         "@driftlock/db": "workspace:*",
@@ -283,6 +264,7 @@
         "@driftlock/git": "workspace:*",
         "drizzle-orm": "^0.45.2",
         "octokit": "^4.1.0",
+        "openai": "^4.73.0",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -296,8 +278,6 @@
     "@bcoe/v8-coverage": ["@bcoe/v8-coverage@0.2.3", "", {}, "sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw=="],
 
     "@driftlock/agent": ["@driftlock/agent@workspace:packages/agent"],
-
-    "@driftlock/agentGuard": ["@driftlock/agentGuard@workspace:packages/agentGuard"],
 
     "@driftlock/aiFix": ["@driftlock/aiFix@workspace:packages/aiFix"],
 
@@ -315,19 +295,15 @@
 
     "@driftlock/git": ["@driftlock/git@workspace:packages/git"],
 
-    "@driftlock/githubApp": ["@driftlock/githubApp@workspace:packages/githubApp"],
-
-    "@driftlock/migrations": ["@driftlock/migrations@workspace:packages/migrations"],
-
     "@driftlock/parser": ["@driftlock/parser@workspace:packages/parser"],
 
     "@driftlock/pipeline": ["@driftlock/pipeline@workspace:packages/pipeline"],
 
-    "@driftlock/rulesEngine": ["@driftlock/rulesEngine@workspace:packages/rulesEngine"],
-
     "@driftlock/sandbox": ["@driftlock/sandbox@workspace:packages/sandbox"],
 
     "@driftlock/tests": ["@driftlock/tests@workspace:packages/tests"],
+
+    "@driftlock/vendorWatch": ["@driftlock/vendorWatch@workspace:packages/vendorWatch"],
 
     "@driftlock/webhook": ["@driftlock/webhook@workspace:apps/webhook"],
 
@@ -431,7 +407,7 @@
 
     "@kwsites/promise-deferred": ["@kwsites/promise-deferred@1.1.1", "", {}, "sha512-GaHYm+c0O9MjZRu0ongGBRbinu8gVAMd2UZjji6jVmqKtZluZnptXGWhz1E8j8D2HJ3f/yMxKAUC0b+57wncIw=="],
 
-    "@nerdev/skillset": ["@nerdev/skillset@0.2.3", "", { "bin": { "skillset": "bin/skillset.mjs" } }, "sha512-cuaA9kPmaqgxxGv4W5+vKIf7oR3MAMd5ENeFvYMDTeTWMfTI72ryWmEy7Rm2Ke1iwbe+KXNmNcDGjj4Iky795Q=="],
+    "@nerdev/skillset": ["@nerdev/skillset@0.2.4", "", { "bin": { "skillset": "bin/skillset.mjs" } }, "sha512-EuaoVGkvn1jgA00ZroQofQtNQk7HUTnmRSi/0twM6ibw/0zbwEriW0p0M7jXyDR81hsiG1ZH22X6+E5R1L7pGQ=="],
 
     "@nodelib/fs.scandir": ["@nodelib/fs.scandir@2.1.5", "", { "dependencies": { "@nodelib/fs.stat": "2.0.5", "run-parallel": "^1.1.9" } }, "sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g=="],
 
@@ -585,6 +561,18 @@
 
     "@tanstack/store": ["@tanstack/store@0.11.1", "", {}, "sha512-mzTOBhypOuDJAy/D8n2MfUZ1HFkXnmSETviRyhqEC8LUE7/IZQExOTxMANj3KjTofYTkFNpBY67qaVrT41YccA=="],
 
+    "@turbo/darwin-64": ["@turbo/darwin-64@2.11.5", "", { "os": "darwin", "cpu": "x64" }, "sha512-KdY4y7BBjIisl+jAkb3FFaRjClGqHyaeHCcVcCT8LBzFFwUu6thgfxyRZAx0uL4KoxLmH+iOan8UhVf/aDDcaA=="],
+
+    "@turbo/darwin-arm64": ["@turbo/darwin-arm64@2.11.5", "", { "os": "darwin", "cpu": "arm64" }, "sha512-ToZDGi2u410+TfRtC/O1/LpujGgvNJoRBZnwVXob7oO0+3OSlwIO3zofXKUvwQvlba7a8ZXPyCZwufjAXd7f0w=="],
+
+    "@turbo/linux-64": ["@turbo/linux-64@2.11.5", "", { "os": [ "linux", "android", ], "cpu": "x64" }, "sha512-Ub2d/nAbdWLaSytcEaPp1wm/YuIvHEIqNrCRMI/UgOGyFdOhgxm8VyWPAJilQWRYxYVrqEUoy2K5S5K8SG50rA=="],
+
+    "@turbo/linux-arm64": ["@turbo/linux-arm64@2.11.5", "", { "os": [ "linux", "android", ], "cpu": "arm64" }, "sha512-JQjmGxp724Wuft9FAxPMtmBur1CEdUyxJ+FVoIvKkgj63rXHl9PYCWrsU2tMjVi609XTQ3M8vZD9Yc9qVAVYrw=="],
+
+    "@turbo/windows-64": ["@turbo/windows-64@2.11.5", "", { "os": "win32", "cpu": "x64" }, "sha512-AFkbPmXNd8XgCi/66YEHR2bVl3gtusXyDihTIVEPAuSB+7ulLmJePvz1unWPVKLHdbCTTIdKq2mpJ1B1e3lJXw=="],
+
+    "@turbo/windows-arm64": ["@turbo/windows-arm64@2.11.5", "", { "os": "win32", "cpu": "arm64" }, "sha512-52ziXYP3snGOxjv19xA3WL1WDKv9Q6uDAa/7EKIR5j4hocMlYURkrOHbJ2ZZI+VfPU5MwKpcGeRfHxHJu7Y/Pw=="],
+
     "@types/aws-lambda": ["@types/aws-lambda@8.10.163", "", {}, "sha512-+4zuoEB3S8RIhimtOFT7zAEk2SbpwrKjjGl9CyYnQR6k08uynxfauIIB0pDU1ssr05F8oyGiETwpn+8eXZMqPw=="],
 
     "@types/bun": ["@types/bun@1.4.2", "", { "dependencies": { "bun-types": "1.4.2" } }, "sha512-GimotNn7+ZV0uVArItBbriZsR1oNf0+WTzPkdcFrzShI7k2norL0uzEaJT8T33dWr7O/c9ZDuAFQrctKCi72oQ=="],
@@ -598,8 +586,6 @@
     "@types/inquirer": ["@types/inquirer@9.0.10", "", { "dependencies": { "@types/through": "*", "rxjs": "^7.2.0" } }, "sha512-vFW2WbXwO9eZpRT5GJGFJ/shgyMNnYozmnjakt9jCQSS1lvqX8pZEQMjJ9RdDPct/YxwciQ8+V8OYn9euIrZDA=="],
 
     "@types/istanbul-lib-coverage": ["@types/istanbul-lib-coverage@2.0.6", "", {}, "sha512-2QF/t/auWm0lsy8XtKVPG19v3sSOQlJe/YHZgfjb/KBBHOGSV+J2q/S671rcq9uTBrLAXmZpqJiaQbMT+zNU1w=="],
-
-    "@types/js-yaml": ["@types/js-yaml@4.0.9", "", {}, "sha512-k4MGaQl5TGo/iipqb2UDG2UwjXziSWkh0uysQelTlJpX1qGlpUZYm8PnO4DxG1qBomtJUdYJ6qR6xdIah10JLg=="],
 
     "@types/node": ["@types/node@20.19.43", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-6oYBAi5ikg4Pl+kGsoYtawUMBT2zZMCvPNF7pVLnHZfd1zf38DRiWn/gT01RYCdUqkv7Fhr+C9ot4/tb+2sVvA=="],
 
@@ -1153,19 +1139,7 @@
 
     "tsx": ["tsx@4.23.13", "", { "dependencies": { "esbuild": "~0.28.0" }, "optionalDependencies": { "fsevents": "~2.3.3" }, "bin": { "tsx": "dist/cli.mjs" } }, "sha512-BL5MGkRln6aDYhb0xbQlEAGw743BaZYWdbWtdJOBriYJboKgUUYCadFp2/FpBBZquBC/ezNBn7wMMPx7FDZUDw=="],
 
-    "turbo": ["turbo@1.13.4", "", { "optionalDependencies": { "turbo-darwin-64": "1.13.4", "turbo-darwin-arm64": "1.13.4", "turbo-linux-64": "1.13.4", "turbo-linux-arm64": "1.13.4", "turbo-windows-64": "1.13.4", "turbo-windows-arm64": "1.13.4" }, "bin": { "turbo": "bin/turbo" } }, "sha512-1q7+9UJABuBAHrcC4Sxp5lOqYS5mvxRrwa33wpIyM18hlOCpRD/fTJNxZ0vhbMcJmz15o9kkVm743mPn7p6jpQ=="],
-
-    "turbo-darwin-64": ["turbo-darwin-64@1.13.4", "", { "os": "darwin", "cpu": "x64" }, "sha512-A0eKd73R7CGnRinTiS7txkMElg+R5rKFp9HV7baDiEL4xTG1FIg/56Vm7A5RVgg8UNgG2qNnrfatJtb+dRmNdw=="],
-
-    "turbo-darwin-arm64": ["turbo-darwin-arm64@1.13.4", "", { "os": "darwin", "cpu": "arm64" }, "sha512-eG769Q0NF6/Vyjsr3mKCnkG/eW6dKMBZk6dxWOdrHfrg6QgfkBUk0WUUujzdtVPiUIvsh4l46vQrNVd9EOtbyA=="],
-
-    "turbo-linux-64": ["turbo-linux-64@1.13.4", "", { "os": "linux", "cpu": "x64" }, "sha512-Bq0JphDeNw3XEi+Xb/e4xoKhs1DHN7OoLVUbTIQz+gazYjigVZvtwCvgrZI7eW9Xo1eOXM2zw2u1DGLLUfmGkQ=="],
-
-    "turbo-linux-arm64": ["turbo-linux-arm64@1.13.4", "", { "os": "linux", "cpu": "arm64" }, "sha512-BJcXw1DDiHO/okYbaNdcWN6szjXyHWx9d460v6fCHY65G8CyqGU3y2uUTPK89o8lq/b2C8NK0yZD+Vp0f9VoIg=="],
-
-    "turbo-windows-64": ["turbo-windows-64@1.13.4", "", { "os": "win32", "cpu": "x64" }, "sha512-OFFhXHOFLN7A78vD/dlVuuSSVEB3s9ZBj18Tm1hk3aW1HTWTuAw0ReN6ZNlVObZUHvGy8d57OAGGxf2bT3etQw=="],
-
-    "turbo-windows-arm64": ["turbo-windows-arm64@1.13.4", "", { "os": "win32", "cpu": "arm64" }, "sha512-u5A+VOKHswJJmJ8o8rcilBfU5U3Y1TTAfP9wX8bFh8teYF1ghP0EhtMRLjhtp6RPa+XCxHHVA2CiC3gbh5eg5g=="],
+    "turbo": ["turbo@2.11.5", "", { "optionalDependencies": { "@turbo/darwin-64": "2.11.5", "@turbo/darwin-arm64": "2.11.5", "@turbo/linux-64": "2.11.5", "@turbo/linux-arm64": "2.11.5", "@turbo/windows-64": "2.11.5", "@turbo/windows-arm64": "2.11.5" }, "bin": { "turbo": "bin/turbo" } }, "sha512-qLXheqz3TUvJpHIV6MUBwkNkvwKxMVG/QsimyiKT9DfNWPHJ294G/i5nDaH+fbHJt3UH7orubNNxAqYkbUNGAQ=="],
 
     "tweetnacl": ["tweetnacl@0.14.5", "", {}, "sha512-KXXFFdAbFXY4geFIwoyNK+f5Z1b7swfXABfL7HXCmoIWMKU3dmS26672A4EeQtDzLKy7SXmfBu51JolvEKwtGA=="],
 

@@ -6,7 +6,17 @@ type EventName =
     | "try_sample_run"
     | "confidence_explained_open"
     | "drift_card_view"
-    | "repos_selected";
+    | "repos_selected"
+    | "onboarding_view"
+    | "onboarding_intent_selected"
+    | "onboarding_detect_run"
+    | "onboarding_step_complete"
+    | "actions_clicked"
+    | "actions_view"
+    | "actions_repo_selected"
+    | "actions_repo_preselected"
+    | "actions_key_issued"
+    | "actions_yaml_viewed";
 
 interface EventProps {
     [key: string]: string | number | boolean | undefined;
@@ -34,6 +44,6 @@ export function track(name: EventName, props?: EventProps) {
 }
 
 export function useTrackOnMount(name: EventName, props?: EventProps) {
-    // Intentionally not a hook — caller uses useEffect
+    // Intentionally not a hook, caller uses useEffect
     return { name, props };
 }

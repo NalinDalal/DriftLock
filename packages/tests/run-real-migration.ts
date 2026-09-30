@@ -51,6 +51,8 @@ const result = await runMigrationAgent({
     apiKey: process.env.CLOUDFLARE_API_TOKEN,
     baseURL: `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/v1`,
     model,
+    // Manual operator script on the operator's own checkout: host execution is explicit.
+    allowHostExecution: true,
 });
 
 console.log("=".repeat(70));

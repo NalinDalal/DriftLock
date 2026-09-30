@@ -1,5 +1,6 @@
+#!/usr/bin/env bun
 import { readdirSync, readFileSync, writeFileSync } from "fs";
-import { join } from "path";
+import { isAbsolute, join, relative, resolve } from "path";
 import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
@@ -17,8 +18,10 @@ import { analyzeAndCompare, applyDriftFix, buildDriftEvent } from "@driftlock/pi
 import type { CallSite, Fix } from "@driftlock/core";
 import type { DriftResult } from "@driftlock/pipeline";
 import { SnapshotStore } from "./drift";
+import { aiConfigFromEnv } from "./aiEnv";
 import { harToConsumerContract } from "@driftlock/webhookCapture";
 import { runMigrate } from "./migrate";
+import { runWatch } from "./watch";
 
 const program = new Command();
 
@@ -34,6 +37,8 @@ Examples:
   $ driftlock test ./repo --command "npm test"
   $ driftlock diff ./repo --base main
   $ driftlock fix ./repo --repo owner/repo --dry-run
+  $ driftlock watch stripe
+  $ driftlock watch stripe --trigger --repo owner/repo
   $ driftlock init
 `,
     );
@@ -265,6 +270,7 @@ program
         [],
     )
     .option("--dry-run", "Show affected call sites without creating PRs")
+    .option("--json", "Print a machine-readable summary as the last stdout line (for CI)")
     .addHelpText(
         "after",
         `
@@ -278,11 +284,18 @@ The core DriftLock loop:
 
 Environment variables:
   GITHUB_TOKEN    Required for PR creation (not needed for --dry-run)
+  AI_PROVIDER     Optional model fixes: openai, anthropic, gemini, cloudflare
+  AI_API_KEY      API key for openai/anthropic (GEMINI_API_KEY and
+  AI_MODEL        CLOUDFLARE_API_TOKEN take precedence per provider)
+
+With --json, the last stdout line is always a JSON summary:
+  {"callSites":N,"drifts":N,"fixes":N,"prs":[...],"baselines":N,"pendingCapture":N}
 
 Examples:
   $ driftlock fix ./repo --dry-run
   $ driftlock fix ./repo --repo owner/repo
   $ driftlock fix ./repo --command "bun test"
+  $ driftlock fix ./repo --repo owner/repo --json 2>/dev/null | tail -n 1 | jq .
 `,
     )
     .action(
@@ -294,8 +307,14 @@ Examples:
                 dryRun?: boolean;
                 command?: string;
                 forward?: string[];
+                json?: boolean;
             },
         ) => {
+            const emitSummary = (summary: Record<string, unknown>) => {
+                if (options.json) {
+                    console.log(JSON.stringify(summary));
+                }
+            };
             const spinner = ora("Starting drift detection...").start();
 
             try {
@@ -313,8 +332,16 @@ Examples:
                 const allCallSites = result.callSites;
                 const shapes = result.shapes;
 
+                // Model fixes when AI credentials are present, otherwise the
+                // deterministic path (same single fix path, see @driftlock/aiFix).
+                const ai = aiConfigFromEnv();
+                if (ai) {
+                    console.log(chalk.dim(`Model fixes enabled (${ai.provider}${ai.model ? `:${ai.model}` : ""})`));
+                }
+
                 if (allCallSites.length === 0) {
                     spinner.warn("No API call sites found");
+                    emitSummary({ callSites: 0, drifts: 0, fixes: 0, prs: [], baselines: 0, pendingCapture: 0 });
                     return;
                 }
 
@@ -322,6 +349,21 @@ Examples:
 
                 const drifts = result.drifts;
                 const baselines = result.baselines;
+                const pendingCapture = result.pendingCapture;
+                const noTraffic = result.trafficCaptured === 0;
+                if (noTraffic) {
+                    console.log(
+                        chalk.yellow(
+                            `\nNo API traffic captured through the proxy, so baselines are impossible for ${pendingCapture.length} of ${allCallSites.length} call site(s). Make the test suite exercise them, then re-run.`,
+                        ),
+                    );
+                } else if (pendingCapture.length > 0) {
+                    console.log(
+                        chalk.dim(
+                            `\n${pendingCapture.length} call site(s) produced no traffic and stay pending capture.`,
+                        ),
+                    );
+                }
                 spinner.text = `Comparing ${result.trafficCaptured} captured requests against baseline`;
 
                 if (baselines.length > 0) {
@@ -339,13 +381,25 @@ Examples:
                 }
 
                 if (drifts.length === 0) {
-                    if (baselines.length === 0) {
+                    if (noTraffic) {
+                        spinner.warn(
+                            "No traffic captured, nothing to baseline or compare",
+                        );
+                    } else if (baselines.length === 0) {
                         spinner.succeed("No drift detected");
                     } else {
                         spinner.succeed(
                             "Baseline captured, no comparison yet",
                         );
                     }
+                    emitSummary({
+                        callSites: allCallSites.length,
+                        drifts: 0,
+                        fixes: 0,
+                        prs: [],
+                        baselines: baselines.length,
+                        pendingCapture: pendingCapture.length,
+                    });
                     return;
                 }
 
@@ -353,24 +407,35 @@ Examples:
                     `Detected drift at ${drifts.length} call site(s)`,
                 );
 
-                // Step 4: Apply deterministic fixes
+                // Step 4: Apply fixes (deterministic, upgraded to model fixes
+                // when AI credentials are configured)
                 const fixes: Array<{
                     callSite: CallSite;
                     drift: DriftResult;
                     fix: Fix;
                 }> = [];
                 for (const drift of drifts) {
-                    const file = join(
-                        repoPath,
-                        drift.callSite.filePath,
-                    );
+                    // Extractor filePaths may be absolute or repo-relative;
+                    // join() on an absolute second half silently builds a
+                    // nonexistent path, so resolve absolutely first.
+                    const file = isAbsolute(drift.callSite.filePath)
+                        ? drift.callSite.filePath
+                        : join(repoPath, drift.callSite.filePath);
                     let content: string;
                     try {
                         content = readFileSync(file, "utf8");
                     } catch {
                         content = "";
                     }
-                    const applied = applyDriftFix(drift, content);
+                    if (!content.trim()) {
+                        console.log(
+                            chalk.yellow(
+                                `  ${drift.callSite.filePath}:${drift.callSite.line}: cannot read source, skipping fix`,
+                            ),
+                        );
+                        continue;
+                    }
+                    const applied = await applyDriftFix(drift, content, { ai });
                     if (!applied) {
                         console.log(
                             chalk.yellow(
@@ -404,6 +469,14 @@ Examples:
 
                 if (fixes.length === 0) {
                     spinner.succeed("No statically applicable fixes");
+                    emitSummary({
+                        callSites: allCallSites.length,
+                        drifts: drifts.length,
+                        fixes: 0,
+                        prs: [],
+                        baselines: baselines.length,
+                        pendingCapture: pendingCapture.length,
+                    });
                     return;
                 }
 
@@ -414,6 +487,14 @@ Examples:
                             "\nDry run, skipping PR creation. Remove --dry-run to create PRs.",
                         ),
                     );
+                    emitSummary({
+                        callSites: allCallSites.length,
+                        drifts: drifts.length,
+                        fixes: fixes.length,
+                        prs: [],
+                        baselines: baselines.length,
+                        pendingCapture: pendingCapture.length,
+                    });
                     return;
                 }
 
@@ -423,6 +504,14 @@ Examples:
                             "\nNo --repo specified. Skipping PR creation. Use --repo owner/repo to create PRs.",
                         ),
                     );
+                    emitSummary({
+                        callSites: allCallSites.length,
+                        drifts: drifts.length,
+                        fixes: fixes.length,
+                        prs: [],
+                        baselines: baselines.length,
+                        pendingCapture: pendingCapture.length,
+                    });
                     return;
                 }
 
@@ -446,11 +535,32 @@ Examples:
 
                 const prSpinner = ora("Creating PR...").start();
                 const prRunner = new FixPRRunner(githubToken);
+                const prs: Array<{
+                    driftId: string;
+                    status: string;
+                    url: string;
+                    number: number;
+                }> = [];
 
+                // PR surfaces are repo-relative: absolute disk paths would
+                // leak local layout into titles and create stray files.
+                const repoRoot = resolve(repoPath);
+                const displayPath = (p: string): string => {
+                    const rel = relative(repoRoot, p).replace(/\\/g, "/");
+                    return rel && !rel.startsWith("..") ? rel : p;
+                };
                 for (const { callSite, drift, fix } of fixes) {
                     const driftEvent = buildDriftEvent(drift);
                     driftEvent.suggestedFix = fix;
                     driftEvent.status = "fix_generated";
+                    console.log(
+                        `[EVENT] type=drift_detected ${JSON.stringify({ driftId: driftEvent.id, callSiteId: callSite.id, method: callSite.method })}`,
+                    );
+                    const displaySite = { ...callSite, filePath: displayPath(callSite.filePath) };
+                    const displayFiles = fix.files.map((f) => ({
+                        path: displayPath(f.path),
+                        content: f.changes,
+                    }));
 
                     const result = await prRunner.run({
                         owner,
@@ -459,15 +569,12 @@ Examples:
                         branch: fixBranchName(callSite.id),
                         title: buildFixPRTitle({
                             driftEvent,
-                            callSite,
+                            callSite: displaySite,
                             fix,
                         }),
-                        body: buildFixPRBody({ driftEvent, callSite, fix }, fix.files),
+                        body: buildFixPRBody({ driftEvent, callSite: displaySite, fix }, displayFiles),
                         commitMessage: `driftlock: apply fix for ${callSite.method}`,
-                        files: fix.files.map((f) => ({
-                            path: f.path,
-                            content: f.changes,
-                        })),
+                        files: displayFiles,
                     });
 
                     if (result.status === "merged") {
@@ -475,17 +582,52 @@ Examples:
                         if (current) {
                             await store.save(callSite.id, current);
                         }
+                        console.log(
+                            `[EVENT] type=pr_merged ${JSON.stringify({ driftId: driftEvent.id, prNumber: result.number, url: result.url })}`,
+                        );
+                        prs.push({
+                            driftId: driftEvent.id,
+                            status: result.status,
+                            url: result.url,
+                            number: result.number,
+                        });
                         prSpinner.succeed(
                             `Fix already merged (${result.url}); baseline refreshed`,
                         );
                         continue;
                     }
                     if (result.status === "already_open") {
+                        console.log(
+                            `[EVENT] type=pr_opened ${JSON.stringify({ driftId: driftEvent.id, prNumber: result.number, url: result.url })}`,
+                        );
+                        prs.push({
+                            driftId: driftEvent.id,
+                            status: result.status,
+                            url: result.url,
+                            number: result.number,
+                        });
                         prSpinner.succeed(`PR already open: ${result.url}`);
                         continue;
                     }
+                    console.log(
+                        `[EVENT] type=pr_opened ${JSON.stringify({ driftId: driftEvent.id, prNumber: result.number, url: result.url })}`,
+                    );
+                    prs.push({
+                        driftId: driftEvent.id,
+                        status: result.status,
+                        url: result.url,
+                        number: result.number,
+                    });
                     prSpinner.succeed(`PR created: ${result.url}`);
                 }
+                emitSummary({
+                    callSites: allCallSites.length,
+                    drifts: drifts.length,
+                    fixes: fixes.length,
+                    prs,
+                    baselines: baselines.length,
+                    pendingCapture: pendingCapture.length,
+                });
             } catch (error) {
                 spinner.fail("Fix generation failed");
                 console.error(error);
@@ -595,5 +737,50 @@ program
               : undefined;
         await runMigrate({ repo: opts.repo, changePath: opts.change, dryRun: opts.dryRun, ai });
     });
+
+program
+    .command("watch")
+    .description("Poll a vendor spec for breaking changes, optionally triggering migration")
+    .argument("<provider>", "Vendor to watch (stripe, twilio, p5)")
+    .option("--version <v>", "Version label recorded on the baseline", "latest")
+    .option("--baselines-dir <dir>", "Where polled baselines live", ".driftlock/vendor-baselines")
+    .option("--repo <owner/repo|path>", "With --trigger: repo to migrate")
+    .option("--trigger", "Run the migration agent when members are removed")
+    .option("--base <branch>", "Base branch for triggered PRs", "main")
+    .option("--model <name>", "Model for the triggered agent (or DRIFTLOCK_MODEL)")
+    .addHelpText(
+        "after",
+        `
+Polls the vendor's published spec and diffs it against the stored baseline.
+Exit codes: 0 no breaking change, 1 vendor removed members, 2 poll failed.
+
+  $ driftlock watch stripe
+  $ driftlock watch stripe --trigger --repo owner/repo
+`,
+    )
+    .action(
+        async (
+            provider: string,
+            opts: {
+                version: string;
+                baselinesDir: string;
+                repo?: string;
+                trigger?: boolean;
+                base: string;
+                model?: string;
+            },
+        ) => {
+            const code = await runWatch({
+                provider,
+                version: opts.version,
+                baselinesDir: opts.baselinesDir,
+                repo: opts.repo,
+                trigger: opts.trigger,
+                base: opts.base,
+                model: opts.model,
+            });
+            process.exitCode = code;
+        },
+    );
 
 program.parse();

@@ -3,24 +3,31 @@ import { readdir } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import { join } from "node:path";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
-import { isToolName, toOpenAITools } from "./tools";
+import { isToolName, toOpenAITools, type ToolName } from "./tools";
 import { SYSTEM_PROMPT } from "./prompt";
 import {
+    assessConfidence,
+    buildReceipt,
     canChangeMoreFiles,
     canRunMoreCommands,
     createInitialState,
     decideOutcome,
     describeNextStep,
     limits,
+    noteEditFailure,
+    noteEditSuccess,
+    pendingEditRefusal,
     recordFileChanged,
+    recordSearch,
     stageOf,
     type AgentState,
     type ChangePacket,
     type MigrationStage,
     type Outcome,
-    type PrMode,
+    type RunReceipt,
     type ToolCall,
     type TranscriptEntry,
+    trimTranscript,
 } from "./state";
 import {
     collectDiffStat,
@@ -44,6 +51,7 @@ import {
 } from "./publisher";
 import type { CommandRunner } from "./commandRunner";
 import {
+    lookupVendorSymbol,
     verifyVendorSymbols,
     type SymbolFinding,
     type VendorContract,
@@ -154,34 +162,131 @@ export type RunOptions = {
     target?: PullRequestTarget;
     commandRunner?: CommandRunner;
     /**
+     * Allow model-requested commands to run directly on the host. Defaults to
+     * false: without a `commandRunner` (e.g. `createSandboxCommandRunner()`),
+     * `runCommand` is refused so untrusted repository scripts can never execute
+     * outside isolation. Set true only for an operator's own machine.
+     */
+    allowHostExecution?: boolean;
+    /**
      * Ground truth about the vendor's API surface. When present it is injected
      * into the opening message and enforced before any pull request is opened.
      */
     contract?: VendorContract;
     vendor?: VendorConfig;
     /**
-     * What the caller wants when no vendor contract gates the run. Without a
-     * contract the outcome is capped at `review_pr` (`review`, the default) or
-     * `draft_pr` (`draft`), never `auto_pr`.
-     */
-    prMode?: PrMode;
-    /**
      * Overrides the repository fingerprint. Normally this is read from disk
      * before the loop starts, because the model cannot be trusted to go looking
      * for it, but a caller that already knows the facts can supply them.
      */
     repoFacts?: RepoFacts;
+    /**
+     * Model-call resilience (timeouts and transient failures are the common
+     * way a long run dies). Defaults: 120s timeout, 2 retries, 1s base delay.
+     */
+    modelTimeoutMs?: number;
+    modelMaxRetries?: number;
+    modelRetryBaseMs?: number;
+    /**
+     * Human-in-the-loop for high-stakes tools. Before a tool in
+     * `toolsRequiringApproval` runs, `approveTool` is consulted; a rejection
+     * (or a throwing hook — fail-closed) returns a FAILED tool result the
+     * model can react to instead of executing. Defaults to approving.
+     */
+    approveTool?: (call: { name: ToolName; args: Record<string, unknown> }) =>
+        | Promise<"approve" | "reject">
+        | "approve"
+        | "reject";
+    toolsRequiringApproval?: ToolName[];
+    /** Progress observer; see `AgentEvent`. Never affects the run. */
+    onEvent?: (event: AgentEvent) => void;
+    /** Transcript budget in serialized characters before old tool results are
+     * compacted. Defaults to 120000. */
+    transcriptBudgetChars?: number;
 };
 
 export type RunResult = {
     outcome: Outcome;
     state: AgentState;
     filesChanged: string[];
+    /** Structured audit line for this run: what changed, what proved it. */
+    receipt: RunReceipt;
 };
+
+/**
+ * Run observer (SDK event sinks, without the SDK). Fires on iteration start,
+ * every tool result, every model retry, and completion. Observer errors are
+ * swallowed: a sink failure must never change what the run does.
+ */
+export type AgentEvent =
+    | { type: "iteration"; iteration: number; stage: MigrationStage }
+    | { type: "tool"; name: ToolName; ok: boolean; iteration: number }
+    | { type: "model_retry"; attempt: number; error: string }
+    | { type: "done"; outcome: Outcome; iterations: number };
+
+/** Tools that pause for operator approval. Publishing is the irreversible
+ * external side effect in this loop, so it is the only default. */
+export const DEFAULT_APPROVAL_TOOLS: ToolName[] = ["createPullRequest"];
 
 type RunnerDeps = {
     create: OpenAI["chat"]["completions"]["create"];
 };
+
+/**
+ * Which model-call failures are worth retrying. Rate limits, overloaded
+ * servers, timeouts, and dropped connections are transient; anything else
+ * (auth, bad request, bad key) will fail identically on retry.
+ */
+export function isRetryableModelError(error: unknown): boolean {
+    if (error instanceof DOMException && error.name === "AbortError") return true;
+    const status = (error as { status?: unknown } | null)?.status;
+    if (typeof status === "number") return status === 429 || status >= 500;
+    if (error instanceof TypeError) return true;
+    return false;
+}
+
+function modelErrorMessage(error: unknown): string {
+    if (error instanceof DOMException && error.name === "AbortError") {
+        return "model request timed out";
+    }
+    return error instanceof Error ? error.message : String(error);
+}
+
+async function createWithRetry(
+    create: RunnerDeps["create"],
+    body: Parameters<RunnerDeps["create"]>[0],
+    options: {
+        timeoutMs: number;
+        maxRetries: number;
+        baseDelayMs: number;
+        onRetry?: (attempt: number, error: unknown) => void;
+    },
+): Promise<
+    Extract<Awaited<ReturnType<RunnerDeps["create"]>>, { choices: unknown }>
+> {
+    for (let attempt = 0; ; attempt += 1) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), options.timeoutMs);
+        try {
+            // The request body never sets `stream`, so the SDK resolves to a
+            // full completion; the cast recovers the overload the union hides.
+            const response = (await create(body, { signal: controller.signal })) as Extract<
+                Awaited<ReturnType<RunnerDeps["create"]>>,
+                { choices: unknown }
+            >;
+            clearTimeout(timer);
+            return response;
+        } catch (error) {
+            clearTimeout(timer);
+            if (attempt >= options.maxRetries || !isRetryableModelError(error)) {
+                throw error;
+            }
+            options.onRetry?.(attempt + 1, error);
+            const delay = Math.min(options.baseDelayMs * 2 ** attempt, 10_000);
+            await Bun.sleep(delay * (0.5 + Math.random() * 0.5));
+        }
+    }
+}
 
 function toWireMessages(
     transcript: TranscriptEntry[],
@@ -254,11 +359,38 @@ async function execute(
     state: AgentState,
 ): Promise<ToolResult> {
     const root = options.root;
+    // Human-in-the-loop: high-stakes tools pause for approval first. A denial
+    // (or a throwing hook — fail-closed) is an ordinary FAILED result the
+    // model can react to, not a halt.
+    if ((options.toolsRequiringApproval ?? DEFAULT_APPROVAL_TOOLS).includes(name)) {
+        let decision: "approve" | "reject" = "approve";
+        try {
+            decision = (await options.approveTool?.({ name, args })) ?? "approve";
+        } catch (error) {
+            return {
+                ok: false,
+                output: `Approval hook failed for ${name}: ${error instanceof Error ? error.message : String(error)}. Denied by default; fix the hook or call again.`,
+            };
+        }
+        if (decision !== "approve") {
+            return {
+                ok: false,
+                output: `Operator denied ${name}. Explain what you wanted and ask what to change, or proceed without it.`,
+            };
+        }
+    }
     switch (name) {
         case "inspectRepo":
             return inspectRepo(root);
-        case "searchCode":
-            return searchCode(root, readString(args, "query"), readString(args, "path") || undefined);
+        case "searchCode": {
+            const result = await searchCode(
+                root,
+                readString(args, "query"),
+                readString(args, "path") || undefined,
+            );
+            if (result.ok) recordSearch(state, readString(args, "query"));
+            return result;
+        }
         case "readFile":
             return readFile(root, readString(args, "path"));
         case "editFile": {
@@ -268,11 +400,15 @@ async function execute(
                     output: `Refusing edit: MAX_FILES_CHANGED (${state.maxFilesChanged}) reached`,
                 };
             }
-            const result = await editFile(root, readString(args, "path"), readString(args, "patch"));
+            const path = readString(args, "path");
+            const result = await editFile(root, path, readString(args, "patch"));
             if (result.ok) {
-                recordFileChanged(state, readString(args, "path"));
+                recordFileChanged(state, path);
+                noteEditSuccess(state, path);
                 // A passing verification no longer describes the tree once it is edited.
                 state.lastTestResult = undefined;
+            } else {
+                noteEditFailure(state, path);
             }
             return result;
         }
@@ -283,20 +419,54 @@ async function execute(
                     output: `Refusing edit: MAX_FILES_CHANGED (${state.maxFilesChanged}) reached`,
                 };
             }
+            const path = readString(args, "path");
             const result = await replaceInFile(
                 root,
-                readString(args, "path"),
+                path,
                 readString(args, "oldText"),
                 readString(args, "newText"),
             );
             if (result.ok) {
-                recordFileChanged(state, readString(args, "path"));
+                recordFileChanged(state, path);
+                noteEditSuccess(state, path);
                 // A passing verification no longer describes the tree once it is edited.
                 state.lastTestResult = undefined;
+            } else {
+                noteEditFailure(state, path);
             }
             return result;
         }
+        case "lookupVendorSymbol": {
+            const contract = options.contract;
+            if (!contract) {
+                return {
+                    ok: false,
+                    output:
+                        "No vendor contract gates this run, so there is nothing authoritative to resolve against. Re-read the change packet and search the repository instead of guessing a name.",
+                };
+            }
+            const symbol = readString(args, "symbol");
+            if (!symbol.trim()) {
+                return { ok: false, output: "lookupVendorSymbol requires a non-empty symbol" };
+            }
+            const found = lookupVendorSymbol(contract, symbol);
+            const lines = [
+                `${found.status.toUpperCase()}: ${found.detail}`,
+            ];
+            if (found.suggestions.length > 0) {
+                lines.push(`Candidates from the contract: ${found.suggestions.join(", ")}.`);
+            }
+            if (found.status !== "exists") {
+                lines.push("Do not guess a name that is not in this list.");
+            }
+            return { ok: true, output: lines.join("\n") };
+        }
+        case "checkCompleteness":
+            return checkCompleteness(root, options, state);
         case "runCommand": {
+            if (state.pendingEditRetry) {
+                return { ok: false, output: pendingEditRefusal(state) };
+            }
             if (!canRunMoreCommands(state)) {
                 return {
                     ok: false,
@@ -305,13 +475,33 @@ async function execute(
             }
             state.commandsRun += 1;
             const command = readString(args, "command");
+            if (!options.commandRunner && options.allowHostExecution !== true) {
+                const refused = {
+                    ok: false,
+                    output:
+                        "Refusing command: no commandRunner was supplied, and host execution is disabled. Pass commandRunner: createSandboxCommandRunner() (Docker isolation), or set allowHostExecution: true only on an operator's own machine.",
+                };
+                state.lastTestResult = { passed: false, output: refused.output };
+                return refused;
+            }
             const result = options.commandRunner
                 ? await options.commandRunner.run(root, command)
                 : await runCommand(root, command);
             state.lastTestResult = { passed: result.ok, output: result.output };
+            if (!result.ok) return result;
+            // Verification passed, but a green build on 2 of 3 call sites is
+            // the exact failure the real runs showed. Warn inline while the
+            // model can still act, rather than saving the news for the PR gate.
+            const warning = await staleWarning(root, options, state);
+            if (warning) {
+                return { ok: true, output: `${result.output}\n\n${warning}` };
+            }
             return result;
         }
         case "createPullRequest":
+            if (state.pendingEditRetry) {
+                return { ok: false, output: pendingEditRefusal(state) };
+            }
             return openPullRequest(
                 args,
                 options.packet,
@@ -325,6 +515,89 @@ async function execute(
         default:
             return { ok: false, output: `Unknown tool: ${String(name)}` };
     }
+}
+
+/**
+ * On-demand completeness sweep, and the shared body behind the inline
+ * warning appended to a passing verification.
+ *
+ * Changed files get the full check; untouched files are swept for stale
+ * reads of removed fields. Findings are stored on state so the outcome and
+ * the receipt reflect them even when the model never calls createPullRequest.
+ */
+async function checkCompleteness(
+    root: string,
+    options: RunOptions,
+    state: AgentState,
+): Promise<ToolResult> {
+    const contract = options.contract;
+    const vendor = options.vendor;
+    if (!contract || !vendor) {
+        const searched = state.searchedQueries.length > 0 ? state.searchedQueries.join(", ") : "(none yet)";
+        const changed = state.filesChanged.length > 0 ? state.filesChanged.join(", ") : "(none yet)";
+        return {
+            ok: true,
+            output: [
+                "No vendor contract gates this run, so completeness cannot be checked against the vendor.",
+                `Searches issued: ${searched}. Files changed: ${changed}.`,
+                "Search once per deprecated name in the change packet, read every hit, and say in your report which names you searched and what you found.",
+            ].join("\n"),
+        };
+    }
+    const findings = [
+        ...(await checkChangedFiles(root, state.filesChanged, contract, vendor)),
+        ...(await sweepStaleReferences(root, new Set(state.filesChanged), contract, vendor)),
+    ];
+    state.symbolFindings = findings;
+    state.contractChecked = true;
+    if (findings.length === 0) {
+        return {
+            ok: true,
+            output: `Completeness clean: no stale reads of ${contract.removed.join(", ") || "(no removed fields)"} anywhere in the repository.`,
+        };
+    }
+    return {
+        ok: false,
+        output: [
+            `INCOMPLETE: ${findings.length} stale vendor symbol(s) remain. A green build does not excuse them.`,
+            "",
+            ...findings.map(
+                (finding) =>
+                    `- ${finding.file}:${finding.line} ${finding.kind}: ${finding.detail}\n    ${finding.text}`,
+            ),
+            "",
+            "Fix every line above (lookupVendorSymbol names the real replacements), then run checkCompleteness again.",
+        ].join("\n"),
+    };
+}
+
+/** Warning text appended to a passing verification when stale reads remain. */
+async function staleWarning(
+    root: string,
+    options: RunOptions,
+    state: AgentState,
+): Promise<string | null> {
+    const contract = options.contract;
+    const vendor = options.vendor;
+    if (!contract || !vendor || state.filesChanged.length === 0) return null;
+    if (contract.removed.length === 0) return null;
+    const findings = [
+        ...(await checkChangedFiles(root, state.filesChanged, contract, vendor)),
+        ...(await sweepStaleReferences(root, new Set(state.filesChanged), contract, vendor)),
+    ];
+    if (findings.length === 0) return null;
+    state.symbolFindings = findings;
+    state.contractChecked = true;
+    const { level, reasons } = assessConfidence(state);
+    return [
+        `COMPLETENESS WARNING (confidence: ${level}): verification passed, but ${findings.length} stale vendor symbol(s) remain elsewhere:`,
+        ...findings.map(
+            (finding) =>
+                `- ${finding.file}:${finding.line} ${finding.kind}: ${finding.detail}`,
+        ),
+        `Why this matters: ${reasons.join("; ")}.`,
+        "Call checkCompleteness for exact lines, fix them, then verify again. Do not open a PR yet.",
+    ].join("\n");
 }
 
 async function openPullRequest(
@@ -395,17 +668,24 @@ async function openPullRequest(
         return { ok: false, output: "Refusing to open a PR: the working tree is clean" };
     }
 
+    // The policy, enforced where the PR is opened rather than in the outcome
+    // label: without a vendor contract nothing checked the edits against the
+    // vendor's real API surface, so the run may only ever produce a draft.
+    const draft = !contract || !vendor;
+
     if (!publisher || !target) {
         const stat = await collectDiffStat(root);
+        const confidence = assessConfidence(state);
         return {
             ok: true,
             output: [
                 `PREVIEW ONLY, no pull request was opened.`,
                 `A publisher and target were not supplied to the agent.`,
-                `Would open on branch ${branch} against ${target?.base ?? "<base>"}`,
+                `Would open${draft ? " as a draft (no vendor contract)" : ""} on branch ${branch} against ${target?.base ?? "<base>"}`,
                 `Title: ${title}`,
                 `Body: ${body}`,
                 `Diff stat: ${stat || "(no changes)"}`,
+                `Confidence: ${confidence.level} (${confidence.reasons.join("; ")}).`,
             ].join("\n"),
         };
     }
@@ -428,6 +708,7 @@ async function openPullRequest(
                 fromVersion: packet.fromVersion,
                 toVersion: packet.toVersion,
             }),
+            draft,
         });
     } catch (error) {
         return {
@@ -437,12 +718,14 @@ async function openPullRequest(
     }
 
     state.pullRequest = result;
+    const confidence = assessConfidence(state);
     return {
         ok: true,
         output: [
-            `Pull request ${result.status}: ${result.url}`,
+            `Pull request ${result.status}${draft ? " (draft)" : ""}: ${result.url}`,
             `Branch: ${result.branch}`,
             `Files published: ${files.length}`,
+            `Confidence: ${confidence.level} (${confidence.reasons.join("; ")}).`,
         ].join("\n"),
     };
 }
@@ -465,8 +748,21 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
     // The contract gate needs both halves: the API surface and the config
     // that says which receivers it applies to. Anything less is ungated.
     state.hasContract = Boolean(options.contract && options.vendor);
-    if (options.prMode) state.prMode = options.prMode;
     const model = options.model ?? "gpt-4o-mini";
+    const modelResilience = {
+        timeoutMs: options.modelTimeoutMs ?? 120_000,
+        maxRetries: options.modelMaxRetries ?? 2,
+        baseDelayMs: options.modelRetryBaseMs ?? 1000,
+    };
+    const budgetChars = options.transcriptBudgetChars ?? 120_000;
+    // Observer errors must never change what the run does.
+    const emit = (event: AgentEvent): void => {
+        try {
+            options.onEvent?.(event);
+        } catch {
+            // Sinks observe; they do not steer.
+        }
+    };
     let lastStage: MigrationStage | null = null;
 
     while (!state.done && state.iteration < state.maxIterations) {
@@ -487,17 +783,39 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
             }
             lastStage = stage;
         }
+        emit({ type: "iteration", iteration: state.iteration, stage });
 
-        const response = await deps.create({
-            model,
-            temperature: 0.1,
-            messages: [
-                { role: "system", content: SYSTEM_PROMPT },
-                ...toWireMessages(state.transcript),
-            ],
-            tools: toOpenAITools(),
-            tool_choice: "auto",
-        });
+        // A dead model endpoint must degrade to an outcome, never throw: the
+        // edits on disk are real work worth reporting as review_pr.
+        let response: Awaited<ReturnType<typeof createWithRetry>>;
+        try {
+            response = await createWithRetry(
+                deps.create,
+                {
+                    model,
+                    temperature: 0.1,
+                    messages: [
+                        { role: "system", content: SYSTEM_PROMPT },
+                        ...toWireMessages(state.transcript),
+                    ],
+                    tools: toOpenAITools(),
+                    tool_choice: "auto",
+                },
+                {
+                    ...modelResilience,
+                    onRetry: (attempt, error) =>
+                        emit({ type: "model_retry", attempt, error: modelErrorMessage(error) }),
+                },
+            );
+        } catch (error) {
+            state.transcript.push({
+                role: "assistant",
+                content: `Model call failed (${modelErrorMessage(error)}). Stopping with what is on disk.`,
+            });
+            state.done = true;
+            state.outcome = decideOutcome(state);
+            break;
+        }
 
         const message = response.choices[0]?.message;
         const toolCalls = parseToolCalls(
@@ -529,7 +847,25 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
                 toolName: call.name,
                 content: result.ok ? result.output : `FAILED: ${result.output}`,
             });
+            emit({ type: "tool", name: call.name, ok: result.ok, iteration: state.iteration });
             if (call.name === "createPullRequest" && result.ok) state.done = true;
+            // Failure threshold: that many tool failures in a row means the
+            // strategy is stuck. Escalate to a human (review/draft) instead of
+            // burning the remaining iterations proving it again.
+            if (result.ok) {
+                state.consecutiveFailures = 0;
+            } else {
+                state.consecutiveFailures += 1;
+                if (state.consecutiveFailures >= limits.MAX_CONSECUTIVE_FAILURES) {
+                    state.transcript.push({
+                        role: "assistant",
+                        content: `Stopping: ${state.consecutiveFailures} tool calls failed in a row. The failures above describe what to look at.`,
+                    });
+                    state.done = true;
+                    state.outcome = decideOutcome(state);
+                    break;
+                }
+            }
         }
 
         if (state.filesChanged.length >= limits.MAX_FILES_CHANGED) {
@@ -540,6 +876,9 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
         if (state.done && !state.outcome) {
             state.outcome = decideOutcome(state);
         }
+
+        // Bound context growth before the next model call.
+        trimTranscript(state, budgetChars);
     }
 
     if (!state.done) {
@@ -550,9 +889,12 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
                 : decideOutcome(state);
     }
 
+    const outcome = state.outcome ?? decideOutcome(state);
+    emit({ type: "done", outcome, iterations: state.iteration });
     return {
-        outcome: state.outcome ?? decideOutcome(state),
+        outcome,
         state,
         filesChanged: state.filesChanged,
+        receipt: buildReceipt(state, options.packet, model, outcome),
     };
 }

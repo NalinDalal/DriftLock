@@ -9,8 +9,15 @@ import {
     readChangedFiles,
     runMigrationAgent,
     type ChangePacket,
+    type CommandRunner,
     type PullRequestPublisher,
+    type VendorContract,
 } from "@driftlock/agent";
+
+function fakeOkRunner(): CommandRunner {
+    return { run: async () => ({ ok: true, output: "fake pass" }) };
+}
+import { P5_VENDOR } from "@driftlock/core";
 import { FixPRRunner } from "@driftlock/git";
 
 let root: string;
@@ -290,6 +297,7 @@ describe("createGitHubPublisher", () => {
                 buildCall("npm run build"),
                 prCall("driftlock/p5-2-3"),
             ]),
+            commandRunner: fakeOkRunner(),
         });
 
         const names = calls.map((call) => call.name);
@@ -357,6 +365,7 @@ describe("createGitHubPublisher", () => {
                 buildCall("npm run build"),
                 prCall("driftlock/p5-2-3"),
             ]),
+            commandRunner: fakeOkRunner(),
         });
 
         expect(calls).toHaveLength(0);
@@ -378,11 +387,12 @@ describe("createPullRequest", () => {
                 buildCall("npm run build"),
                 prCall("driftlock/p5-2-3"),
             ]),
+            commandRunner: fakeOkRunner(),
         });
 
-        // No contract gates this run, so the verified diff is review-only even
-        // though the PR itself opened.
-        expect(result.outcome).toBe("review_pr");
+        // No contract gates this run, so the gate publishes a draft and the
+        // outcome matches it.
+        expect(result.outcome).toBe("draft_pr");
         expect(result.state.pullRequest).toEqual({
             status: "opened",
             url: "https://github.com/acme/widgets/pull/7",
@@ -392,10 +402,49 @@ describe("createPullRequest", () => {
         expect(seen).toHaveLength(1);
         expect(seen[0].target).toEqual(target);
         expect(seen[0].branch).toBe("driftlock/p5-2-3");
+        // Contractless: the gate enforces draft, not the outcome label.
+        expect(seen[0].draft).toBe(true);
+        expect(result.receipt.draft).toBe(true);
+        expect(result.receipt.prNumber).toBe(7);
+        expect(result.receipt.verificationPassed).toBe(true);
         expect(seen[0].commitMessage).toBe("driftlock: migrate p5 1.11 to 2.3");
         expect(seen[0].files).toEqual([
             { path: "src/client.ts", content: "createSurface(1);\n" },
         ]);
+    });
+
+    test("publishes a mergeable PR when a contract gates the run", async () => {
+        const { publisher, seen } = recordingPublisher();
+        const contract: VendorContract = {
+            provider: "p5",
+            version: "2.3.0",
+            source: "spec",
+            authority: "authoritative",
+            origin: "test://contract",
+            capturedAt: new Date().toISOString(),
+            members: ["createSurface"],
+            removed: [],
+        };
+        const result = await runMigrationAgent({
+            root,
+            packet,
+            publisher,
+            target,
+            contract,
+            vendor: P5_VENDOR,
+            client: scriptedClient([
+                editCall(),
+                buildCall("npm run build"),
+                prCall("driftlock/p5-2-3"),
+            ]),
+            commandRunner: fakeOkRunner(),
+        });
+
+        expect(result.outcome).toBe("auto_pr");
+        expect(seen).toHaveLength(1);
+        expect(seen[0].draft).toBe(false);
+        expect(result.receipt.draft).toBe(false);
+        expect(result.state.pullRequest?.status).toBe("opened");
     });
 
     test("refuses a branch outside the driftlock namespace", async () => {
@@ -410,6 +459,7 @@ describe("createPullRequest", () => {
                 buildCall("npm run build"),
                 prCall("main"),
             ]),
+            commandRunner: fakeOkRunner(),
         });
 
         expect(seen).toHaveLength(0);
@@ -463,6 +513,7 @@ describe("createPullRequest", () => {
                 buildCall("npm run build"),
                 prCall("driftlock/p5-2-3"),
             ]),
+            commandRunner: fakeOkRunner(),
         });
 
         expect(result.state.pullRequest).toBeUndefined();
@@ -484,6 +535,7 @@ describe("createPullRequest", () => {
                 buildCall("npm run build"),
                 prCall("driftlock/p5-2-3"),
             ]),
+            commandRunner: fakeOkRunner(),
         });
         expect(seen).toHaveLength(1);
 
@@ -509,12 +561,18 @@ describe("createPullRequest", () => {
                 },
             ],
         };
+        // The first run already rewrote src/client.ts, so reset it: otherwise
+        // the second run's edit fails and the new pending-retry gate (which
+        // refuses verify/PR until the same file is retried) fires before the
+        // title check this test exercises.
+        await writeFile(join(root, "src/client.ts"), "createCanvas(1);\n");
         const second = await runMigrationAgent({
             root,
             packet,
             publisher,
             target,
             client: scriptedClient([editCall(), buildCall("npm run build"), blankTitle]),
+            commandRunner: fakeOkRunner(),
         });
         expect(seen).toHaveLength(1);
         const entry = second.state.transcript.find(
