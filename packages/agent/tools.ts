@@ -9,6 +9,37 @@ export type ToolName =
     | "runCommand"
     | "createPullRequest";
 
+/**
+ * Subscription tier. Determined at runtime by the caller (plan check),
+ * not baked into the agent: the same loop runs with fewer tools on free.
+ *
+ * - `free`: local analysis only. Edits and verification run, but publishing
+ *   is hidden so the run ends as preview/review rather than a PR.
+ * - `pro`: full loop including `createPullRequest`.
+ */
+export type AgentTier = "free" | "pro";
+
+const FREE_TOOLS: ToolName[] = [
+    "inspectRepo",
+    "searchCode",
+    "readFile",
+    "editFile",
+    "replaceInFile",
+    "lookupVendorSymbol",
+    "checkCompleteness",
+    "runCommand",
+];
+
+const PRO_TOOLS: ToolName[] = [
+    ...FREE_TOOLS,
+    "createPullRequest",
+];
+
+export const TIER_TOOLS: Record<AgentTier, readonly ToolName[]> = {
+    free: FREE_TOOLS,
+    pro: PRO_TOOLS,
+};
+
 export interface ToolDefinition {
     name: ToolName;
     description: string;
@@ -170,8 +201,18 @@ export function isToolName(value: string): value is ToolName {
     return tools.some((tool) => tool.name === value);
 }
 
-export function toOpenAITools() {
-    return tools.map((tool) => ({
+/** Tools visible to a tier. Unknown tiers fail closed to free. */
+export function toolsForTier(tier: AgentTier = "pro"): ToolDefinition[] {
+    const allowed = new Set<ToolName>(TIER_TOOLS[tier] ?? TIER_TOOLS.free);
+    return tools.filter((tool) => allowed.has(tool.name));
+}
+
+export function isToolAllowed(name: ToolName, tier: AgentTier = "pro"): boolean {
+    return (TIER_TOOLS[tier] ?? TIER_TOOLS.free).includes(name);
+}
+
+export function toOpenAITools(tier: AgentTier = "pro") {
+    return toolsForTier(tier).map((tool) => ({
         type: "function" as const,
         function: {
             name: tool.name,

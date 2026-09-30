@@ -3,8 +3,8 @@ import { readdir } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import { join } from "node:path";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
-import { isToolName, toOpenAITools, type ToolName } from "./tools";
-import { SYSTEM_PROMPT } from "./prompt";
+import { isToolAllowed, isToolName, toOpenAITools, type AgentTier, type ToolName } from "./tools";
+import { buildSystemPrompt } from "./prompt";
 import {
     assessConfidence,
     buildReceipt,
@@ -156,6 +156,8 @@ export type RunOptions = {
     packet: ChangePacket;
     apiKey?: string;
     model?: string;
+    /** Subscription tier. Defaults to pro so existing callers keep full tools. */
+    tier?: AgentTier;
     baseURL?: string;
     client?: OpenAI;
     publisher?: PullRequestPublisher;
@@ -358,6 +360,15 @@ async function execute(
     options: RunOptions,
     state: AgentState,
 ): Promise<ToolResult> {
+    const tier: AgentTier = options.tier ?? "pro";
+    // Tier gate enforced here, not just in the prompt: a free run that asks
+    // for createPullRequest gets a FAILED result it can react to, not a PR.
+    if (!isToolAllowed(name, tier)) {
+        return {
+            ok: false,
+            output: `${name} is disabled on the ${tier} plan. Summarise the change for review instead.`,
+        };
+    }
     const root = options.root;
     // Human-in-the-loop: high-stakes tools pause for approval first. A denial
     // (or a throwing hook — fail-closed) is an ordinary FAILED result the
@@ -745,6 +756,8 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
     // about a script name is indistinguishable from a real build failure.
     const facts = options.repoFacts ?? (await fingerprintRepo(options.root));
     const state = createInitialState(options.packet, options.contract, facts);
+    const tier: AgentTier = options.tier ?? "pro";
+    const systemPrompt = buildSystemPrompt(tier);
     // The contract gate needs both halves: the API surface and the config
     // that says which receivers it applies to. Anything less is ungated.
     state.hasContract = Boolean(options.contract && options.vendor);
@@ -795,10 +808,10 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
                     model,
                     temperature: 0.1,
                     messages: [
-                        { role: "system", content: SYSTEM_PROMPT },
+                        { role: "system", content: systemPrompt },
                         ...toWireMessages(state.transcript),
                     ],
-                    tools: toOpenAITools(),
+                    tools: toOpenAITools(tier),
                     tool_choice: "auto",
                 },
                 {

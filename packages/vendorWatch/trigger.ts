@@ -3,6 +3,7 @@ import {
     changePacketFromDrift,
     createSandboxCommandRunner,
     runMigrationAgent,
+    type AgentTier,
     type ObservedDrift,
     type RunResult,
 } from "@driftlock/agent";
@@ -13,6 +14,8 @@ export interface TriggerOptions {
     root: string;
     /** Docs links to attach to the packet. */
     docs?: string[];
+    /** Subscription tier. Free hides createPullRequest; defaults to pro. */
+    tier?: AgentTier;
     /** Model the agent runs with. Defaults to the agent default. */
     model?: string;
     /** API key when no `client` is supplied. */
@@ -71,6 +74,7 @@ export async function runVendorTriggeredMigration(
     );
     return runMigrationAgent({
         root: options.root,
+        ...(options.tier ? { tier: options.tier } : {}),
         packet: {
             provider: packet.provider,
             fromVersion: packet.fromVersion,

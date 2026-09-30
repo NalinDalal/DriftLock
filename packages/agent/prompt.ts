@@ -1,3 +1,17 @@
+export type PromptTier = "free" | "pro";
+
+const TIER_ADDENDUM: Record<PromptTier, string> = {
+    free: [
+        "Plan: free. Local analysis and edits only.",
+        "Do not call createPullRequest: it is disabled on this plan.",
+        "End with a summary of what changed and what the operator should review.",
+    ].join("\n"),
+    pro: [
+        "Plan: pro. Full loop including pull requests.",
+        "Open a pull request only after verification passes.",
+    ].join("\n"),
+};
+
 export const SYSTEM_PROMPT = `You are DriftLock, an autonomous API migration agent.
 
 You receive a ChangePacket describing a vendor API change, along with facts read
@@ -51,3 +65,8 @@ Hard rules:
 - Stop at the first tool result that contradicts your plan. Report it instead.
 
 When the repository does not use the changed API, make no edits and say so.`;
+
+/** System instructions for a tier. `SYSTEM_PROMPT` stays as the pro default. */
+export function buildSystemPrompt(tier: PromptTier = "pro"): string {
+    return `${SYSTEM_PROMPT}\n\n${TIER_ADDENDUM[tier] ?? TIER_ADDENDUM.free}`;
+}
