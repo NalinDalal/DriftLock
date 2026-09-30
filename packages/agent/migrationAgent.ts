@@ -264,8 +264,7 @@ async function createWithRetry(
 ): Promise<
     Extract<Awaited<ReturnType<RunnerDeps["create"]>>, { choices: unknown }>
 > {
-    let attempt = 0;
-    while (true) {
+    for (let attempt = 0; ; attempt += 1) {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), options.timeoutMs);
         try {
@@ -285,7 +284,6 @@ async function createWithRetry(
             options.onRetry?.(attempt + 1, error);
             const delay = Math.min(options.baseDelayMs * 2 ** attempt, 10_000);
             await Bun.sleep(delay * (0.5 + Math.random() * 0.5));
-            attempt += 1;
         }
     }
 }
