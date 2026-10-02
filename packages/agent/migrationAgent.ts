@@ -40,6 +40,7 @@ import {
     editFile,
     hasUncommittedChanges,
     inspectRepo,
+    isAllowedCommand,
     isGitRepository,
     readFile,
     replaceInFile,
@@ -533,6 +534,18 @@ async function execute(
             }
             state.commandsRun += 1;
             const command = readString(args, "command");
+            // Allowlist enforced here, not in each runner: a custom
+            // CommandRunner is a test seam or an isolation boundary, never a
+            // policy decision. Untrusted model output stops at this line no
+            // matter which runner is plugged in.
+            if (!isAllowedCommand(command)) {
+                const refused = {
+                    ok: false,
+                    output: `Command not allowed: ${command.trim()}. The harness only runs verification commands from the repository facts, copied exactly, with no shell operators.`,
+                };
+                state.lastTestResult = { passed: false, output: refused.output };
+                return refused;
+            }
             if (!options.commandRunner && options.allowHostExecution !== true) {
                 const refused = {
                     ok: false,
