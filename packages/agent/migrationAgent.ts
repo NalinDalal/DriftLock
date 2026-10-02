@@ -487,6 +487,38 @@ async function execute(
             }
             return { ok: true, output: lines.join("\n") };
         }
+        case "readContract": {
+            const contract = options.contract;
+            if (!contract) {
+                return {
+                    ok: false,
+                    output:
+                        "No vendor contract gates this run, so there is nothing to re-read. Re-read the change packet and search the repository instead.",
+                };
+            }
+            const prefix = readString(args, "prefix").trim();
+            const rawLimit = args["limit"];
+            const parsedLimit =
+                typeof rawLimit === "number"
+                    ? rawLimit
+                    : Number.parseInt(readString(args, "limit"), 10);
+            const limit = Number.isNaN(parsedLimit) ? 50 : Math.min(Math.max(parsedLimit, 1), 200);
+            const matched = contract.members.filter((member) =>
+                prefix ? member === prefix || member.startsWith(`${prefix}.`) || member.startsWith(prefix) : true,
+            );
+            const shown = matched.slice(0, limit);
+            const lines = [
+                `${contract.provider} contract from ${contract.origin}: ${matched.length} member(s)${prefix ? ` starting with "${prefix}"` : ""}.`,
+                ...shown.map((member) => `- ${member}`),
+            ];
+            if (matched.length > shown.length) {
+                lines.push(`...and ${matched.length - shown.length} more. Narrow with prefix or raise limit.`);
+            }
+            if (contract.removed.length > 0) {
+                lines.push(`Removed by the vendor: ${contract.removed.join(", ")}.`);
+            }
+            return { ok: true, output: lines.join("\n") };
+        }
         case "checkCompleteness":
             return checkCompleteness(root, options, state);
         case "runCommand": {

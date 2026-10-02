@@ -42,6 +42,9 @@ How to edit:
   call lookupVendorSymbol with the name you are considering before editing.
   It answers from the captured contract (exists, removed, or unknown with
   real candidates). A plausible guess that does not exist is worse than no edit.
+- The opening message lists at most 200 contract members. If the member you
+  need is not there, call readContract with a prefix to re-read the contract
+  on demand rather than assuming it does not exist.
 - After your last edit, call checkCompleteness before verifying. It sweeps
   files you never touched for reads of removed fields; a green build on 2 of
   3 call sites still leaves the third broken.

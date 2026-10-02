@@ -78,11 +78,12 @@ afterEach(async () => {
 });
 
 describe("tier tool gating", () => {
-    test("free hides createPullRequest, pro exposes all nine tools", () => {
+    test("free hides createPullRequest, pro exposes all ten tools", () => {
         const free = toolsForTier("free").map((t) => t.name);
         expect(free).not.toContain("createPullRequest");
-        expect(free).toHaveLength(8);
-        expect(toolsForTier("pro")).toHaveLength(9);
+        expect(free).toContain("readContract");
+        expect(free).toHaveLength(9);
+        expect(toolsForTier("pro")).toHaveLength(10);
     });
 
     test("unknown tiers fail closed to free", () => {

@@ -5,6 +5,7 @@ export type ToolName =
     | "editFile"
     | "replaceInFile"
     | "lookupVendorSymbol"
+    | "readContract"
     | "checkCompleteness"
     | "runCommand"
     | "createPullRequest";
@@ -26,6 +27,7 @@ const FREE_TOOLS: ToolName[] = [
     "editFile",
     "replaceInFile",
     "lookupVendorSymbol",
+    "readContract",
     "checkCompleteness",
     "runCommand",
 ];
@@ -150,6 +152,25 @@ export const tools: ToolDefinition[] = [
                 },
             },
             required: ["symbol"],
+        },
+    },
+    {
+        name: "readContract",
+        description:
+            "Re-read the vendor contract on demand, filtered by an optional prefix and capped by limit. The opening message shows at most 200 members; use this when the member you need is not listed there. Returns matching member paths with the total count. Takes no required arguments.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                prefix: {
+                    type: "string",
+                    description: "Only members starting with this string, e.g. payment_method",
+                },
+                limit: {
+                    type: "string",
+                    description: "Maximum members to list, default 50",
+                },
+            },
+            required: [],
         },
     },
     {
