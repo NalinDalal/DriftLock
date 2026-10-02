@@ -3,8 +3,14 @@ import { readdir } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import { join } from "node:path";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
-import { isToolAllowed, isToolName, toOpenAITools, validateToolArgs, type AgentTier, type ToolName } from "./tools";
+import { isToolAllowed, isToolName, toOpenAITools, toolsForTier, validateToolArgs, type AgentTier, type ToolName } from "./tools";
 import { buildSystemPrompt } from "./prompt";
+import {
+    createAnthropicModelClient,
+    type ModelClient,
+    type ModelProvider,
+    type ModelTurn,
+} from "./modelClient";
 import {
     assessConfidence,
     buildReceipt,
@@ -158,6 +164,17 @@ export type RunOptions = {
     model?: string;
     /** Subscription tier. Defaults to pro so existing callers keep full tools. */
     tier?: AgentTier;
+    /**
+     * Model provider. Defaults to OpenAI wire protocol; pass "anthropic"
+     * (with `anthropicApiKey` or `ANTHROPIC_API_KEY`) to run the same loop
+     * against Anthropic's messages API with tool_use blocks.
+     */
+    provider?: ModelProvider;
+    /** Full override for the model call. Wins over `client` and `provider`. */
+    modelClient?: ModelClient;
+    anthropicApiKey?: string;
+    anthropicBaseURL?: string;
+    anthropicFetchFn?: typeof fetch;
     baseURL?: string;
     client?: OpenAI;
     publisher?: PullRequestPublisher;
@@ -254,28 +271,20 @@ function modelErrorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 
-async function createWithRetry(
-    create: RunnerDeps["create"],
-    body: Parameters<RunnerDeps["create"]>[0],
+async function createWithRetry<T>(
+    run: (signal: AbortSignal) => Promise<T>,
     options: {
         timeoutMs: number;
         maxRetries: number;
         baseDelayMs: number;
         onRetry?: (attempt: number, error: unknown) => void;
     },
-): Promise<
-    Extract<Awaited<ReturnType<RunnerDeps["create"]>>, { choices: unknown }>
-> {
+): Promise<T> {
     for (let attempt = 0; ; attempt += 1) {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), options.timeoutMs);
         try {
-            // The request body never sets `stream`, so the SDK resolves to a
-            // full completion; the cast recovers the overload the union hides.
-            const response = (await create(body, { signal: controller.signal })) as Extract<
-                Awaited<ReturnType<RunnerDeps["create"]>>,
-                { choices: unknown }
-            >;
+            const response = await run(controller.signal);
             clearTimeout(timer);
             return response;
         } catch (error) {
@@ -748,13 +757,6 @@ async function openPullRequest(
 }
 
 export async function runMigrationAgent(options: RunOptions): Promise<RunResult> {
-    const client =
-        options.client ??
-        new OpenAI({
-            apiKey: options.apiKey ?? process.env.OPENAI_API_KEY,
-            ...(options.baseURL ? { baseURL: options.baseURL } : {}),
-        });
-    const deps: RunnerDeps = { create: client.chat.completions.create.bind(client.chat.completions) };
     // Stage 0. Read what the repository is before the model gets a say, so that
     // the opening message contains the real scripts, the real package manager,
     // and the installed version of whatever is being migrated. An agent asked to
@@ -774,6 +776,32 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
         baseDelayMs: options.modelRetryBaseMs ?? 1000,
     };
     const budgetChars = options.transcriptBudgetChars ?? 120_000;
+    // Provider resolution: an explicit ModelClient wins (tests, custom
+    // runtimes), then the Anthropic messages API, then the OpenAI-compatible
+    // client. All three produce the same transcript entries downstream.
+    // The OpenAI client is built lazily so Anthropic runs never require
+    // OPENAI_API_KEY to even be present.
+    const turnClient: ModelClient | null =
+        options.modelClient ??
+        ((options.provider ?? "openai") === "anthropic"
+            ? createAnthropicModelClient({
+                  apiKey: options.anthropicApiKey ?? process.env.ANTHROPIC_API_KEY ?? "",
+                  ...(options.anthropicBaseURL ? { baseURL: options.anthropicBaseURL } : {}),
+                  ...(options.anthropicFetchFn ? { fetchFn: options.anthropicFetchFn } : {}),
+              })
+            : null);
+    const openAiCreate = (): RunnerDeps["create"] => {
+        const client =
+            options.client ??
+            new OpenAI({
+                apiKey: options.apiKey ?? process.env.OPENAI_API_KEY,
+                ...(options.baseURL ? { baseURL: options.baseURL } : {}),
+            });
+        return client.chat.completions.create.bind(client.chat.completions);
+    };
+    // One client for the run, built only for the path taken: Anthropic runs
+    // never touch the OpenAI constructor.
+    const openAi = turnClient ? null : openAiCreate();
     // Observer errors must never change what the run does.
     const emit = (event: AgentEvent): void => {
         try {
@@ -806,26 +834,58 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
 
         // A dead model endpoint must degrade to an outcome, never throw: the
         // edits on disk are real work worth reporting as review_pr.
-        let response: Awaited<ReturnType<typeof createWithRetry>>;
+        let content = "";
+        let toolCalls: ToolCall[] = [];
         try {
-            response = await createWithRetry(
-                deps.create,
-                {
-                    model,
-                    temperature: 0.1,
-                    messages: [
-                        { role: "system", content: systemPrompt },
-                        ...toWireMessages(state.transcript),
-                    ],
-                    tools: toOpenAITools(tier),
-                    tool_choice: "auto",
-                },
-                {
-                    ...modelResilience,
-                    onRetry: (attempt, error) =>
-                        emit({ type: "model_retry", attempt, error: modelErrorMessage(error) }),
-                },
-            );
+            if (turnClient) {
+                const turn: ModelTurn = await createWithRetry(
+                    (signal) =>
+                        turnClient.create({
+                            model,
+                            temperature: 0.1,
+                            system: systemPrompt,
+                            transcript: state.transcript,
+                            tools: toolsForTier(tier),
+                            signal,
+                        }),
+                    {
+                        ...modelResilience,
+                        onRetry: (attempt, error) =>
+                            emit({ type: "model_retry", attempt, error: modelErrorMessage(error) }),
+                    },
+                );
+                content = turn.content;
+                toolCalls = turn.toolCalls;
+            } else {
+                const response = await createWithRetry(
+                    (signal) =>
+                        openAi!(
+                            {
+                                model,
+                                temperature: 0.1,
+                                messages: [
+                                    { role: "system", content: systemPrompt },
+                                    ...toWireMessages(state.transcript),
+                                ],
+                                tools: toOpenAITools(tier),
+                                tool_choice: "auto",
+                            },
+                            { signal },
+                        ) as Promise<
+                            Extract<Awaited<ReturnType<RunnerDeps["create"]>>, { choices: unknown }>
+                        >,
+                    {
+                        ...modelResilience,
+                        onRetry: (attempt, error) =>
+                            emit({ type: "model_retry", attempt, error: modelErrorMessage(error) }),
+                    },
+                );
+                const message = response.choices[0]?.message;
+                content = (message as { content?: unknown } | undefined)?.content as string ?? "";
+                toolCalls = parseToolCalls(
+                    (message as { tool_calls?: unknown } | undefined)?.tool_calls,
+                );
+            }
         } catch (error) {
             state.transcript.push({
                 role: "assistant",
@@ -836,15 +896,10 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
             break;
         }
 
-        const message = response.choices[0]?.message;
-        const toolCalls = parseToolCalls(
-            (message as { tool_calls?: unknown } | undefined)?.tool_calls,
-        );
-
         if (toolCalls.length === 0) {
             state.transcript.push({
                 role: "assistant",
-                content: message?.content ?? "",
+                content,
             });
             state.done = true;
             state.outcome = decideOutcome(state);
@@ -853,7 +908,7 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
 
         state.transcript.push({
             role: "assistant",
-            content: message?.content ?? "",
+            content,
             toolCalls,
         });
 
