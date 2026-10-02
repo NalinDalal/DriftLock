@@ -749,6 +749,7 @@ program
     .option("--base <branch>", "Base branch for triggered PRs", "main")
     .option("--model <name>", "Model for the triggered agent (or DRIFTLOCK_MODEL)")
     .option("--tier <free|pro>", "Subscription tier (or DRIFTLOCK_PLAN)", process.env.DRIFTLOCK_PLAN ?? "pro")
+    .option("--model-provider <openai|anthropic>", "Model provider (or DRIFTLOCK_MODEL_PROVIDER)", process.env.DRIFTLOCK_MODEL_PROVIDER ?? "openai")
     .addHelpText(
         "after",
         `
@@ -770,6 +771,7 @@ Exit codes: 0 no breaking change, 1 vendor removed members, 2 poll failed.
                 base: string;
                 model?: string;
                 tier: string;
+                modelProvider: string;
             },
         ) => {
             const code = await runWatch({
@@ -781,6 +783,7 @@ Exit codes: 0 no breaking change, 1 vendor removed members, 2 poll failed.
                 base: opts.base,
                 model: opts.model,
                 tier: opts.tier,
+                modelProvider: opts.modelProvider,
             });
             process.exitCode = code;
         },

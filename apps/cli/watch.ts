@@ -2,7 +2,7 @@ import { execFileSync } from "child_process";
 import { rm } from "fs/promises";
 import { STRIPE_VENDOR, TWILIO_VENDOR, P5_VENDOR } from "@driftlock/core";
 import type { VendorConfig } from "@driftlock/core";
-import { createGitHubPublisher, fingerprintRepo, type AgentTier } from "@driftlock/agent";
+import { createGitHubPublisher, fingerprintRepo, type AgentTier, type ModelProvider } from "@driftlock/agent";
 import {
     checkVendor,
     checkVendorPackageDrift,
@@ -29,16 +29,32 @@ export interface WatchOptions {
     model?: string;
     /** Subscription tier. Explicit flag wins, then DRIFTLOCK_PLAN, then pro. */
     tier?: string;
+    /** Model provider: "openai" (default) or "anthropic". Flag wins, then DRIFTLOCK_MODEL_PROVIDER. */
+    modelProvider?: string;
     /** Test seam for the spec poll. Production always fetches the vendor spec. */
     poll?: CheckOptions["poll"];
+}
 
+/**
  * Resolves the agent tier at the process edge. Unknown values fail closed
  * to free: a typo must never grant publishing rights.
+ */
 export function resolveTier(explicit?: string): AgentTier {
     const raw = (explicit ?? process.env.DRIFTLOCK_PLAN ?? "pro").trim().toLowerCase();
     if (raw === "free") return "free";
     if (raw === "pro" || raw === "") return "pro";
     return "free";
+}
+
+/**
+ * Resolves the model provider at the process edge. Anything unrecognised
+ * falls back to OpenAI wire protocol: provider is not a privilege, so
+ * there is nothing to fail closed over, and a typo should not kill a run.
+ */
+export function resolveModelProvider(explicit?: string): ModelProvider {
+    const raw = (explicit ?? process.env.DRIFTLOCK_MODEL_PROVIDER ?? "openai").trim().toLowerCase();
+    return raw === "anthropic" ? "anthropic" : "openai";
+}
 
 function resolveVendor(provider: string): VendorConfig {
     const vendor = KNOWN_VENDORS[provider.toLowerCase()];
@@ -48,6 +64,7 @@ function resolveVendor(provider: string): VendorConfig {
         );
     }
     return vendor;
+}
 
 async function resolveRoot(repo: string): Promise<{ root: string; cleanup: () => Promise<void> }> {
     if (!isRemoteRef(repo)) return { root: repo, cleanup: async () => {} };
@@ -59,17 +76,21 @@ async function resolveRoot(repo: string): Promise<{ root: string; cleanup: () =>
         { stdio: "inherit" },
     );
     return { root: tmp, cleanup: async () => rm(tmp, { recursive: true, force: true }) };
+}
 
+/**
  * Polls a vendor's published spec, diffs it against the stored baseline, and
  * optionally triggers the migration agent on a repository.
  *
  * Exit codes are cron-friendly: 0 means no breaking change (or a first poll
  * that recorded the baseline), 1 means the vendor removed members, 2 means
  * the poll itself failed.
+ */
 export async function runWatch(opts: WatchOptions): Promise<number> {
     const vendor = resolveVendor(opts.provider);
     const version = opts.version ?? "latest";
     const tier = resolveTier(opts.tier);
+    const modelProvider = resolveModelProvider(opts.modelProvider);
     const store = new FileVendorBaselineStore(
         opts.baselinesDir ?? ".driftlock/vendor-baselines",
     );
@@ -145,9 +166,11 @@ export async function runWatch(opts: WatchOptions): Promise<number> {
         const result = await runVendorTriggeredMigration(vendor, change, {
             root,
             tier,
+            modelProvider,
             docs: vendor.docs?.url ? [vendor.docs.url] : [],
             model: opts.model ?? process.env.DRIFTLOCK_MODEL,
             apiKey: process.env.OPENAI_API_KEY,
+            anthropicApiKey: process.env.ANTHROPIC_API_KEY,
             baseURL: process.env.OPENAI_BASE_URL,
             ...(remote && owner && name
                 ? {
@@ -169,3 +192,4 @@ export async function runWatch(opts: WatchOptions): Promise<number> {
     } finally {
         await cleanup();
     }
+}

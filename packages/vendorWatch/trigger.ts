@@ -4,6 +4,7 @@ import {
     createSandboxCommandRunner,
     runMigrationAgent,
     type AgentTier,
+    type ModelProvider,
     type ObservedDrift,
     type RunResult,
 } from "@driftlock/agent";
@@ -18,6 +19,10 @@ export interface TriggerOptions {
     tier?: AgentTier;
     /** Model the agent runs with. Defaults to the agent default. */
     model?: string;
+    /** Model provider. Defaults to OpenAI wire protocol; "anthropic" uses tool_use blocks. */
+    modelProvider?: ModelProvider;
+    anthropicApiKey?: string;
+    anthropicBaseURL?: string;
     /** API key when no `client` is supplied. */
     apiKey?: string;
     baseURL?: string;
@@ -84,12 +89,15 @@ export async function runVendorTriggeredMigration(
             provider: packet.provider,
             fromVersion: packet.fromVersion,
             toVersion: packet.toVersion,
-            summary: packet.summary,
+            summary,
             migrationDocs: packet.migrationDocs,
         },
         contract: change.contract,
         vendor,
         ...(options.model ? { model: options.model } : {}),
+        ...(options.modelProvider ? { provider: options.modelProvider } : {}),
+        ...(options.anthropicApiKey ? { anthropicApiKey: options.anthropicApiKey } : {}),
+        ...(options.anthropicBaseURL ? { anthropicBaseURL: options.anthropicBaseURL } : {}),
         ...(options.apiKey ? { apiKey: options.apiKey } : {}),
         ...(options.baseURL ? { baseURL: options.baseURL } : {}),
         ...(options.client ? { client: options.client } : {}),
