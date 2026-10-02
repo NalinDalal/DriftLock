@@ -2,10 +2,12 @@ import { execFileSync } from "child_process";
 import { rm } from "fs/promises";
 import { STRIPE_VENDOR, TWILIO_VENDOR, P5_VENDOR } from "@driftlock/core";
 import type { VendorConfig } from "@driftlock/core";
-import { createGitHubPublisher } from "@driftlock/agent";
+import { createGitHubPublisher, fingerprintRepo, type AgentTier } from "@driftlock/agent";
 import {
     checkVendor,
+    checkVendorPackageDrift,
     FileVendorBaselineStore,
+    MemoryRegistryCache,
     runVendorTriggeredMigration,
     type CheckOptions,
 } from "@driftlock/vendorWatch";
@@ -25,9 +27,18 @@ export interface WatchOptions {
     trigger?: boolean;
     base?: string;
     model?: string;
+    /** Subscription tier. Explicit flag wins, then DRIFTLOCK_PLAN, then pro. */
+    tier?: string;
     /** Test seam for the spec poll. Production always fetches the vendor spec. */
     poll?: CheckOptions["poll"];
-}
+
+ * Resolves the agent tier at the process edge. Unknown values fail closed
+ * to free: a typo must never grant publishing rights.
+export function resolveTier(explicit?: string): AgentTier {
+    const raw = (explicit ?? process.env.DRIFTLOCK_PLAN ?? "pro").trim().toLowerCase();
+    if (raw === "free") return "free";
+    if (raw === "pro" || raw === "") return "pro";
+    return "free";
 
 function resolveVendor(provider: string): VendorConfig {
     const vendor = KNOWN_VENDORS[provider.toLowerCase()];
@@ -37,7 +48,6 @@ function resolveVendor(provider: string): VendorConfig {
         );
     }
     return vendor;
-}
 
 async function resolveRoot(repo: string): Promise<{ root: string; cleanup: () => Promise<void> }> {
     if (!isRemoteRef(repo)) return { root: repo, cleanup: async () => {} };
@@ -49,26 +59,39 @@ async function resolveRoot(repo: string): Promise<{ root: string; cleanup: () =>
         { stdio: "inherit" },
     );
     return { root: tmp, cleanup: async () => rm(tmp, { recursive: true, force: true }) };
-}
 
-/**
  * Polls a vendor's published spec, diffs it against the stored baseline, and
  * optionally triggers the migration agent on a repository.
  *
  * Exit codes are cron-friendly: 0 means no breaking change (or a first poll
  * that recorded the baseline), 1 means the vendor removed members, 2 means
  * the poll itself failed.
- */
 export async function runWatch(opts: WatchOptions): Promise<number> {
     const vendor = resolveVendor(opts.provider);
     const version = opts.version ?? "latest";
+    const tier = resolveTier(opts.tier);
     const store = new FileVendorBaselineStore(
         opts.baselinesDir ?? ".driftlock/vendor-baselines",
     );
+    // One cache per run bounds registry calls when watching several vendors.
+    const registryCache = new MemoryRegistryCache();
+
+    // Local repos can be fingerprinted before the poll so the change carries
+    // the pinned-vs-latest signal. Remote repos are cloned after the poll,
+    // so their registry check happens post-clone below.
+    const localRoot = opts.repo && !isRemoteRef(opts.repo) ? opts.repo : undefined;
+    const localFacts = localRoot
+        ? await fingerprintRepo(localRoot).catch(() => null)
+        : null;
 
     let change;
     try {
-        change = await checkVendor(vendor, version, store, { poll: opts.poll });
+        change = await checkVendor(vendor, version, store, {
+            poll: opts.poll,
+            ...(localFacts
+                ? { registry: { facts: localFacts, fetch: { cache: registryCache } } }
+                : {}),
+        });
     } catch (e) {
         console.error(`[WATCH] poll failed for ${vendor.name}:`, (e as Error).message);
         return 2;
@@ -86,6 +109,9 @@ export async function runWatch(opts: WatchOptions): Promise<number> {
         for (const member of change.added.slice(0, 20)) console.log(`  + ${member}`);
     }
     console.log(`[WATCH] ${change.note}`);
+    if (change.registryDrift?.drift) {
+        console.log(`[WATCH] registry: ${change.registryDrift.note}`);
+    }
 
     if (!opts.trigger) {
         console.log(`[WATCH] pass --trigger --repo <owner/repo|path> to migrate.`);
@@ -98,11 +124,27 @@ export async function runWatch(opts: WatchOptions): Promise<number> {
 
     const { root, cleanup } = await resolveRoot(opts.repo);
     try {
+        // Remote roots did not exist at poll time: attach the registry
+        // signal now so the triggered packet carries it. Advisory only;
+        // a registry failure never blocks the migration.
+        if (!localFacts && !change.registryDrift) {
+            const facts = await fingerprintRepo(root).catch(() => null);
+            if (facts) {
+                const drift = await checkVendorPackageDrift(facts, vendor, {
+                    cache: registryCache,
+                }).catch(() => null);
+                if (drift) {
+                    change.registryDrift = drift;
+                    if (drift.drift) console.log(`[WATCH] registry: ${drift.note}`);
+                }
+            }
+        }
         const remote = isRemoteRef(opts.repo);
         const [owner, name] = remote ? opts.repo.split("/") : [];
         const token = process.env.GITHUB_TOKEN;
         const result = await runVendorTriggeredMigration(vendor, change, {
             root,
+            tier,
             docs: vendor.docs?.url ? [vendor.docs.url] : [],
             model: opts.model ?? process.env.DRIFTLOCK_MODEL,
             apiKey: process.env.OPENAI_API_KEY,
@@ -127,4 +169,3 @@ export async function runWatch(opts: WatchOptions): Promise<number> {
     } finally {
         await cleanup();
     }
-}

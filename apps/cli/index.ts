@@ -748,6 +748,7 @@ program
     .option("--trigger", "Run the migration agent when members are removed")
     .option("--base <branch>", "Base branch for triggered PRs", "main")
     .option("--model <name>", "Model for the triggered agent (or DRIFTLOCK_MODEL)")
+    .option("--tier <free|pro>", "Subscription tier (or DRIFTLOCK_PLAN)", process.env.DRIFTLOCK_PLAN ?? "pro")
     .addHelpText(
         "after",
         `
@@ -768,6 +769,7 @@ Exit codes: 0 no breaking change, 1 vendor removed members, 2 poll failed.
                 trigger?: boolean;
                 base: string;
                 model?: string;
+                tier: string;
             },
         ) => {
             const code = await runWatch({
@@ -778,6 +780,7 @@ Exit codes: 0 no breaking change, 1 vendor removed members, 2 poll failed.
                 trigger: opts.trigger,
                 base: opts.base,
                 model: opts.model,
+                tier: opts.tier,
             });
             process.exitCode = code;
         },
