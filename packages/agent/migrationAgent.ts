@@ -6,7 +6,8 @@ import type { ChatCompletionMessageParam } from "openai/resources/chat/completio
 import { isToolAllowed, isToolName, toOpenAITools, toolsForTier, validateToolArgs, type AgentTier, type ToolName } from "./tools";
 import { buildSystemPrompt } from "./prompt";
 import {
-    createAnthropicModelClient,
+    createProviderClient,
+    modelProviderEnvKey,
     type ModelClient,
     type ModelProvider,
     type ModelTurn,
@@ -166,13 +167,16 @@ export type RunOptions = {
     /** Subscription tier. Defaults to pro so existing callers keep full tools. */
     tier?: AgentTier;
     /**
-     * Model provider. Defaults to OpenAI wire protocol; pass "anthropic"
-     * (with `anthropicApiKey` or `ANTHROPIC_API_KEY`) to run the same loop
-     * against Anthropic's messages API with tool_use blocks.
+     * Model provider. Resolved through the provider registry ("openai" uses
+     * the OpenAI-compatible client; anything registered — "anthropic" built
+     * in — is built from its factory). Unknown names fail fast.
      */
     provider?: ModelProvider;
     /** Full override for the model call. Wins over `client` and `provider`. */
     modelClient?: ModelClient;
+    /** Key for the selected provider. Falls back to its env var. */
+    providerApiKey?: string;
+    /** Kept for backward compatibility; `providerApiKey` wins over it. */
     anthropicApiKey?: string;
     anthropicBaseURL?: string;
     anthropicFetchFn?: typeof fetch;
@@ -822,19 +826,24 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
     };
     const budgetChars = options.transcriptBudgetChars ?? 120_000;
     // Provider resolution: an explicit ModelClient wins (tests, custom
-    // runtimes), then the Anthropic messages API, then the OpenAI-compatible
-    // client. All three produce the same transcript entries downstream.
-    // The OpenAI client is built lazily so Anthropic runs never require
-    // OPENAI_API_KEY to even be present.
+    // runtimes), then the registry builds the named provider ("openai" keeps
+    // the OpenAI-compatible client below). All paths produce the same
+    // transcript entries downstream. The OpenAI client is built lazily so
+    // other providers never require OPENAI_API_KEY to even be present.
+    const providerName = options.provider ?? "openai";
     const turnClient: ModelClient | null =
         options.modelClient ??
-        ((options.provider ?? "openai") === "anthropic"
-            ? createAnthropicModelClient({
-                  apiKey: options.anthropicApiKey ?? process.env.ANTHROPIC_API_KEY ?? "",
+        (providerName === "openai"
+            ? null
+            : createProviderClient(providerName, {
+                  apiKey:
+                      options.providerApiKey ??
+                      options.anthropicApiKey ??
+                      process.env[modelProviderEnvKey(providerName) ?? ""] ??
+                      "",
                   ...(options.anthropicBaseURL ? { baseURL: options.anthropicBaseURL } : {}),
                   ...(options.anthropicFetchFn ? { fetchFn: options.anthropicFetchFn } : {}),
-              })
-            : null);
+              }));
     const openAiCreate = (): RunnerDeps["create"] => {
         const client =
             options.client ??
@@ -844,8 +853,8 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
             });
         return client.chat.completions.create.bind(client.chat.completions);
     };
-    // One client for the run, built only for the path taken: Anthropic runs
-    // never touch the OpenAI constructor.
+    // One client for the run, built only for the path taken: non-OpenAI
+    // runs never touch the OpenAI constructor.
     const openAi = turnClient ? null : openAiCreate();
     // Observer errors must never change what the run does.
     const emit = (event: AgentEvent): void => {

@@ -4,13 +4,15 @@ import type { TranscriptEntry } from "./state";
 /**
  * Model-call seam: the migration loop speaks this, not any vendor SDK.
  *
- * Two providers implement it: the OpenAI chat-completions shape (inline in
- * `migrationAgent`, preserved for backward compatibility) and Anthropic's
- * messages API with `tool_use` / `tool_result` blocks below. A test fake
- * implements it with scripted turns. The loop cannot tell them apart,
- * which is the point: provider is a runtime option, not a rewrite.
+ * Providers implement it: the OpenAI chat-completions shape (inline in
+ * `migrationAgent`, preserved for backward compatibility) and any
+ * fetch-style provider registered below. A test fake implements it with
+ * scripted turns. The loop cannot tell them apart, which is the point:
+ * provider is a runtime option, not a rewrite.
  */
-export type ModelProvider = "openai" | "anthropic";
+/** Built-in names. The registry accepts any string beyond these. */
+export type BuiltinModelProvider = "openai" | "anthropic";
+export type ModelProvider = BuiltinModelProvider | string;
 
 export interface ModelTurn {
     content: string;
@@ -30,14 +32,68 @@ export interface ModelClient {
     create(request: ModelCallRequest): Promise<ModelTurn>;
 }
 
+export interface ProviderFactoryOptions {
+    apiKey: string;
+    baseURL?: string;
+    fetchFn?: typeof fetch;
+}
+
+export interface ModelProviderSpec {
+    /** Registry name, e.g. "anthropic". */
+    name: string;
+    /** Env var holding the key, e.g. "ANTHROPIC_API_KEY". */
+    envKey: string;
+    create: (options: ProviderFactoryOptions) => ModelClient;
+}
+
+const providerRegistry = new Map<string, ModelProviderSpec>();
+
+/**
+ * Registers a fetch-style model provider. Adding Gemini (or anything else)
+ * is this call plus a `ModelClient` implementation: the loop, trigger,
+ * and CLI resolve through the registry and need no edits.
+ */
+export function registerModelProvider(spec: ModelProviderSpec): void {
+    providerRegistry.set(spec.name.toLowerCase(), spec);
+}
+
+/** Names available through the registry (excludes the OpenAI SDK path). */
+export function modelProviderNames(): string[] {
+    return [...providerRegistry.keys()].sort();
+}
+
+/** Env var holding the key for a registered provider, if any. */
+export function modelProviderEnvKey(name: string): string | null {
+    return providerRegistry.get(name.toLowerCase())?.envKey ?? null;
+}
+
+export class UnknownModelProviderError extends Error {}
+
+/**
+ * Builds a registered provider's client. Throws `UnknownModelProviderError`
+ * naming the known providers: an unrecognised provider is a configuration
+ * error and must fail fast, never silently fall back to another model.
+ */
+export function createProviderClient(
+    name: string,
+    options: ProviderFactoryOptions,
+): ModelClient {
+    const spec = providerRegistry.get(name.toLowerCase());
+    if (!spec) {
+        const known = ["openai", ...modelProviderNames()].join(", ");
+        throw new UnknownModelProviderError(
+            `Unknown model provider "${name}". Known: ${known}.`,
+        );
+    }
+    return spec.create(options);
+}
+
 export interface AnthropicClientOptions {
     apiKey: string;
     baseURL?: string;
     maxTokens?: number;
     fetchFn?: typeof fetch;
-}
-
-type AnthropicContentBlock =
+}type AnthropicContentBlock =
     | { type: "text"; text: string }
     | { type: "tool_use"; id: string; name: string; input: unknown }
     | { type: "tool_result"; tool_use_id: string; content: string };
@@ -175,3 +231,9 @@ export function createAnthropicModelClient(options: AnthropicClientOptions): Mod
         },
     };
 }
+
+registerModelProvider({
+    name: "anthropic",
+    envKey: "ANTHROPIC_API_KEY",
+    create: (options) => createAnthropicModelClient(options),
+});

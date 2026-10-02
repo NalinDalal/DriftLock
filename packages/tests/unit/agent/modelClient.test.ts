@@ -2,9 +2,14 @@ import { describe, expect, test } from "bun:test";
 import {
     AnthropicRequestError,
     createAnthropicModelClient,
+    createProviderClient,
     fromAnthropicResponse,
     isRetryableModelError,
+    modelProviderEnvKey,
+    modelProviderNames,
+    registerModelProvider,
     toAnthropicMessages,
+    UnknownModelProviderError,
 } from "@driftlock/agent";
 
 function anthropicBody(content: unknown[], status = 200) {
@@ -95,6 +100,51 @@ describe("fromAnthropicResponse", () => {
     });
 });
 
+describe("provider registry", () => {
+    test("anthropic is registered with its env key", () => {
+        expect(modelProviderNames()).toContain("anthropic");
+        expect(modelProviderEnvKey("anthropic")).toBe("ANTHROPIC_API_KEY");
+        expect(modelProviderEnvKey("ANTHROPIC")).toBe("ANTHROPIC_API_KEY");
+        expect(modelProviderEnvKey("nope")).toBeNull();
+    });
+
+    test("unknown providers fail fast naming the known ones", () => {
+        const error = (() => {
+            try {
+                createProviderClient("skynet", { apiKey: "k" });
+            } catch (e) {
+                return e;
+            }
+            throw new Error("must throw");
+        })();
+        expect(error).toBeInstanceOf(UnknownModelProviderError);
+        expect((error as Error).message).toContain("openai");
+        expect((error as Error).message).toContain("anthropic");
+    });
+
+    test("a custom provider plugs in with one registration call", async () => {
+        registerModelProvider({
+            name: "echo",
+            envKey: "ECHO_API_KEY",
+            create: () => ({
+                create: async (request) => ({
+                    content: `saw ${request.transcript.length} entries`,
+                    toolCalls: [],
+                }),
+            }),
+        });
+        expect(modelProviderNames()).toContain("echo");
+        const client = createProviderClient("ECHO", { apiKey: "k" });
+        const turn = await client.create({
+            model: "echo-1",
+            temperature: 0,
+            system: "s",
+            transcript: [{ role: "user", content: "hi" }],
+            tools: [],
+        });
+        expect(turn.content).toBe("saw 1 entries");
+    });
+});
 describe("createAnthropicModelClient", () => {
     test("requires an API key", () => {
         expect(() => createAnthropicModelClient({ apiKey: "" })).toThrow(/API key/);

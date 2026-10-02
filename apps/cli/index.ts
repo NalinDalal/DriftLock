@@ -749,7 +749,7 @@ program
     .option("--base <branch>", "Base branch for triggered PRs", "main")
     .option("--model <name>", "Model for the triggered agent (or DRIFTLOCK_MODEL)")
     .option("--tier <free|pro>", "Subscription tier (or DRIFTLOCK_PLAN)", process.env.DRIFTLOCK_PLAN ?? "pro")
-    .option("--model-provider <openai|anthropic>", "Model provider (or DRIFTLOCK_MODEL_PROVIDER)", process.env.DRIFTLOCK_MODEL_PROVIDER ?? "openai")
+    .option("--model-provider <name>", "Model provider (or DRIFTLOCK_MODEL_PROVIDER)", process.env.DRIFTLOCK_MODEL_PROVIDER ?? "openai")
     .addHelpText(
         "after",
         `

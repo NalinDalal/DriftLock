@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
     runMigrationAgent,
+    registerModelProvider,
     type ChangePacket,
     type VendorContract,
 } from "@driftlock/agent";
@@ -281,5 +282,46 @@ describe("anthropic provider", () => {
         expect(seenSystems[0]).toContain("DriftLock");
         expect(result.state.toolsUsed).toEqual(["searchCode"]);
         expect(result.outcome).toBe("no_action");
+    });
+});
+
+describe("provider registry through the loop", () => {
+    test("a third provider drives the loop with one registration, no loop edits", async () => {
+        let turns = 0;
+        registerModelProvider({
+            name: "scripted",
+            envKey: "SCRIPTED_API_KEY",
+            create: () => ({
+                create: async () => {
+                    turns += 1;
+                    if (turns === 1) {
+                        return {
+                            content: "Searching.",
+                            toolCalls: [{ id: "s1", name: "searchCode", args: { query: "source" } }],
+                        };
+                    }
+                    return { content: "Nothing to migrate.", toolCalls: [] };
+                },
+            }),
+        });
+        const result = await runMigrationAgent({
+            root,
+            packet,
+            provider: "scripted",
+            providerApiKey: "test-key",
+        });
+        expect(turns).toBe(2);
+        expect(result.state.toolsUsed).toEqual(["searchCode"]);
+        expect(result.outcome).toBe("no_action");
+    });
+
+    test("an unknown provider fails fast instead of silently switching models", async () => {
+        let threw: unknown = null;
+        try {
+            await runMigrationAgent({ root, packet, provider: "skynet" });
+        } catch (e) {
+            threw = e;
+        }
+        expect(String(threw)).toContain('Unknown model provider "skynet"');
     });
 });

@@ -47,13 +47,14 @@ export function resolveTier(explicit?: string): AgentTier {
 }
 
 /**
- * Resolves the model provider at the process edge. Anything unrecognised
- * falls back to OpenAI wire protocol: provider is not a privilege, so
- * there is nothing to fail closed over, and a typo should not kill a run.
+ * Resolves the model provider at the process edge. Empty means OpenAI wire
+ * protocol; anything else passes through to the agent's provider registry,
+ * which fails fast naming the known providers. Provider is not a privilege,
+ * so there is nothing to fail closed over here.
  */
 export function resolveModelProvider(explicit?: string): ModelProvider {
     const raw = (explicit ?? process.env.DRIFTLOCK_MODEL_PROVIDER ?? "openai").trim().toLowerCase();
-    return raw === "anthropic" ? "anthropic" : "openai";
+    return raw === "" ? "openai" : raw;
 }
 
 function resolveVendor(provider: string): VendorConfig {
