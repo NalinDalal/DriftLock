@@ -36,8 +36,8 @@ const PRO_TOOLS: ToolName[] = [
 ];
 
 export const TIER_TOOLS: Record<AgentTier, readonly ToolName[]> = {
-    free: FREE_TOOLS,
-    pro: PRO_TOOLS,
+    free: Object.freeze(FREE_TOOLS) as readonly ToolName[],
+    pro: Object.freeze(PRO_TOOLS) as readonly ToolName[],
 };
 
 export interface ToolDefinition {
@@ -209,6 +209,34 @@ export function toolsForTier(tier: AgentTier = "pro"): ToolDefinition[] {
 
 export function isToolAllowed(name: ToolName, tier: AgentTier = "pro"): boolean {
     return (TIER_TOOLS[tier] ?? TIER_TOOLS.free).includes(name);
+}
+
+/**
+ * Rejects malformed tool args at parse time, before the executor runs.
+ *
+ * The model speaks JSON, not types: a missing `path` or a non-string
+ * `query` used to travel all the way into the executor and come back as a
+ * confusing tool failure, burning an iteration. This names the exact
+ * missing or mistyped field so the retry succeeds. Returns null when the
+ * args satisfy the tool's schema.
+ */
+export function validateToolArgs(name: ToolName, args: Record<string, unknown>): string | null {
+    const def = tools.find((tool) => tool.name === name);
+    if (!def) return `Unknown tool: ${name}`;
+    for (const key of def.inputSchema.required) {
+        const value = args[key];
+        const expected = def.inputSchema.properties[key]?.type ?? "string";
+        // Presence and type only. Emptiness is each tool's own call: an
+        // empty `newText` is a legal delete, while an empty `query` is
+        // refused by searchCode with a better message than this can give.
+        if (value === undefined || value === null) {
+            return `${name} requires "${key}" (${expected}). Retry the call with it set.`;
+        }
+        if (typeof value !== expected) {
+            return `${name} requires "${key}" to be ${expected}, got ${typeof value}. Retry with the correct type.`;
+        }
+    }
+    return null;
 }
 
 export function toOpenAITools(tier: AgentTier = "pro") {

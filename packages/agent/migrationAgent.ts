@@ -3,7 +3,7 @@ import { readdir } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import { join } from "node:path";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
-import { isToolAllowed, isToolName, toOpenAITools, type AgentTier, type ToolName } from "./tools";
+import { isToolAllowed, isToolName, toOpenAITools, validateToolArgs, type AgentTier, type ToolName } from "./tools";
 import { buildSystemPrompt } from "./prompt";
 import {
     assessConfidence,
@@ -368,6 +368,12 @@ async function execute(
             ok: false,
             output: `${name} is disabled on the ${tier} plan. Summarise the change for review instead.`,
         };
+    }
+    // Schema check before the executor: a call missing a required arg gets
+    // a precise retry directive instead of a confusing tool failure.
+    const argError = validateToolArgs(name, args);
+    if (argError) {
+        return { ok: false, output: argError };
     }
     const root = options.root;
     // Human-in-the-loop: high-stakes tools pause for approval first. A denial
