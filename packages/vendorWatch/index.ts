@@ -9,8 +9,11 @@ export {
     compareVersions,
     fetchLatestVersion,
     stripRange,
+    MemoryRegistryCache,
     RegistryError,
     type PackageDrift,
+    type RegistryCache,
+    type RegistryCacheEntry,
     type RegistryEcosystem,
     type RegistryOptions,
 } from "./registry";

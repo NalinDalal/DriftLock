@@ -72,6 +72,11 @@ export async function runVendorTriggeredMigration(
     const packet = changePacketFromDrift(
         observedDriftFromChange(change, options.docs),
     );
+    // Registry drift is advisory, never a trigger: the spec diff proved the
+    // breakage, this tells the model whether the pin also lags the registry.
+    const summary = change.registryDrift?.drift
+        ? `${packet.summary} Registry signal: ${change.registryDrift.note}.`
+        : packet.summary;
     return runMigrationAgent({
         root: options.root,
         ...(options.tier ? { tier: options.tier } : {}),

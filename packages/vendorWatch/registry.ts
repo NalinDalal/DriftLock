@@ -28,6 +28,46 @@ export type RegistryEcosystem = "npm" | "rust" | "python" | "go";
 export interface RegistryOptions {
     timeoutMs?: number;
     fetchFn?: typeof fetch;
+    /** TTL cache for latest-version lookups. Absent means no caching. */
+    cache?: RegistryCache;
+}
+
+export interface RegistryCacheEntry {
+    latest: string;
+    origin: string;
+    checkedAt: number;
+}
+
+export interface RegistryCache {
+    load(key: string): RegistryCacheEntry | null;
+    /** Implementations stamp `checkedAt` with their own clock. */
+    save(key: string, entry: Omit<RegistryCacheEntry, "checkedAt">): void;
+}
+
+/**
+ * In-memory TTL cache so one cron run with several vendors (or retries)
+ * does not hammer public registries. Cron processes are short-lived, so
+ * this bounds calls within a run, not across runs; cross-run caching
+ * belongs next to the file baseline store if rate limits ever bite.
+ */
+export class MemoryRegistryCache implements RegistryCache {
+    private entries = new Map<string, RegistryCacheEntry>();
+    constructor(
+        private ttlMs = 6 * 60 * 60 * 1000,
+        private clock: () => number = Date.now,
+    ) {}
+    load(key: string): RegistryCacheEntry | null {
+        const entry = this.entries.get(key);
+        if (!entry) return null;
+        if (this.clock() - entry.checkedAt > this.ttlMs) {
+            this.entries.delete(key);
+            return null;
+        }
+        return entry;
+    }
+    save(key: string, entry: Omit<RegistryCacheEntry, "checkedAt">): void {
+        this.entries.set(key, { ...entry, checkedAt: this.clock() });
+    }
 }
 
 export interface PackageDrift {
@@ -43,7 +83,14 @@ export interface PackageDrift {
 }
 
 function registryUrl(packageName: string, ecosystem: RegistryEcosystem): string {
-    const encoded = encodeURIComponent(packageName);
+    // Encode segments separately: a scoped npm name like `@acme/sdk` must
+    // keep its `@` bare and only encode the separator (`@acme%2fsdk`),
+    // which is the registry's canonical form. A blanket encodeURIComponent
+    // turns `@` into `%40`, which some registry endpoints reject.
+    const encoded = packageName
+        .split("/")
+        .map((segment) => encodeURIComponent(segment).replace(/^%40/, "@"))
+        .join("%2f");
     switch (ecosystem) {
         case "npm":
             return `https://registry.npmjs.org/${encoded}/latest`;
@@ -99,6 +146,9 @@ export async function fetchLatestVersion(
     options: RegistryOptions = {},
 ): Promise<{ latest: string; origin: string }> {
     if (!packageName.trim()) throw new RegistryError("fetchLatestVersion requires a package name");
+    const cacheKey = `${ecosystem}:${packageName}`;
+    const cached = options.cache?.load(cacheKey);
+    if (cached) return { latest: cached.latest, origin: cached.origin };
     const url = registryUrl(packageName, ecosystem);
     const target = new URL(url);
     const host = target.hostname.toLowerCase();
@@ -139,7 +189,9 @@ export async function fetchLatestVersion(
     } catch {
         throw new RegistryError(`Registry fetch failed: ${host} returned a body that is not JSON`);
     }
-    return { latest: parseLatest(ecosystem, payload), origin: url };
+    const latest = parseLatest(ecosystem, payload);
+    options.cache?.save(cacheKey, { latest, origin: url });
+    return { latest, origin: url };
 }
 
 /** Strips range prefixes (`^`, `~`, `>=`, `=`, `v`) to the base version. */
@@ -202,7 +254,7 @@ export async function checkVendorPackageDrift(
     facts: RepoFacts,
     vendor: VendorConfig,
     options: RegistryOptions = {},
-): Promise<PackageDrift & { note: string }> {
+): Promise<PackageDrift> {
     const ecosystem = ecosystemOf(facts);
     if (!ecosystem) {
         throw new RegistryError(
