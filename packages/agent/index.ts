@@ -8,4 +8,5 @@ export * from "./repoFacts";
 export * from "./commandRunner";
 export * from "./publisher";
 export * from "./modelClient";
+export * from "./geminiClient";
 export * from "./migrationAgent";

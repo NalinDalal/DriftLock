@@ -21,6 +21,10 @@ export interface TriggerOptions {
     model?: string;
     /** Model provider. Defaults to OpenAI wire protocol; "anthropic" uses tool_use blocks. */
     modelProvider?: ModelProvider;
+    /** Key for the selected provider. Falls back to its env var. */
+    providerApiKey?: string;
+    /** Base URL override for the selected provider. */
+    providerBaseURL?: string;
     anthropicApiKey?: string;
     anthropicBaseURL?: string;
     /** API key when no `client` is supplied. */
@@ -96,6 +100,8 @@ export async function runVendorTriggeredMigration(
         vendor,
         ...(options.model ? { model: options.model } : {}),
         ...(options.modelProvider ? { provider: options.modelProvider } : {}),
+        ...(options.providerApiKey ? { providerApiKey: options.providerApiKey } : {}),
+        ...(options.providerBaseURL ? { providerBaseURL: options.providerBaseURL } : {}),
         ...(options.anthropicApiKey ? { anthropicApiKey: options.anthropicApiKey } : {}),
         ...(options.anthropicBaseURL ? { anthropicBaseURL: options.anthropicBaseURL } : {}),
         ...(options.apiKey ? { apiKey: options.apiKey } : {}),

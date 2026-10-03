@@ -324,4 +324,23 @@ describe("provider registry through the loop", () => {
         }
         expect(String(threw)).toContain('Unknown model provider "skynet"');
     });
+
+    test("a registered provider falls back to its own default model, not gpt-4o-mini", async () => {
+        let seenUrl = "";
+        await runMigrationAgent({
+            root,
+            packet,
+            provider: "gemini",
+            providerApiKey: "AIza-test",
+            providerFetchFn: (async (url: string) => {
+                seenUrl = url;
+                return {
+                    ok: true,
+                    status: 200,
+                    json: async () => ({ candidates: [{ content: { parts: [{ text: "done" }] } }] }),
+                };
+            }) as unknown as typeof fetch,
+        });
+        expect(seenUrl).toContain("/models/gemini-2.5-flash:generateContent");
+    });
 });

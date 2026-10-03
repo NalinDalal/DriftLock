@@ -2,7 +2,7 @@ import { execFileSync } from "child_process";
 import { rm } from "fs/promises";
 import { STRIPE_VENDOR, TWILIO_VENDOR, P5_VENDOR } from "@driftlock/core";
 import type { VendorConfig } from "@driftlock/core";
-import { createGitHubPublisher, fingerprintRepo, type AgentTier, type ModelProvider } from "@driftlock/agent";
+import { createGitHubPublisher, fingerprintRepo, modelProviderEnvKey, type AgentTier, type ModelProvider } from "@driftlock/agent";
 import {
     checkVendor,
     checkVendorPackageDrift,
@@ -55,6 +55,17 @@ export function resolveTier(explicit?: string): AgentTier {
 export function resolveModelProvider(explicit?: string): ModelProvider {
     const raw = (explicit ?? process.env.DRIFTLOCK_MODEL_PROVIDER ?? "openai").trim().toLowerCase();
     return raw === "" ? "openai" : raw;
+}
+
+/**
+ * Provider key from the environment, resolved through the registry so new
+ * providers need no per-vendor branches here: GEMINI_API_KEY,
+ * ANTHROPIC_API_KEY, and whatever comes next all flow the same way.
+ */
+export function lookupProviderKey(provider: ModelProvider): string | undefined {
+    if (provider === "openai") return process.env.OPENAI_API_KEY;
+    const envKey = modelProviderEnvKey(provider);
+    return envKey ? process.env[envKey] : undefined;
 }
 
 function resolveVendor(provider: string): VendorConfig {
@@ -171,7 +182,7 @@ export async function runWatch(opts: WatchOptions): Promise<number> {
             docs: vendor.docs?.url ? [vendor.docs.url] : [],
             model: opts.model ?? process.env.DRIFTLOCK_MODEL,
             apiKey: process.env.OPENAI_API_KEY,
-            anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+            providerApiKey: lookupProviderKey(modelProvider),
             baseURL: process.env.OPENAI_BASE_URL,
             ...(remote && owner && name
                 ? {

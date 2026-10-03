@@ -43,6 +43,8 @@ export interface ModelProviderSpec {
     name: string;
     /** Env var holding the key, e.g. "ANTHROPIC_API_KEY". */
     envKey: string;
+    /** Used when the run sets no explicit model. */
+    defaultModel: string;
     create: (options: ProviderFactoryOptions) => ModelClient;
 }
 
@@ -65,6 +67,11 @@ export function modelProviderNames(): string[] {
 /** Env var holding the key for a registered provider, if any. */
 export function modelProviderEnvKey(name: string): string | null {
     return providerRegistry.get(name.toLowerCase())?.envKey ?? null;
+}
+
+/** Default model for a registered provider, if any. */
+export function modelProviderDefaultModel(name: string): string | null {
+    return providerRegistry.get(name.toLowerCase())?.defaultModel ?? null;
 }
 
 export class UnknownModelProviderError extends Error {}
@@ -235,5 +242,6 @@ export function createAnthropicModelClient(options: AnthropicClientOptions): Mod
 registerModelProvider({
     name: "anthropic",
     envKey: "ANTHROPIC_API_KEY",
+    defaultModel: "claude-sonnet-4-20250514",
     create: (options) => createAnthropicModelClient(options),
 });

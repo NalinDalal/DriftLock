@@ -7,6 +7,7 @@ import { isToolAllowed, isToolName, toOpenAITools, toolsForTier, validateToolArg
 import { buildSystemPrompt } from "./prompt";
 import {
     createProviderClient,
+    modelProviderDefaultModel,
     modelProviderEnvKey,
     type ModelClient,
     type ModelProvider,
@@ -176,6 +177,10 @@ export type RunOptions = {
     modelClient?: ModelClient;
     /** Key for the selected provider. Falls back to its env var. */
     providerApiKey?: string;
+    /** Base URL override for the selected provider. Test seam and proxies. */
+    providerBaseURL?: string;
+    /** Fetch implementation for the selected provider. Test seam. */
+    providerFetchFn?: typeof fetch;
     /** Kept for backward compatibility; `providerApiKey` wins over it. */
     anthropicApiKey?: string;
     anthropicBaseURL?: string;
@@ -815,10 +820,13 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
     const state = createInitialState(options.packet, options.contract, facts);
     const tier: AgentTier = options.tier ?? "pro";
     const systemPrompt = buildSystemPrompt(tier);
+    const providerName = options.provider ?? "openai";
     // The contract gate needs both halves: the API surface and the config
     // that says which receivers it applies to. Anything less is ungated.
     state.hasContract = Boolean(options.contract && options.vendor);
-    const model = options.model ?? "gpt-4o-mini";
+    // The OpenAI default must not leak into other providers: each registered
+    // provider names its own default, and an explicit model always wins.
+    const model = options.model ?? modelProviderDefaultModel(providerName) ?? "gpt-4o-mini";
     const modelResilience = {
         timeoutMs: options.modelTimeoutMs ?? 120_000,
         maxRetries: options.modelMaxRetries ?? 2,
@@ -830,7 +838,8 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
     // the OpenAI-compatible client below). All paths produce the same
     // transcript entries downstream. The OpenAI client is built lazily so
     // other providers never require OPENAI_API_KEY to even be present.
-    const providerName = options.provider ?? "openai";
+    const providerBaseURL = options.providerBaseURL ?? options.anthropicBaseURL;
+    const providerFetchFn = options.providerFetchFn ?? options.anthropicFetchFn;
     const turnClient: ModelClient | null =
         options.modelClient ??
         (providerName === "openai"
@@ -841,8 +850,8 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
                       options.anthropicApiKey ??
                       process.env[modelProviderEnvKey(providerName) ?? ""] ??
                       "",
-                  ...(options.anthropicBaseURL ? { baseURL: options.anthropicBaseURL } : {}),
-                  ...(options.anthropicFetchFn ? { fetchFn: options.anthropicFetchFn } : {}),
+                  ...(providerBaseURL ? { baseURL: providerBaseURL } : {}),
+                  ...(providerFetchFn ? { fetchFn: providerFetchFn } : {}),
               }));
     const openAiCreate = (): RunnerDeps["create"] => {
         const client =
