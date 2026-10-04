@@ -126,6 +126,7 @@ describe("provider registry", () => {
         registerModelProvider({
             name: "echo",
             envKey: "ECHO_API_KEY",
+            defaultModel: "echo-1",
             create: () => ({
                 create: async (request) => ({
                     content: `saw ${request.transcript.length} entries`,

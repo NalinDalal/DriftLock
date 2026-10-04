@@ -291,6 +291,7 @@ describe("provider registry through the loop", () => {
         registerModelProvider({
             name: "scripted",
             envKey: "SCRIPTED_API_KEY",
+            defaultModel: "scripted-1",
             create: () => ({
                 create: async () => {
                     turns += 1;
