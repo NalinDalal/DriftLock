@@ -15,6 +15,7 @@ const AuthCallbackPage = lazyRouteComponent(() => import("./routes/auth-callback
 const InstallPage = lazyRouteComponent(() => import("./routes/install"), "default");
 const InstallSuccessPage = lazyRouteComponent(() => import("./routes/install-success"), "default");
 const AboutPage = lazyRouteComponent(() => import("./routes/about"), "default");
+const SecurityPage = lazyRouteComponent(() => import("./routes/security"), "default");
 const OnboardingPage = lazyRouteComponent(() => import("./routes/onboarding"), "default");
 const ActionsPage = lazyRouteComponent(() => import("./routes/actions"), "default");
 
@@ -92,6 +93,12 @@ const aboutRoute = createRoute({
     component: AboutPage,
 });
 
+const securityRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/security",
+    component: SecurityPage,
+});
+
 const onboardingRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/onboarding",
@@ -121,6 +128,7 @@ const routeTree = rootRoute.addChildren([
     installRoute,
     installSuccessRoute,
     aboutRoute,
+    securityRoute,
     onboardingRoute,
     actionsRoute,
 ]);
