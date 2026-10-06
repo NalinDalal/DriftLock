@@ -2,6 +2,7 @@ import { InMemorySchemaStore, DbSchemaStore, DriftDetector, createWebhookFixPR, 
 import type { DriftAlert, RollbackAlert, SchemaStore, SchemaSnapshot, FlatSchema } from "@driftlock/webhookCapture";
 import { getDb } from "@driftlock/db";
 import { settings } from "@driftlock/db/schema";
+import { eq } from "drizzle-orm";
 
 function json(data: unknown, status = 200): Response {
     return new Response(JSON.stringify(data, null, 2), {
@@ -30,6 +31,37 @@ let cachedConfig: WebhookConfig | null = null;
 let configLastLoaded = 0;
 const CONFIG_TTL_MS = 30_000;
 
+/**
+ * Log where each effective config value comes from. DB rows override env,
+ * so a stale dashboard-saved row silently wins over freshly exported
+ * variables — this line makes that visible on every (re)load.
+ */
+function logConfigSource(config: WebhookConfig, rowSource: "db" | "env"): void {
+    const fields: Array<[keyof WebhookConfig, string]> = [
+        ["githubToken", "GITHUB_TOKEN"],
+        ["repoPath", "WEBHOOK_REPO_PATH"],
+        ["repoOwner", "WEBHOOK_OWNER"],
+        ["repoName", "WEBHOOK_REPO"],
+        ["aiProvider", "AI_PROVIDER"],
+        ["confidenceThreshold", "CONFIDENCE_THRESHOLD"],
+    ];
+    const parts = fields.map(([key, envKey]) => {
+        const fromDb =
+            config[key] !== undefined && config[key] !== "" && rowSource === "db";
+        const raw = fromDb
+            ? config[key]
+            : (process.env[envKey] as string | undefined);
+        const shown =
+            /token|secret|key/i.test(key) || /token|secret|key/i.test(envKey)
+                ? raw
+                    ? "set"
+                    : "missing"
+                : (raw ?? "missing");
+        return `${key}=${shown}(${fromDb ? "db" : "env"})`;
+    });
+    console.log(`[CONFIG] Loaded [row=${rowSource}]: ${parts.join(", ")}`);
+}
+
 async function loadConfig(): Promise<WebhookConfig> {
     const now = Date.now();
     if (cachedConfig && now - configLastLoaded < CONFIG_TTL_MS) {
@@ -38,24 +70,26 @@ async function loadConfig(): Promise<WebhookConfig> {
 
     try {
         const db = getDb();
+        // Query the row directly: a bounded LIMIT scan silently misses
+        // webhookConfig once unrelated rows (e.g. dashboard sessions)
+        // outnumber the limit, falling back to env without a word.
         const rows = await db
             .select()
             .from(settings)
-            .limit(5);
+            .where(eq(settings.key, "webhookConfig"))
+            .limit(1);
 
-        console.log(`[CONFIG] All settings keys: ${rows.map(r => r.key).join(", ")}`);
-
-        const webhookRow = rows.find(r => r.key === "webhookConfig");
+        const webhookRow = rows[0];
         if (webhookRow) {
             cachedConfig = webhookRow.value as WebhookConfig;
-            console.log(`[CONFIG] Loaded: githubToken=${cachedConfig.githubToken ? "set" : "missing"}, repoPath=${cachedConfig.repoPath || "missing"}, repoOwner=${cachedConfig.repoOwner || "missing"}, repoName=${cachedConfig.repoName || "missing"}`);
+            logConfigSource(cachedConfig, "db");
         } else {
             cachedConfig = {};
-            console.log("[CONFIG] No webhookConfig found");
+            logConfigSource(cachedConfig, "env");
         }
     } catch (e) {
         cachedConfig = {};
-        console.log("[CONFIG] DB error:", e);
+        console.log("[CONFIG] DB error, using env only:", e);
     }
 
     configLastLoaded = now;
