@@ -8,7 +8,7 @@
 
 API providers announce changes. DriftLock applies them to your codebase.
 
-DriftLock scans your codebase for API call sites, captures vendor traffic to build shape snapshots, detects breaking changes between snapshots, and opens a PR with a suggested fix. AI-powered fix generation is on the roadmap.
+DriftLock scans your codebase for API call sites, captures vendor traffic to build shape snapshots, detects breaking changes between snapshots, and opens a PR with a suggested fix. Deterministic fixes ship by default; AI-powered fixes are available via `AI_PROVIDER` (openai/anthropic/gemini/cloudflare).
 
 [Website](https://driftlock.dev) · [Discord](https://discord.gg/driftlock) · [Issues](https://github.com/nerdev-co/DriftLock/issues)
 
@@ -91,7 +91,7 @@ The codebase access is a solved problem (agentic tools proved it); the
 The cost of a vendor change always lands on the consumer. DriftLock moves it
 back to automation: it scans your codebase for API call sites, watches for
 vendor changes, detects how they affect your usages, and opens a PR with the
-fix. AI-powered fix generation is on the roadmap.
+fix. Deterministic fixes ship by default; AI-powered fixes are available via `AI_PROVIDER`.
 
 ---
 
@@ -438,7 +438,7 @@ Stripe has mature test mode, huge installed base, and plenty of teams stuck on o
 
 Twilio, Shopify, and others are on the roadmap.
 
-AI-powered fix generation is on the roadmap. The current implementation captures traffic shapes, detects drift between snapshots, and applies deterministic fixes; full automated PR generation with AI-generated patches is planned.
+Deterministic fixes (field renames, null checks, type coercions) ship by default; AI-powered fixes are available via `AI_PROVIDER` (openai/anthropic/gemini/cloudflare) and are used when confidence >= 60%, with deterministic fallback otherwise.
 
 ---
 

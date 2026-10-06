@@ -8,7 +8,7 @@ Thanks for your interest in contributing! DriftLock is in early development, and
 
 1. **Check existing discussions** — [GitHub Discussions](https://github.com/nerdev-co/DriftLock/discussions) has architecture decisions and implementation plans. Comment there before starting work on something new.
 2. **Open an issue** — For bugs or feature requests, open an issue first. For larger changes, start a discussion.
-3. **Read the blueprint** — [BLUEPRINT.md](./BLUEPRINT.md) has the full implementation plan with task breakdowns.
+3. **Read the product brief** — [PRODUCT.md](./PRODUCT.md) states the positioning and principles; [docs/](./docs/) holds the pitch and ADRs (`docs/adr/`).
 
 ---
 
@@ -30,8 +30,8 @@ cd DriftLock
 # Install dependencies
 bun install
 
-# Start local services (PostgreSQL + Redis)
-docker compose -f docker/docker-compose.yml up -d
+# Start local services (PostgreSQL)
+docker compose up -d db
 
 # Build all packages
 bun run build
@@ -42,15 +42,24 @@ bun run build
 ```text
 driftlock/
 ├── packages/
-│   ├── core/       # Shared types, constants, utils
-│   ├── parser/     # AST-based code analysis
-│   ├── agent/      # AI-powered fix generation
-│   ├── sandbox/    # Docker test execution
-│   └── git/        # Git operations
+│   ├── core/            # Shared types, constants, utils
+│   ├── parser/          # AST-based code analysis
+│   ├── agent/           # Agent migration loop, vendor contracts
+│   ├── aiFix/           # Deterministic + LLM fix generation
+│   ├── pipeline/        # Scan, sandbox run, drift detection
+│   ├── diff/            # Shape infer/merge/diff, fix planning
+│   ├── sandbox/         # Docker test execution
+│   ├── git/             # Git operations, PR creation
+│   ├── db/              # Drizzle/Postgres persistence
+│   ├── vendorWatch/     # Vendor spec polling
+│   ├── webhookCapture/  # Inbound capture and fix
+│   └── tests/           # Canonical unit/integration/e2e suite
 ├── apps/
-│   ├── cli/        # Command-line interface
-│   └── web/        # Web dashboard
-└── docker/         # Sandbox Dockerfiles
+│   ├── cli/             # Command-line interface
+│   ├── be/              # Backend API (Bun, :8787 locally)
+│   ├── fe/              # Web dashboard (Vite, :5173)
+│   └── webhook/         # GitHub App + inbound capture (:3001)
+└── docs/                # Pitch, YC application, ADRs
 ```
 
 ---
@@ -95,7 +104,7 @@ bun run format      # Auto-fix formatting
 ### Testing
 
 ```bash
-bun run test        # Run all tests
+bun run test:unit   # Canonical suite (packages/tests, 692 tests)
 bun run test --watch  # Watch mode
 ```
 
@@ -163,10 +172,11 @@ bun run --filter @driftlock/parser test # Run tests
 
 ### Agent (`packages/agent`)
 
-Requires `OPENAI_API_KEY` env var for testing.
+Requires an AI provider key for live-model tests (see `.env.example` for the
+`AI_PROVIDER` matrix). Most agent tests run offline with stubs.
 
 ```bash
-export OPENAI_API_KEY=sk-...
+export AI_PROVIDER=openai AI_API_KEY=sk-...
 bun run --filter @driftlock/agent test
 ```
 
