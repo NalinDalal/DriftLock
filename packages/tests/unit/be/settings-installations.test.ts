@@ -1,7 +1,7 @@
 import { afterAll, afterEach, describe, expect, spyOn, test } from "bun:test";
 import * as storeModule from "@driftlock/be/src/store";
 import { handleInstallationsSync } from "@driftlock/be/src/routes/installations";
-import { handleUpdateSettings } from "@driftlock/be/src/routes/settings";
+import { handleGetSettings, handleUpdateSettings, SECRET_SENTINEL } from "@driftlock/be/src/routes/settings";
 
 const storeSpy = spyOn(storeModule, "getStore");
 afterEach(() => storeSpy.mockReset());
@@ -97,5 +97,37 @@ describe("provider credentials", () => {
         const { settings } = installStore({ aiProvider: "gemini", aiModel: "gemini-2.5-flash" });
         await handleUpdateSettings(request({ webhookConfig: { aiModel: "gemini-2.0-flash" } }));
         expect(settings.get("webhookConfig")).toEqual({ aiProvider: "gemini", aiModel: "gemini-2.0-flash" });
+    });
+});
+
+describe("webhook secret masking", () => {
+    test("GET replaces stored secrets with the sentinel, keeps the rest", async () => {
+        installStore({
+            githubToken: "ghp_real",
+            aiProvider: "openai",
+            aiApiKey: "sk-real",
+            repoOwner: "acme",
+        });
+        const res = await handleGetSettings();
+        expect(res.status).toBe(200);
+        const body = await res.json();
+        expect(body.settings.webhookConfig).toEqual({
+            githubToken: SECRET_SENTINEL,
+            aiProvider: "openai",
+            aiApiKey: SECRET_SENTINEL,
+            repoOwner: "acme",
+        });
+    });
+
+    test("PUT with the sentinel keeps the stored secret", async () => {
+        const { settings } = installStore({ githubToken: "ghp_real", repoOwner: "acme" });
+        await handleUpdateSettings(request({ webhookConfig: { githubToken: SECRET_SENTINEL, repoOwner: "acme" } }));
+        expect(settings.get("webhookConfig")).toEqual({ githubToken: "ghp_real", repoOwner: "acme" });
+    });
+
+    test("PUT with a new value replaces the stored secret", async () => {
+        const { settings } = installStore({ githubToken: "ghp_real" });
+        await handleUpdateSettings(request({ webhookConfig: { githubToken: "ghp_new" } }));
+        expect(settings.get("webhookConfig")).toEqual({ githubToken: "ghp_new" });
     });
 });

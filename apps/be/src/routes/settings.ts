@@ -30,6 +30,26 @@ const FORWARD_WHITELIST = "forwardWhitelist";
 const PROBE_CREDENTIALS = "probeCredentials";
 const WEBHOOK_CONFIG = "webhookConfig";
 
+/**
+ * Sentinel returned by GET in place of stored secrets. The dashboard sends
+ * it back untouched when the operator did not change the field, and PUT
+ * treats it as "keep existing" — so secrets are never echoed to the browser
+ * and never need to be. Any other non-empty value replaces the stored secret.
+ */
+export const SECRET_SENTINEL = "__MASKED__";
+
+const SECRET_FIELDS = ["githubToken", "aiApiKey"] as const;
+
+function maskWebhookConfig(
+    config: AppSettings["webhookConfig"],
+): AppSettings["webhookConfig"] {
+    const masked = { ...config };
+    for (const field of SECRET_FIELDS) {
+        if (masked[field]) masked[field] = SECRET_SENTINEL;
+    }
+    return masked;
+}
+
 export async function handleGetSettings(): Promise<Response> {
     const store = getStore();
     const settings: AppSettings = {
@@ -42,10 +62,11 @@ export async function handleGetSettings(): Promise<Response> {
             (await store.getSetting<AppSettings["probeCredentials"]>(
                 PROBE_CREDENTIALS,
             )) ?? [],
-        webhookConfig:
+        webhookConfig: maskWebhookConfig(
             (await store.getSetting<AppSettings["webhookConfig"]>(
                 WEBHOOK_CONFIG,
             )) ?? {},
+        ),
     };
     return json({ settings });
 }
@@ -75,7 +96,12 @@ export async function handleUpdateSettings(req: Request): Promise<Response> {
     }
     if (typeof patch.webhookConfig === "object" && patch.webhookConfig !== null) {
         const existing = await store.getSetting<AppSettings["webhookConfig"]>(WEBHOOK_CONFIG) ?? {};
-        const incoming = patch.webhookConfig as Record<string, unknown>;
+        const incoming = { ...(patch.webhookConfig as Record<string, unknown>) };
+        // The dashboard round-trips the sentinel for untouched secret fields;
+        // drop those keys so the stored secret survives a no-change save.
+        for (const field of SECRET_FIELDS) {
+            if (incoming[field] === SECRET_SENTINEL) delete incoming[field];
+        }
         const updated = { ...existing, ...incoming };
         if (updated.aiProvider !== existing.aiProvider) {
             // Model names are provider-specific, so a model saved for the old
