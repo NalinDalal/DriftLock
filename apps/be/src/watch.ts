@@ -7,6 +7,7 @@ import {
 } from "@driftlock/vendorWatch";
 import {
     createGitHubPublisher,
+    resolveAgentTier,
     type AgentTier,
     type PullRequestPublisher,
 } from "@driftlock/agent";
@@ -24,6 +25,10 @@ export interface WatchConfig {
     vendors: VendorConfig[];
     baselinesDir: string;
     tier: AgentTier;
+    /** Max watched repos migrated per vendor change (oldest first). */
+    maxRepos: number;
+    /** How many repo migrations run at once. */
+    concurrency: number;
     model?: string;
     apiKey?: string;
     baseURL?: string;
@@ -45,7 +50,8 @@ export function readWatchConfig(
         .filter(Boolean)
         .map((v) => KNOWN_VENDORS[v])
         .filter((v): v is VendorConfig => !!v);
-    const plan = (env.DRIFTLOCK_PLAN ?? "pro").trim().toLowerCase();
+    const rawMax = parseInt(env.WATCH_MAX_REPOS ?? "", 10);
+    const rawConcurrency = parseInt(env.WATCH_CONCURRENCY ?? "", 10);
     return {
         enabled: (env.WATCH_ENABLED ?? "false").trim().toLowerCase() === "true",
         intervalMs: Math.max(
@@ -54,7 +60,9 @@ export function readWatchConfig(
         ),
         vendors,
         baselinesDir: env.WATCH_BASELINES_DIR ?? ".driftlock/vendor-baselines",
-        tier: plan === "free" ? "free" : "pro",
+        tier: resolveAgentTier(env.DRIFTLOCK_PLAN ?? "pro"),
+        maxRepos: Math.max(1, Number.isFinite(rawMax) ? rawMax : 50),
+        concurrency: Math.max(1, Number.isFinite(rawConcurrency) ? rawConcurrency : 2),
         model: env.DRIFTLOCK_MODEL || undefined,
         apiKey: env.OPENAI_API_KEY || undefined,
         baseURL: env.OPENAI_BASE_URL || undefined,
@@ -146,13 +154,19 @@ export async function runWatchTick(
             console.log(`[WATCH] ${vendor.name}: breaking change but no watched repos.`);
             continue;
         }
+        const eligible = repos.slice(0, config.maxRepos);
+        if (eligible.length < repos.length) {
+            console.log(
+                `[WATCH] ${vendor.name}: ${repos.length - eligible.length} watched repo(s) over WATCH_MAX_REPOS=${config.maxRepos}; skipping until next change.`,
+            );
+        }
         const publisher = config.githubToken
             ? makePublisher(config.githubToken)
             : undefined;
         if (!publisher) {
             console.log(`[WATCH] no GITHUB_TOKEN: migrations run in preview mode (no PRs).`);
         }
-        for (const repo of repos) {
+        const migrateRepo = async (repo: WatchedRepo): Promise<void> => {
             const { path, cleanup } = await clone(repo.owner, repo.name, repo.base);
             try {
                 const migration = await migrate(vendor, change, {
@@ -187,6 +201,22 @@ export async function runWatchTick(
             } finally {
                 await cleanup();
             }
+        };
+        // Bounded parallelism: a vendor change must not clone the fleet at
+        // once. One repo's clone/migrate failure (settled, logged) never
+        // aborts the rest of the batch.
+        for (let i = 0; i < eligible.length; i += config.concurrency) {
+            const settled = await Promise.allSettled(
+                eligible.slice(i, i + config.concurrency).map((repo) => migrateRepo(repo)),
+            );
+            for (const s of settled) {
+                if (s.status === "rejected") {
+                    console.error(
+                        `[WATCH] migration failed for ${vendor.name}:`,
+                        (s.reason as Error)?.message ?? String(s.reason),
+                    );
+                }
+            }
         }
     }
     return result;
@@ -211,7 +241,8 @@ export function startWatchScheduler(
     console.log(
         `[WATCH] enabled: vendors=${config.vendors.map((v) => v.name).join(",")} ` +
             `interval=${Math.round(config.intervalMs / 60000)}m tier=${config.tier} ` +
-            `baselines=${config.baselinesDir} prs=${config.githubToken ? "on" : "preview-only"}`,
+            `baselines=${config.baselinesDir} prs=${config.githubToken ? "on" : "preview-only"} ` +
+            `maxRepos=${config.maxRepos} concurrency=${config.concurrency}`,
     );
     let running = false;
     const tick = async () => {

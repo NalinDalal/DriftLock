@@ -2,7 +2,7 @@ import { execFileSync } from "child_process";
 import { rm } from "fs/promises";
 import { STRIPE_VENDOR, TWILIO_VENDOR, P5_VENDOR } from "@driftlock/core";
 import type { VendorConfig } from "@driftlock/core";
-import { createGitHubPublisher, fingerprintRepo, modelProviderEnvKey, type AgentTier, type ModelProvider } from "@driftlock/agent";
+import { createGitHubPublisher, fingerprintRepo, modelProviderEnvKey, resolveAgentTier, type AgentTier, type ModelProvider } from "@driftlock/agent";
 import {
     checkVendor,
     checkVendorPackageDrift,
@@ -36,14 +36,12 @@ export interface WatchOptions {
 }
 
 /**
- * Resolves the agent tier at the process edge. Unknown values fail closed
- * to free: a typo must never grant publishing rights.
+ * Resolves the agent tier at the process edge (shared helper in
+ * `@driftlock/agent`: unknown values fail closed to free, so a typo must
+ * never grant publishing rights).
  */
 export function resolveTier(explicit?: string): AgentTier {
-    const raw = (explicit ?? process.env.DRIFTLOCK_PLAN ?? "pro").trim().toLowerCase();
-    if (raw === "free") return "free";
-    if (raw === "pro" || raw === "") return "pro";
-    return "free";
+    return resolveAgentTier(explicit ?? process.env.DRIFTLOCK_PLAN ?? "pro");
 }
 
 /**

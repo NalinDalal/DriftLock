@@ -14,6 +14,8 @@ function baseConfig(over: Partial<WatchConfig> = {}): WatchConfig {
         vendors: [STRIPE_VENDOR],
         baselinesDir: "/tmp/driftlock-test-baselines",
         tier: "pro",
+        maxRepos: 50,
+        concurrency: 2,
         ...over,
     };
 }
@@ -32,9 +34,10 @@ describe("readWatchConfig", () => {
         expect(config.vendors.map((v) => v.name)).toEqual([STRIPE_VENDOR.name]);
     });
 
-    test("unknown plan fails closed to pro is wrong: fails to pro default, free only when free", () => {
+    test("unknown plan fails closed to free (a typo must never grant publishing)", () => {
         expect(readWatchConfig({ DRIFTLOCK_PLAN: "free" }).tier).toBe("free");
-        expect(readWatchConfig({ DRIFTLOCK_PLAN: "enterprise" }).tier).toBe("pro");
+        expect(readWatchConfig({ DRIFTLOCK_PLAN: "enterprise" }).tier).toBe("free");
+        expect(readWatchConfig({}).tier).toBe("pro");
     });
 });
 
@@ -126,6 +129,75 @@ describe("runWatchTick", () => {
         expect(result.breakingVendors).toEqual([]);
         expect(result.migrations).toEqual([]);
         expect(result.vendorsChecked).toHaveLength(2);
+    });
+
+    test("repos beyond maxRepos are skipped, oldest first", async () => {
+        const change = {
+            provider: "stripe",
+            fromVersion: "v1",
+            toVersion: "v2",
+            removed: ["source"],
+            added: [],
+            contract: { provider: "stripe" },
+            note: "staged",
+        };
+        const seen: string[] = [];
+        const result = await runWatchTick(baseConfig({ maxRepos: 2 }), {
+            poll: (async () => change) as never,
+            listWatchedRepos: async () => [
+                { owner: "a", name: "one", base: "main" },
+                { owner: "a", name: "two", base: "main" },
+                { owner: "a", name: "three", base: "main" },
+            ],
+            clone: (async (_o: string, name: string) => {
+                seen.push(name);
+                return { path: `/tmp/${name}`, cleanup: async () => {} };
+            }) as never,
+            migrate: (async () => ({
+                outcome: "no_action",
+                filesChanged: [],
+                state: {},
+            })) as never,
+        });
+        expect(seen).toEqual(["one", "two"]);
+        expect(result.migrations.map((m) => m.repo)).toEqual(["a/one", "a/two"]);
+    });
+
+    test("concurrency bounds parallel migrations and one failure never aborts the batch", async () => {
+        const change = {
+            provider: "stripe",
+            fromVersion: "v1",
+            toVersion: "v2",
+            removed: ["source"],
+            added: [],
+            contract: { provider: "stripe" },
+            note: "staged",
+        };
+        let inFlight = 0;
+        let peak = 0;
+        const result = await runWatchTick(baseConfig({ concurrency: 2 }), {
+            poll: (async () => change) as never,
+            listWatchedRepos: async () => [
+                { owner: "a", name: "one", base: "main" },
+                { owner: "a", name: "two", base: "main" },
+                { owner: "a", name: "three", base: "main" },
+                { owner: "a", name: "four", base: "main" },
+            ],
+            clone: (async (_o: string, name: string) => ({
+                path: `/tmp/${name}`,
+                cleanup: async () => {},
+            })) as never,
+            migrate: (async (_v: unknown, _c: unknown, opts: { root: string }) => {
+                inFlight++;
+                peak = Math.max(peak, inFlight);
+                await new Promise((r) => setTimeout(r, 10));
+                inFlight--;
+                if (opts.root.endsWith("two")) throw new Error("clone lost power");
+                return { outcome: "no_action", filesChanged: [], state: {} };
+            }) as never,
+        });
+        expect(peak).toBeLessThanOrEqual(2);
+        expect(result.migrations).toHaveLength(3);
     });
 });
 

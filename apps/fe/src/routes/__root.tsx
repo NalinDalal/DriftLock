@@ -34,6 +34,26 @@ function LockMark() {
     );
 }
 
+export function NotFoundPage() {
+    return (
+        <div className="mx-auto max-w-[880px] py-10 text-center">
+            <p className="font-mono text-[11px] tracking-[0.14em] text-[var(--color-muted)]">404</p>
+            <h1 className="display mt-2 text-[var(--color-ink)]">No such page.</h1>
+            <p className="mx-auto mt-3 max-w-[520px] font-mono text-xs leading-5 text-[var(--color-muted)]">
+                The page moved or never existed. The product pages are one click away.
+            </p>
+            <div className="mt-6 flex flex-wrap justify-center gap-2">
+                <Link to="/" className="bg-[var(--color-ink)] px-4 py-2 font-mono text-xs tracking-wide text-[var(--color-paper)] hover:bg-[var(--color-ink)]/90">
+                    Back to Home
+                </Link>
+                <Link to="/about" className="border border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-2 font-mono text-xs tracking-wide text-[var(--color-ink)] hover:bg-[var(--color-paper)]">
+                    About DriftLock
+                </Link>
+            </div>
+        </div>
+    );
+}
+
 export default function AppShell() {
     const location = useLocation();
     const [user, setUser] = useState<{ name: string; handle: string } | null>(
@@ -273,6 +293,12 @@ export default function AppShell() {
                                 className="flex min-h-[32px] items-center font-mono text-[12px] tracking-wide text-[var(--color-ink)] hover:underline underline-offset-2"
                             >
                                 About DriftLock
+                            </Link>
+                            <Link
+                                to="/changelog"
+                                className="flex min-h-[32px] items-center font-mono text-[12px] tracking-wide text-[var(--color-ink)] hover:underline underline-offset-2"
+                            >
+                                Changelog
                             </Link>
                             <Link
                                 to="/onboarding"

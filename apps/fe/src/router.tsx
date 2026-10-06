@@ -1,5 +1,5 @@
 import { createRootRoute, createRoute, createRouter, lazyRouteComponent } from "@tanstack/react-router";
-import AppShell from "./routes/__root";
+import AppShell, { NotFoundPage } from "./routes/__root";
 import LandingPage from "./routes/index";
 
 // The landing page is the first paint, so it stays eager. Everything else is
@@ -16,13 +16,14 @@ const InstallPage = lazyRouteComponent(() => import("./routes/install"), "defaul
 const InstallSuccessPage = lazyRouteComponent(() => import("./routes/install-success"), "default");
 const AboutPage = lazyRouteComponent(() => import("./routes/about"), "default");
 const StatisticsPage = lazyRouteComponent(() => import("./routes/statistics"), "default");
+const ChangelogPage = lazyRouteComponent(() => import("./routes/changelog"), "default");
 const SecurityPage = lazyRouteComponent(() => import("./routes/security"), "default");
 const PrivacyPage = lazyRouteComponent(() => import("./routes/privacy"), "default");
 const TermsPage = lazyRouteComponent(() => import("./routes/terms"), "default");
 const OnboardingPage = lazyRouteComponent(() => import("./routes/onboarding"), "default");
 const ActionsPage = lazyRouteComponent(() => import("./routes/actions"), "default");
 
-const rootRoute = createRootRoute({ component: AppShell });
+const rootRoute = createRootRoute({ component: AppShell, notFoundComponent: NotFoundPage });
 
 const indexRoute = createRoute({
     getParentRoute: () => rootRoute,
@@ -102,6 +103,12 @@ const statisticsRoute = createRoute({
     component: StatisticsPage,
 });
 
+const changelogRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/changelog",
+    component: ChangelogPage,
+});
+
 const securityRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/security",
@@ -150,6 +157,7 @@ const routeTree = rootRoute.addChildren([
     installSuccessRoute,
     aboutRoute,
     statisticsRoute,
+    changelogRoute,
     securityRoute,
     privacyRoute,
     termsRoute,

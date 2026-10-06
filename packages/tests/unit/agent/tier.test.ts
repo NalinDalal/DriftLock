@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
     buildSystemPrompt,
     isToolAllowed,
+    resolveAgentTier,
     runMigrationAgent,
     TIER_TOOLS,
     toolsForTier,
@@ -156,5 +157,20 @@ describe("free-tier enforcement in the loop", () => {
             (e) => e.role === "tool" && e.toolCallId === "c1",
         );
         expect(entry?.content).toContain('"path"');
+    });
+});
+
+describe("resolveAgentTier", () => {
+    test("free stays free, pro and empty default to pro", () => {
+        expect(resolveAgentTier("free")).toBe("free");
+        expect(resolveAgentTier("FREE")).toBe("free");
+        expect(resolveAgentTier("pro")).toBe("pro");
+        expect(resolveAgentTier("")).toBe("pro");
+        expect(resolveAgentTier(undefined)).toBe("pro");
+    });
+
+    test("unknown values fail closed to free so a typo never grants publishing", () => {
+        expect(resolveAgentTier("enterprise")).toBe("free");
+        expect(resolveAgentTier("prod")).toBe("free");
     });
 });

@@ -20,6 +20,19 @@ export type ToolName =
  */
 export type AgentTier = "free" | "pro";
 
+/**
+ * Resolve the agent tier from a raw plan string. Unknown values (including
+ * a typo) fail closed to free: nothing must ever grant publishing rights by
+ * accident. Pure function; callers pass `explicit ?? process.env.X`. Single
+ * home for the CLI, the backend scheduler, and tests.
+ */
+export function resolveAgentTier(raw: string | undefined): AgentTier {
+    const v = (raw ?? "pro").trim().toLowerCase();
+    if (v === "free") return "free";
+    if (v === "pro" || v === "") return "pro";
+    return "free";
+}
+
 const FREE_TOOLS: ToolName[] = [
     "inspectRepo",
     "searchCode",

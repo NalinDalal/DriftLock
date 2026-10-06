@@ -17,7 +17,7 @@ import {
 import { analyzeAndCompare, applyDriftFix, buildDriftEvent } from "@driftlock/pipeline";
 import type { CallSite, Fix } from "@driftlock/core";
 import type { DriftResult } from "@driftlock/pipeline";
-import { SnapshotStore } from "./drift";
+import { SnapshotStore, commitBaselines } from "./drift";
 import { aiConfigFromEnv } from "./aiEnv";
 import { harToConsumerContract } from "@driftlock/webhookCapture";
 import { runMigrate } from "./migrate";
@@ -271,6 +271,10 @@ program
     )
     .option("--dry-run", "Show affected call sites without creating PRs")
     .option("--json", "Print a machine-readable summary as the last stdout line (for CI)")
+    .option(
+        "--commit-baselines",
+        "Commit changed .driftlock/ snapshots and push to the base branch (for scheduled CI, so the next run compares instead of re-baselining)",
+    )
     .addHelpText(
         "after",
         `
@@ -289,7 +293,7 @@ Environment variables:
   AI_MODEL        CLOUDFLARE_API_TOKEN take precedence per provider)
 
 With --json, the last stdout line is always a JSON summary:
-  {"callSites":N,"drifts":N,"fixes":N,"prs":[...],"baselines":N,"pendingCapture":N}
+  {"callSites":N,"drifts":N,"fixes":N,"prs":[...],"baselines":N,"pendingCapture":N,"baselinesCommitted":true|false}
 
 Examples:
   $ driftlock fix ./repo --dry-run
@@ -308,6 +312,7 @@ Examples:
                 command?: string;
                 forward?: string[];
                 json?: boolean;
+                commitBaselines?: boolean;
             },
         ) => {
             const emitSummary = (summary: Record<string, unknown>) => {
@@ -380,6 +385,14 @@ Examples:
                     );
                 }
 
+                // Persist baselines where the next run can see them. On
+                // ephemeral CI checkouts the snapshots die with the job
+                // unless committed back, and every run would re-baseline.
+                const commitIfEnabled = async () =>
+                    options.commitBaselines
+                        ? await commitBaselines(resolve(repoPath), options.base ?? "main")
+                        : { committed: false, pushed: false };
+
                 if (drifts.length === 0) {
                     if (noTraffic) {
                         spinner.warn(
@@ -392,6 +405,7 @@ Examples:
                             "Baseline captured, no comparison yet",
                         );
                     }
+                    const baselineCommit = await commitIfEnabled();
                     emitSummary({
                         callSites: allCallSites.length,
                         drifts: 0,
@@ -399,6 +413,7 @@ Examples:
                         prs: [],
                         baselines: baselines.length,
                         pendingCapture: pendingCapture.length,
+                        baselinesCommitted: baselineCommit.pushed,
                     });
                     return;
                 }
@@ -620,6 +635,9 @@ Examples:
                     });
                     prSpinner.succeed(`PR created: ${result.url}`);
                 }
+                // Commit after the loop so merged-PR baseline refreshes (saved
+                // to disk above) persist too, not just run-captured ones.
+                const baselineCommit = await commitIfEnabled();
                 emitSummary({
                     callSites: allCallSites.length,
                     drifts: drifts.length,
@@ -627,6 +645,7 @@ Examples:
                     prs,
                     baselines: baselines.length,
                     pendingCapture: pendingCapture.length,
+                    baselinesCommitted: baselineCommit.pushed,
                 });
             } catch (error) {
                 spinner.fail("Fix generation failed");
