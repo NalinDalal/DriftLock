@@ -385,6 +385,10 @@ function setupDetectorCallbacks(det: DriftDetector) {
                     onEvent: (event) => {
                         if (event.type === "note") {
                             console.log(`  [AGENT] ${event.message}`);
+                        } else if (event.type === "tool") {
+                            console.log(`  [AGENT] tool ${event.name} ok=${event.ok} (iter ${event.iteration})`);
+                        } else if (event.type === "done") {
+                            console.log(`  [AGENT] done outcome=${event.outcome} iterations=${event.iterations}`);
                         }
                     },
                 });
