@@ -153,6 +153,9 @@ export default function SecurityPage() {
             <p className="mt-3 max-w-[65ch] text-sm leading-5 text-[var(--color-ink)]/80">
                 DPA available on request: <a href="mailto:nalin@nerdev.in?subject=DPA%20request%20for%20DriftLock" className="underline underline-offset-2 hover:text-[var(--color-ink)]">nalin@nerdev.in</a>. No SOC 2 yet. Controls above are in place and an audit is planned after beta.
             </p>
+            <p className="mt-3 max-w-[65ch] text-sm leading-5 text-[var(--color-ink)]/80">
+                Suspected breach: notified within 72 hours to the account contact. SSO/SAML, audit logs, residency pinning, and automated backups are not yet available. Ask and we will scope them.
+            </p>
 
             <h2 className="mt-12 border-t border-[var(--color-line-strong)] pt-6 heading-section text-[var(--color-ink)]">Frequently Asked Questions</h2>
             <div className="mt-6 space-y-6">
