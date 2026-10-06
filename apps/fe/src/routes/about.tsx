@@ -3,18 +3,29 @@ import { Link } from "@tanstack/react-router";
 
 export default function AboutPage() {
     useEffect(() => {
+        const prevTitle = document.title;
         document.title = "About DriftLock | API Maintenance Tool for Teams Running Stripe";
         const meta = document.querySelector('meta[name="description"]');
         const content =
             "DriftLock is an API maintenance tool that scans codebases, detects vendor breaking changes, and opens GitHub fix PRs for engineering teams that maintain Stripe integrations. Founded 2024. Free in beta.";
+        const prevContent = meta?.getAttribute("content") ?? null;
+        let tag: HTMLMetaElement | null = null;
         if (meta) {
             meta.setAttribute("content", content);
         } else {
-            const tag = document.createElement("meta");
+            tag = document.createElement("meta");
             tag.setAttribute("name", "description");
             tag.setAttribute("content", content);
             document.head.appendChild(tag);
         }
+        return () => {
+            document.title = prevTitle;
+            if (meta) {
+                if (prevContent !== null) meta.setAttribute("content", prevContent);
+            } else if (tag) {
+                tag.remove();
+            }
+        };
     }, []);
 
     const orgSchema = {
@@ -202,7 +213,7 @@ export default function AboutPage() {
                 </div>
                 <div>
                     <h3 className="font-mono text-xs font-semibold tracking-[0.08em] text-[var(--color-ink)]">FINDS EVERY CALL SITE WITH 3 CLI COMMANDS</h3>
-                    <p className="mt-1 max-w-[65ch] text-sm leading-5 text-[var(--color-ink)]/80">Static analysis via TypeScriptExtractor with vendor configs for Stripe finds every client resource method through driftlock analyze, driftlock test, and driftlock fix. No manual grep. The same extractor runs in the browser on the homepage and in the CLI on your repo.</p>
+                    <p className="mt-1 max-w-[65ch] text-sm leading-5 text-[var(--color-ink)]/80">Static analysis via TypeScriptExtractor with vendor configs for Stripe finds every client resource method through driftlock analyze, driftlock test, and driftlock fix. No manual grep. The homepage demo below is a lightweight regex preview of the same idea; the CLI runs the full extractor on your repo.</p>
                 </div>
                 <div>
                     <h3 className="font-mono text-xs font-semibold tracking-[0.08em] text-[var(--color-ink)]">VALIDATES AGAINST REAL TRAFFIC WITH CONFIDENCE 0 TO 100</h3>

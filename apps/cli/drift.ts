@@ -40,12 +40,19 @@ export async function commitBaselines(
     }
     if (!status) return idle;
     try {
-        git(repoPath, ["config", "user.name", "driftlock[bot]"]);
-        git(repoPath, ["config", "user.email", "driftlock[bot]@driftlock.dev"]);
+        // Identity travels per-command (-c), never written to the repo's
+        // local config: this code runs in customer checkouts that are not
+        // ours to modify.
+        const identity = [
+            "-c",
+            "user.name=driftlock[bot]",
+            "-c",
+            "user.email=driftlock[bot]@driftlock.dev",
+        ];
         git(repoPath, ["add", "--", ".driftlock"]);
         // Nothing to commit (raced with another run) is fine, not an error.
         try {
-            git(repoPath, ["commit", "-m", "driftlock: update API baselines"]);
+            git(repoPath, [...identity, "commit", "-m", "driftlock: update API baselines"]);
         } catch {
             return { committed: false, pushed: false };
         }

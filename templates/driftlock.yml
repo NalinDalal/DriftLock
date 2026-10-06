@@ -60,7 +60,12 @@ jobs:
           # the step. Without it the pipe exits 0 via tail, the summary
           # falls back to zeros, and the cloud records a healthy quiet run.
           set -o pipefail
-          bunx @driftlock/cli fix . --repo __OWNER__/__REPO__ --command "bun test" --commit-baselines --json 2>/dev/null \
+          # Baselines commit back only on trusted runs (schedule, push to the
+          # base branch, manual dispatch). On pull_request runs the token is
+          # read-only and there is nothing durable to persist, so skip it.
+          FLAGS="--commit-baselines"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then FLAGS=""; fi
+          bunx @driftlock/cli fix . --repo __OWNER__/__REPO__ --command "bun test" $FLAGS --json 2>/dev/null \
             | tail -n 1 > driftlock-summary.json
           cat driftlock-summary.json
 

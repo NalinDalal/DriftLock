@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
     readWatchConfig,
     runWatchTick,
     startWatchScheduler,
+    DeferredBaselineStore,
     type TickRecord,
     type WatchedRepo,
     type WatchConfig,
@@ -274,5 +278,65 @@ describe("startWatchScheduler", () => {
         );
         stop();
         expect(polls).toBe(0);
+    });
+});
+
+describe("DeferredBaselineStore", () => {
+    function contract(members: string[]) {
+        return {
+            provider: "stripe",
+            version: "v1",
+            source: "spec" as const,
+            authority: "authoritative" as const,
+            origin: "test",
+            capturedAt: "2026-01-01T00:00:00.000Z",
+            members,
+            removed: [],
+        };
+    }
+
+    test("buffers saves until commit, drops on demand", async () => {
+        const { MemoryVendorBaselineStore } = await import("@driftlock/vendorWatch");
+        const inner = new MemoryVendorBaselineStore();
+        const deferred = new DeferredBaselineStore(inner);
+        await deferred.save(contract(["a"]));
+        expect(await inner.load("stripe")).toBeNull();
+        await deferred.commit();
+        expect((await inner.load("stripe"))?.members).toEqual(["a"]);
+        await deferred.save(contract(["b"]));
+        deferred.drop();
+        expect((await inner.load("stripe"))?.members).toEqual(["a"]);
+    });
+
+    test("a failed migration holds the baseline so the change re-detects next tick", async () => {
+        const { checkVendor, FileVendorBaselineStore } = await import("@driftlock/vendorWatch");
+        const dir = await mkdtemp(join(tmpdir(), "driftlock-defer-"));
+        try {
+            const oldPoll = async () => ({ contract: contract(["id", "source"]), note: "old" });
+            const newPoll = async () => ({ contract: contract(["id", "payment_method"]), note: "new" });
+            // Seed the on-disk baseline the way a previous quiet tick would.
+            await checkVendor(STRIPE_VENDOR, "v1", new FileVendorBaselineStore(dir), { poll: oldPoll as never });
+            // The tick delegates to the real checkVendor through the
+            // deferred store, so a thrown migration exercises the hold.
+            const tickPoll = ((vendor: unknown, version: string, store: never) =>
+                checkVendor(vendor as never, version, store as never, { poll: newPoll as never })) as never;
+            const result = await runWatchTick(baseConfig({ baselinesDir: dir }), {
+                poll: tickPoll,
+                listWatchedRepos: async () => [{ owner: "a", name: "one", base: "main" }],
+                clone: (async () => ({ path: "/tmp/one", cleanup: async () => {} })) as never,
+                migrate: (async () => { throw new Error("agent down"); }) as never,
+                recordTick: (async () => {}) as never,
+            });
+            expect(result.breakingVendors).toHaveLength(1);
+            expect(result.migrations).toEqual([]);
+            // The failed tick must not have advanced the baseline: the same
+            // new contract re-detects the removal instead of seeing nothing.
+            const redetected = await checkVendor(STRIPE_VENDOR, "v2", new FileVendorBaselineStore(dir), {
+                poll: newPoll as never,
+            });
+            expect(redetected?.removed).toEqual(["source"]);
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
     });
 });

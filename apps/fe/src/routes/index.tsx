@@ -113,7 +113,7 @@ function TryPlayground() {
     return (
         <div className="overflow-hidden border border-[var(--color-line-strong)] bg-[var(--color-surface)]">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--color-line-strong)] bg-[var(--color-ink)] px-4 py-2.5">
-                <p className="font-mono text-[11px] tracking-wide text-[var(--color-paper)]">TRY, NO INSTALL · SAME EXTRACTOR THE CLI USES</p>
+                <p className="font-mono text-[11px] tracking-wide text-[var(--color-paper)]">TRY, NO INSTALL · REGEX PREVIEW OF THE CLI SCAN</p>
                 <span className="font-mono text-[10px] tracking-wide text-[var(--color-paper)]/60">NO DATA LEAVES BROWSER</span>
             </div>
             <div className="grid lg:grid-cols-[1.15fr_0.85fr]">

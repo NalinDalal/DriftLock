@@ -87,6 +87,10 @@ export async function checkVendor(
     const current: VendorContract = { ...contract, removed };
     await store.save(current);
 
+    if (removed.length === 0) return null;
+
+    // Registry check runs only when removals require processing: quiet
+    // polls skip the extra network call entirely.
     let registryDrift: PackageDrift | null = null;
     if (options.registry) {
         try {
@@ -100,7 +104,6 @@ export async function checkVendor(
         }
     }
 
-    if (removed.length === 0) return null;
     return {
         provider: vendor.name,
         fromVersion: baseline.version,

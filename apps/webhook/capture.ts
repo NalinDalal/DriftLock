@@ -54,12 +54,11 @@ function logConfigSource(config: WebhookConfig, rowSource: "db" | "env"): void {
         const raw = fromDb
             ? config[key]
             : (process.env[envKey] as string | undefined);
-        const shown =
-            /token|secret|key/i.test(key) || /token|secret|key/i.test(envKey)
-                ? raw
-                    ? "set"
-                    : "missing"
-                : (raw ?? "missing");
+        // Secrets, keys, tokens, and URLs (which can carry credentials or
+        // sensitive query params) log as presence only, never raw values.
+        const sensitive =
+            /token|secret|key|url/i.test(key) || /token|secret|key|url/i.test(envKey);
+        const shown = sensitive ? (raw ? "set" : "missing") : (raw ?? "missing");
         return `${key}=${shown}(${fromDb ? "db" : "env"})`;
     });
     console.log(`[CONFIG] Loaded [row=${rowSource}]: ${parts.join(", ")}`);

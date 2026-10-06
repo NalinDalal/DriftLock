@@ -3,18 +3,29 @@ import { Link } from "@tanstack/react-router";
 
 export default function StatisticsPage() {
     useEffect(() => {
+        const prevTitle = document.title;
         document.title = "API Drift Statistics 2026 | DriftLock Research";
         const meta = document.querySelector('meta[name="description"]');
         const content =
             "API drift statistics 2026: industry figures on webhook failures and downtime plus DriftLock measured findings from Stripe fixtures. Updated quarterly.";
+        const prevContent = meta?.getAttribute("content") ?? null;
+        let tag: HTMLMetaElement | null = null;
         if (meta) {
             meta.setAttribute("content", content);
         } else {
-            const tag = document.createElement("meta");
+            tag = document.createElement("meta");
             tag.setAttribute("name", "description");
             tag.setAttribute("content", content);
             document.head.appendChild(tag);
         }
+        return () => {
+            document.title = prevTitle;
+            if (meta) {
+                if (prevContent !== null) meta.setAttribute("content", prevContent);
+            } else if (tag) {
+                tag.remove();
+            }
+        };
     }, []);
 
     const breadcrumbSchema = {

@@ -3,6 +3,7 @@ import {
     checkVendor,
     FileVendorBaselineStore,
     runVendorTriggeredMigration,
+    type VendorBaselineStore,
     type VendorChange,
 } from "@driftlock/vendorWatch";
 import {
@@ -118,6 +119,41 @@ async function defaultListWatchedRepos(): Promise<WatchedRepo[]> {
 }
 
 /**
+ * Buffers baseline writes so a failed tick never advances past a change.
+ * checkVendor saves the advanced baseline as a side effect of reporting;
+ * without this wrapper, failed migrations or maxRepos-skipped repos would
+ * lose the change forever (the next poll compares against the already-new
+ * baseline and sees nothing). The tick commits only when every watched
+ * repo was attempted and none failed; otherwise the pending write is
+ * dropped and the next tick re-detects the same change.
+ */
+export class DeferredBaselineStore implements VendorBaselineStore {
+    private pending = new Map<string, Parameters<VendorBaselineStore["save"]>[0]>();
+
+    constructor(private readonly inner: VendorBaselineStore) {}
+
+    load(provider: string) {
+        return this.inner.load(provider);
+    }
+
+    async save(contract: Parameters<VendorBaselineStore["save"]>[0]): Promise<void> {
+        this.pending.set(contract.provider, contract);
+    }
+
+    /** Write through all buffered baselines. */
+    async commit(): Promise<void> {
+        for (const contract of this.pending.values()) {
+            await this.inner.save(contract);
+        }
+        this.pending.clear();
+    }
+
+    /** Drop the buffered baselines: changes stay detectable next tick. */
+    drop(): void {
+        this.pending.clear();
+    }
+}
+/**
  * Default tick recorder: one finished run per repo per vendor change, so
  * time-to-merge is measurable from the runs table instead of scattered
  * logs. Failures recording the record must never fail the tick.
@@ -168,13 +204,13 @@ export async function runWatchTick(
         breakingVendors: [],
         migrations: [],
     };
-    const store = new FileVendorBaselineStore(config.baselinesDir);
+    const baselines = new DeferredBaselineStore(new FileVendorBaselineStore(config.baselinesDir));
 
     for (const vendor of config.vendors) {
         result.vendorsChecked.push(vendor.name);
         let change: VendorChange | null;
         try {
-            change = await poll(vendor, "latest", store);
+            change = await poll(vendor, "latest", baselines);
         } catch (error) {
             console.error(
                 `[WATCH] poll failed for ${vendor.name}:`,
@@ -184,6 +220,7 @@ export async function runWatchTick(
         }
         if (!change) {
             console.log(`[WATCH] ${vendor.name}: no removed members since baseline.`);
+            await baselines.commit();
             continue;
         }
         result.breakingVendors.push(vendor.name);
@@ -197,9 +234,10 @@ export async function runWatchTick(
             continue;
         }
         const eligible = repos.slice(0, config.maxRepos);
-        if (eligible.length < repos.length) {
+        const skipped = repos.length - eligible.length;
+        if (skipped > 0) {
             console.log(
-                `[WATCH] ${vendor.name}: ${repos.length - eligible.length} watched repo(s) over WATCH_MAX_REPOS=${config.maxRepos}; skipping until next change.`,
+                `[WATCH] ${vendor.name}: ${skipped} watched repo(s) over WATCH_MAX_REPOS=${config.maxRepos}; skipping until next change.`,
             );
         }
         const publisher = config.githubToken
@@ -263,18 +301,31 @@ export async function runWatchTick(
         // Bounded parallelism: a vendor change must not clone the fleet at
         // once. One repo's clone/migrate failure (settled, logged) never
         // aborts the rest of the batch.
+        let failed = 0;
         for (let i = 0; i < eligible.length; i += config.concurrency) {
             const settled = await Promise.allSettled(
                 eligible.slice(i, i + config.concurrency).map((repo) => migrateRepo(repo)),
             );
             for (const s of settled) {
                 if (s.status === "rejected") {
+                    failed++;
                     console.error(
                         `[WATCH] migration failed for ${vendor.name}:`,
                         (s.reason as Error)?.message ?? String(s.reason),
                     );
                 }
             }
+        }
+        // Advance the baseline only when nothing is left pending: every
+        // watched repo attempted and none failed. Otherwise hold it so the
+        // next tick re-detects the same change instead of losing it.
+        if (skipped === 0 && failed === 0) {
+            await baselines.commit();
+        } else {
+            baselines.drop();
+            console.log(
+                `[WATCH] ${vendor.name}: holding baseline (${failed} failed, ${skipped} skipped); will retry next tick.`,
+            );
         }
     }
     return result;

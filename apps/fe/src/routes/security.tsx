@@ -130,7 +130,7 @@ export default function SecurityPage() {
                 <li>GitHub App requests read plus suggest-only access.</li>
                 <li>Every change is a PR via the Git Database API. Nothing is merged without explicit approval.</li>
                 <li>Preview with driftlock fix --dry-run. Confidence thresholds skip low-confidence PRs.</li>
-                <li>No routine human access to customer code. Break-glass only with audit log.</li>
+                <li>No routine human access to customer code. Break-glass only, recorded in run logs (7-day retention).</li>
             </ul>
 
             <h2 className="mt-12 border-t border-[var(--color-line-strong)] pt-6 heading-section text-[var(--color-ink)]">Encryption And Secrets</h2>

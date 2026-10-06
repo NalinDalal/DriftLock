@@ -98,8 +98,16 @@ function registryUrl(packageName: string, ecosystem: RegistryEcosystem): string 
             return `https://crates.io/api/v1/crates/${encoded}`;
         case "python":
             return `https://pypi.org/pypi/${encoded}/json`;
-        case "go":
-            return `https://proxy.golang.org/${encoded}/@latest`;
+        case "go": {
+            // Go module proxy: literal `/` separators, and uppercase letters
+            // escaped as `!` + lowercase (golang.org/ref/mod). Percent forms
+            // 404, so this branch builds its own path, not `encoded`.
+            const path = packageName
+                .split("/")
+                .map((segment) => segment.replace(/[A-Z]/g, (c) => `!${c.toLowerCase()}`))
+                .join("/");
+            return `https://proxy.golang.org/${path}/@latest`;
+        }
     }
 }
 

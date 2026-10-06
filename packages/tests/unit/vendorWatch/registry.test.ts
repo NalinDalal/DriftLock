@@ -83,6 +83,14 @@ describe("fetchLatestVersion", () => {
         expect(origin).toBe("https://registry.npmjs.org/@acme%2fsdk/latest");
     });
 
+    test("escapes uppercase Go modules per the proxy protocol", async () => {
+        const seen = { count: 0 };
+        const { origin } = await fetchLatestVersion("example.com/AzureMod", "go", {
+            fetchFn: stubFetch({ Version: "v1.2.3" }, seen),
+        });
+        expect(origin).toBe("https://proxy.golang.org/example.com/!azure!mod/@latest");
+    });
+
     test("reads crates.io, PyPI, and Go proxy shapes", async () => {
         const seen = { count: 0 };
         await expect(

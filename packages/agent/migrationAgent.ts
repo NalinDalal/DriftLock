@@ -1010,8 +1010,10 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
     // the OpenAI-compatible client below). All paths produce the same
     // transcript entries downstream. The OpenAI client is built lazily so
     // other providers never require OPENAI_API_KEY to even be present.
-    const providerBaseURL = options.providerBaseURL ?? options.anthropicBaseURL;
-    const providerFetchFn = options.providerFetchFn ?? options.anthropicFetchFn;
+    const providerBaseURL =
+        options.providerBaseURL ?? (providerName === "anthropic" ? options.anthropicBaseURL : undefined);
+    const providerFetchFn =
+        options.providerFetchFn ?? (providerName === "anthropic" ? options.anthropicFetchFn : undefined);
     const turnClient: ModelClient | null =
         options.modelClient ??
         (providerName === "openai"
@@ -1019,7 +1021,7 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
             : createProviderClient(providerName, {
                   apiKey:
                       options.providerApiKey ??
-                      options.anthropicApiKey ??
+                      (providerName === "anthropic" ? options.anthropicApiKey : undefined) ??
                       process.env[modelProviderEnvKey(providerName) ?? ""] ??
                       "",
                   ...(providerBaseURL ? { baseURL: providerBaseURL } : {}),
