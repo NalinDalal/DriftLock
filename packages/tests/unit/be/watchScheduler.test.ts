@@ -3,6 +3,8 @@ import {
     readWatchConfig,
     runWatchTick,
     startWatchScheduler,
+    type TickRecord,
+    type WatchedRepo,
     type WatchConfig,
 } from "@driftlock/be/src/watch";
 import { STRIPE_VENDOR } from "@driftlock/core";
@@ -219,7 +221,7 @@ describe("runWatchTick", () => {
                 filesChanged: ["src/payment.ts"],
                 state: { pullRequest: { url: "https://pr/1", number: 1, branch: "b" } },
             })) as never,
-            recordTick: (async (repo, entry) => {
+            recordTick: (async (repo: WatchedRepo, entry: TickRecord) => {
                 records.push({ repo: `${repo.owner}/${repo.name}`, outcome: entry.outcome, prUrl: entry.prUrl, ok: entry.ok });
             }) as never,
         });
@@ -251,7 +253,7 @@ describe("runWatchTick", () => {
                 if (opts.root.endsWith("/bad")) throw new Error("boom");
                 return { outcome: "no_action", filesChanged: [], state: {} };
             }) as never,
-            recordTick: (async (repo, entry) => {
+            recordTick: (async (repo: WatchedRepo, entry: TickRecord) => {
                 records.push({ repo: repo.name, ok: entry.ok });
             }) as never,
         });

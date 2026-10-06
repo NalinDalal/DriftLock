@@ -257,4 +257,19 @@ describe("applyFixWork", () => {
         };
         expect(applyFixWork(custom, "const id = legacy_id;")).toBeNull();
     });
+
+    test("custom flags destructuring and shorthand lines, not just member access", () => {
+        const custom: FixWork = {
+            kind: "custom",
+            field: "data.object.source",
+            description: "Handle removed response field 'data.object.source'",
+            template: "remove access to 'data.object.source'",
+            confidence: "high",
+        };
+        expect(
+            applyFixWork(custom, "const { source, amount } = obj;"),
+        ).toBe("// const { source, amount } = obj;");
+        // Bare variable reads are not field accesses: left alone.
+        expect(applyFixWork(custom, "use(source);")).toBeNull();
+    });
 });

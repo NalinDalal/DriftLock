@@ -706,21 +706,31 @@ export function applyFixWork(work: FixWork, source: string): string | null {
             }
             const fieldParts = work.field.split(".");
             const leaf = fieldParts[fieldParts.length - 1];
+            const escLeaf = leaf.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
             const fieldRegex = new RegExp(
-                `[\\w$]+(?:\\.[\\w$]+)*\\.${leaf.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
+                `[\\w$]+(?:\\.[\\w$]+)*\\.${escLeaf}`,
                 "g",
             );
-            if (!fieldRegex.test(source)) {
+            // Brace-bound leaf: destructuring (`const { source } = obj`),
+            // shorthand, and object-literal keys. Kept in sync with
+            // contentMatchesWorks in @driftlock/webhookCapture so every
+            // file the scan flags is also flaggable by the fixer.
+            const bracedRegex = new RegExp(`[{,]\\s*${escLeaf}\\b`, "g");
+            if (!fieldRegex.test(source) && !bracedRegex.test(source)) {
                 return null;
             }
             // Reset: .test() with /g leaves lastIndex mid-string, which
             // would poison every per-line test below into false negatives.
             fieldRegex.lastIndex = 0;
+            bracedRegex.lastIndex = 0;
             // Comment out lines containing the removed field
             const lines = source.split("\n");
             const result = lines.map((line) => {
-                if (fieldRegex.test(line) && !line.trimStart().startsWith("//")) {
-                    fieldRegex.lastIndex = 0; // reset regex
+                const hit =
+                    fieldRegex.test(line) || bracedRegex.test(line);
+                fieldRegex.lastIndex = 0; // reset regex
+                bracedRegex.lastIndex = 0;
+                if (hit && !line.trimStart().startsWith("//")) {
                     return `// ${line}`;
                 }
                 return line;

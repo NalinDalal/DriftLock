@@ -86,6 +86,7 @@ export const TWILIO_VENDOR: VendorConfig = {
     basePath: "/2010-04-01",
     docs: {
         url: "https://www.twilio.com/docs",
+        specUrl: "https://raw.githubusercontent.com/twilio/twilio-oai/main/spec/json/twilio_api_v2010.json",
     },
 };
 

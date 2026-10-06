@@ -31,13 +31,9 @@ describe("driftlock watch", () => {
         await expect(runWatch({ provider: "acme" })).rejects.toThrow(/Unknown provider/);
     });
 
-    test("a vendor with no published spec fails the poll with exit 2", async () => {
-        const { dir: d, cleanup } = await dir();
-        try {
-            expect(await runWatch({ provider: "twilio", baselinesDir: d })).toBe(2);
-        } finally {
-            await cleanup();
-        }
+    test("twilio carries a published spec URL, so spec polling covers it", async () => {
+        const { TWILIO_VENDOR } = await import("@driftlock/core");
+        expect(TWILIO_VENDOR.docs?.specUrl).toMatch(/^https:\/\//);
     });
 
     test("first poll records the baseline and exits 0", async () => {

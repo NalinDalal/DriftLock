@@ -49,6 +49,43 @@ function alertToWorks(alert: DriftAlert): FixWork[] {
     return fixWorksForDiff(responseDiff);
 }
 
+/**
+ * Pure content matcher behind the repo scan, exported for tests. A file is
+ * affected when any work matches: renames by token, null checks by member
+ * access, removals by member access OR by brace-bound leaf
+ * (`const { source } = obj`, `{ source }` shorthand, `{ source: ... }`
+ * keys). The brace arm closes a real miss: files that only destructure the
+ * removed field never matched the dotted-access regex, so their usages
+ * went unfound and no PR opened.
+ */
+export function contentMatchesWorks(content: string, works: FixWork[]): boolean {
+    const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    for (const work of works) {
+        if (work.kind === "field_rename" && work.from && work.to) {
+            const regex = new RegExp(`(?<![\\w])${esc(work.from)}(?![\\w])`, "g");
+            if (regex.test(content)) return true;
+        } else if (work.kind === "null_check" && work.field) {
+            const fieldParts = work.field.split(".");
+            const leaf = fieldParts[fieldParts.length - 1];
+            const regex = new RegExp(
+                `(?<![\\w.])[\\w$]+(?:\\.[\\w$]+)*\\.${esc(leaf)}(?![\\w])`,
+                "g",
+            );
+            if (regex.test(content)) return true;
+        } else if (work.kind === "custom" && work.field) {
+            const fieldParts = work.field.split(".");
+            const leaf = fieldParts[fieldParts.length - 1];
+            const access = new RegExp(`[\\w$]+(?:\\.[\\w$]+)*\\.${esc(leaf)}`, "g");
+            // Brace-bound matches may over-match same-named keys in
+            // unrelated objects; that is the safe direction for a
+            // Flag-titled PR a human reviews.
+            const braced = new RegExp(`[{,]\\s*${esc(leaf)}\\b`, "g");
+            if (access.test(content) || braced.test(content)) return true;
+        }
+    }
+    return false;
+}
+
 function scanForAffectedFiles(
     repoPath: string,
     works: FixWork[],
@@ -73,40 +110,9 @@ function scanForAffectedFiles(
             continue;
         }
 
-        for (const work of works) {
-            if (work.kind === "field_rename" && work.from && work.to) {
-                const regex = new RegExp(
-                    `(?<![\\w])${work.from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w])`,
-                    "g",
-                );
-                if (regex.test(content) && !seen.has(fullPath)) {
-                    results.push({ filePath: file, fullPath });
-                    seen.add(fullPath);
-                }
-            } else if (work.kind === "null_check" && work.field) {
-                const fieldParts = work.field.split(".");
-                const leaf = fieldParts[fieldParts.length - 1];
-                const regex = new RegExp(
-                    `(?<![\\w.])[\\w$]+(?:\\.[\\w$]+)*\\.${leaf.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w])`,
-                    "g",
-                );
-                if (regex.test(content) && !seen.has(fullPath)) {
-                    results.push({ filePath: file, fullPath });
-                    seen.add(fullPath);
-                }
-            } else if (work.kind === "custom" && work.field) {
-                // For removed fields, search for the leaf field name
-                const fieldParts = work.field.split(".");
-                const leaf = fieldParts[fieldParts.length - 1];
-                const regex = new RegExp(
-                    `[\\w$]+(?:\\.[\\w$]+)*\\.${leaf.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
-                    "g",
-                );
-                if (regex.test(content) && !seen.has(fullPath)) {
-                    results.push({ filePath: file, fullPath });
-                    seen.add(fullPath);
-                }
-            }
+        if (contentMatchesWorks(content, works) && !seen.has(fullPath)) {
+            results.push({ filePath: file, fullPath });
+            seen.add(fullPath);
         }
     }
 
