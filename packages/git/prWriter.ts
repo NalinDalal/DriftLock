@@ -307,6 +307,25 @@ export class FixPRRunner {
         };
     }
 
+    /**
+     * Post a comment on a pull request (PRs share the issues comment API).
+     * Used for the automated second-pass review after publishing a fix.
+     * Best effort: callers must not fail the run when commenting fails.
+     */
+    async comment(input: {
+        owner: string;
+        repo: string;
+        number: number;
+        body: string;
+    }): Promise<void> {
+        await this.octokit.rest.issues.createComment({
+            owner: input.owner,
+            repo: input.repo,
+            issue_number: input.number,
+            body: input.body,
+        });
+    }
+
     private async deleteBranchIfExists(
         owner: string,
         repo: string,

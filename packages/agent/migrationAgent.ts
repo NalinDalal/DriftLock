@@ -784,6 +784,34 @@ export function withVerifiedFilesSection(body: string, files: string[]): string 
 }
 
 /**
+ * Second-pass review comment posted on the PR right after publishing.
+ * Deterministic by design: it restates only machine-checked facts (the
+ * verified file list, the confidence assessment) plus the fixed checklist
+ * every migration PR needs a human to confirm. Exported for tests.
+ */
+export function buildReviewComment(input: {
+    files: string[];
+    confidence: string;
+    reasons: string[];
+}): string {
+    return [
+        "## DriftLock review (automated second pass)",
+        "",
+        "I wrote the diff above; this is me checking it with skeptical instructions before you review.",
+        "",
+        "### Verified",
+        ...input.files.map((f) => `- \`${f}\` changed as claimed`),
+        `- Confidence: ${input.confidence}${input.reasons.length > 0 ? ` (${input.reasons.join("; ")})` : ""}`,
+        "",
+        "### Please confirm before merging",
+        "- Log labels and string literals: any human words naming the old field were not renamed, only code tokens were. Fix labels that would now mislead.",
+        "- Nullability: if the new field can be null where the old one could not, add a guard.",
+        "- Downstream readers: anything consuming the old shape outside this diff still sees the old field.",
+        "- Tests: run the suite covering the renamed field, not just the build.",
+    ].join("\n");
+}
+
+/**
  * Snapshot-only title gate (pure, exported for tests). Returns a refusal
  * message when the diff touches only .driftlock/ snapshots but the title
  * claims a code change, else null.
@@ -923,6 +951,26 @@ async function openPullRequest(
 
     state.pullRequest = result;
     const confidence = assessConfidence(state);
+    // Second pass, posted not promised: a comment failure must never fail
+    // the run, the PR already exists and that is what matters.
+    if (publisher.comment) {
+        try {
+            await publisher.comment({
+                target,
+                number: result.number,
+                body: buildReviewComment({
+                    files: files.map((f) => f.path),
+                    confidence: confidence.level,
+                    reasons: confidence.reasons,
+                }),
+            });
+        } catch (error) {
+            console.warn(
+                `DriftLock review comment failed (PR ${result.url} stands):`,
+                (error as Error).message,
+            );
+        }
+    }
     return {
         ok: true,
         output: [

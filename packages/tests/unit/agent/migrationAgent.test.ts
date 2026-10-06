@@ -1197,3 +1197,122 @@ describe("PR honesty guardrails", () => {
         expect(body).toContain("- `src/payment.ts`");
     });
 });
+
+describe("post-publish review comment", () => {
+    test("review body restates verified files and the human checklist", async () => {
+        const { buildReviewComment } = await import("@driftlock/agent");
+        const body = buildReviewComment({
+            files: ["src/payment.ts"],
+            confidence: "high",
+            reasons: ["contract checked"],
+        });
+        expect(body).toContain("- `src/payment.ts` changed as claimed");
+        expect(body).toContain("Confidence: high (contract checked)");
+        expect(body).toContain("Log labels and string literals");
+        expect(body).toContain("Downstream readers");
+    });
+
+    test("publishing posts the review comment without failing the run", async () => {
+        const init = Bun.spawn(["git", "init"], { cwd: root, stdout: "pipe" });
+        await init.exited;
+        const add = Bun.spawn(["git", "add", "-A"], { cwd: root, stdout: "pipe" });
+        await add.exited;
+
+        apiCalls = [
+            toolCall(
+                "editFile",
+                {
+                    path: "src/client.ts",
+                    patch: [
+                        "--- a/src/client.ts",
+                        "+++ b/src/client.ts",
+                        "@@ -1 +1 @@",
+                        "-createCanvas(1);",
+                        "+createSurface(1);",
+                    ].join("\n"),
+                },
+                "c1",
+            ),
+            toolCall("runCommand", { command: "npm run build" }, "c2"),
+            toolCall(
+                "createPullRequest",
+                { title: "Migrate to p5 2.3", body: "Renamed call", branch: "driftlock/p5-2.3" },
+                "c3",
+            ),
+        ];
+        const comments: string[] = [];
+        const result = await runMigrationAgent({
+            root,
+            packet,
+            client: fakeClient(),
+            commandRunner: fakeOkRunner(),
+            publisher: {
+                publish: async (input) => ({
+                    status: "opened" as const,
+                    url: "https://pr/staged-review",
+                    number: 7,
+                    branch: input.branch,
+                }),
+                comment: async (input) => {
+                    comments.push(input.body);
+                },
+            },
+            target: { owner: "acme", repo: "pay", base: "main" },
+        });
+
+        expect(result.state.pullRequest?.url).toBe("https://pr/staged-review");
+        expect(comments).toHaveLength(1);
+        expect(comments[0]).toContain("- `src/client.ts` changed as claimed");
+        expect(comments[0]).toContain("Please confirm before merging");
+    });
+
+    test("a failing comment posts still leaves the PR standing", async () => {
+        const init = Bun.spawn(["git", "init"], { cwd: root, stdout: "pipe" });
+        await init.exited;
+        const add = Bun.spawn(["git", "add", "-A"], { cwd: root, stdout: "pipe" });
+        await add.exited;
+
+        apiCalls = [
+            toolCall(
+                "editFile",
+                {
+                    path: "src/client.ts",
+                    patch: [
+                        "--- a/src/client.ts",
+                        "+++ b/src/client.ts",
+                        "@@ -1 +1 @@",
+                        "-createCanvas(1);",
+                        "+createSurface(1);",
+                    ].join("\n"),
+                },
+                "c1",
+            ),
+            toolCall("runCommand", { command: "npm run build" }, "c2"),
+            toolCall(
+                "createPullRequest",
+                { title: "Migrate to p5 2.3", body: "Renamed call", branch: "driftlock/p5-2.3" },
+                "c3",
+            ),
+        ];
+        const result = await runMigrationAgent({
+            root,
+            packet,
+            client: fakeClient(),
+            commandRunner: fakeOkRunner(),
+            publisher: {
+                publish: async (input) => ({
+                    status: "opened" as const,
+                    url: "https://pr/staged-review-2",
+                    number: 8,
+                    branch: input.branch,
+                }),
+                comment: async () => {
+                    throw new Error("comments disabled");
+                },
+            },
+            target: { owner: "acme", repo: "pay", base: "main" },
+        });
+
+        expect(result.state.pullRequest?.url).toBe("https://pr/staged-review-2");
+    });
+});

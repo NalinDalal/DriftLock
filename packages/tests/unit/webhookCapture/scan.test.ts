@@ -29,7 +29,7 @@ describe("contentMatchesWorks", () => {
     });
 
     test("matches member access for type coercion works", () => {
-        const works = [{ kind: "type_coercion", field: "data.object.amount", description: "", template: "", confidence: "high" as const }];
+        const works: FixWork[] = [{ kind: "type_coercion", field: "data.object.amount", description: "", template: "", confidence: "high" }];
         expect(contentMatchesWorks("cents: obj.amount", works)).toBe(true);
         expect(contentMatchesWorks("return obj.status;", works)).toBe(false);
     });
