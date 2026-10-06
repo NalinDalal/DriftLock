@@ -20,6 +20,32 @@ interface RunBody {
     forward?: unknown;
 }
 
+const ALLOWED_COMMAND_PREFIXES = [
+    "npm test",
+    "npm run test",
+    "bun test",
+    "bun run test",
+    "yarn test",
+    "pnpm test",
+    "npx jest",
+    "node --test",
+] as const;
+
+/**
+ * Commands run inside the Docker sandbox on BE infra. Authenticated users
+ * supply this value, so reject shell metachars and anything outside the
+ * known test-runner prefixes (no `;`, `&&`, backticks, subshells, redirects).
+ */
+export function isAllowedTestCommand(command: string): boolean {
+    const trimmed = command.trim();
+    if (!trimmed || trimmed.length > 500) return false;
+    // eslint-disable-next-line no-control-regex
+    if (/[;&|`$()><\n\r\x00]/.test(trimmed)) return false;
+    return ALLOWED_COMMAND_PREFIXES.some(
+        (prefix) => trimmed === prefix || trimmed.startsWith(`${prefix} `) || trimmed.startsWith(`${prefix}--`),
+    );
+}
+
 export async function handleRun(req: Request): Promise<Response> {
     let body: RunBody;
     try {
@@ -34,8 +60,13 @@ export async function handleRun(req: Request): Promise<Response> {
     }
     const command =
         typeof body.command === "string" && body.command.trim()
-            ? body.command
+            ? body.command.trim()
             : "npm test";
+    if (!isAllowedTestCommand(command)) {
+        return badRequest(
+            "command must be a known test runner (npm/bun/yarn/pnpm test, npx jest, node --test) without shell operators",
+        );
+    }
     const forward = Array.isArray(body.forward)
         ? body.forward.filter(
               (entry): entry is string => typeof entry === "string",

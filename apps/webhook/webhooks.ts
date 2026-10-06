@@ -32,14 +32,24 @@ function json(data: unknown, status = 200): Response {
 
 function verifySignature(payload: string, signature: string): boolean {
   if (!WEBHOOK_SECRET) {
-    console.warn("No GITHUB_WEBHOOK_SECRET set. Skipping signature verification");
+    // Fail closed in production; dev keeps working with an explicit opt-in
+    // so copy-paste quickstarts don't silently accept forged webhooks.
+    if (process.env.NODE_ENV === "production" && process.env.ALLOW_UNSIGNED_WEBHOOKS !== "true") {
+      console.error("GITHUB_WEBHOOK_SECRET missing in production. Rejecting webhook (set GITHUB_WEBHOOK_SECRET or ALLOW_UNSIGNED_WEBHOOKS=true for dev)");
+      return false;
+    }
+    console.warn("No GITHUB_WEBHOOK_SECRET set. Accepting unsigned payload (dev only — set GITHUB_WEBHOOK_SECRET in prod)");
     return true;
   }
+  if (!signature) return false;
 
   const expected = "sha256=" +
     createHmac("sha256", WEBHOOK_SECRET).update(payload).digest("hex");
 
-  return timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+  const a = Buffer.from(signature);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
 }
 
 export async function webhookHandler(req: Request): Promise<Response> {

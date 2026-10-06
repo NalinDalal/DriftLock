@@ -568,9 +568,14 @@ export function createCaptureHandler() {
                 );
                 return json({ error: "Invalid signature" }, 401);
             }
+        } else if (process.env.NODE_ENV === "production" && process.env.ALLOW_UNSIGNED_CAPTURE !== "true") {
+            console.error(
+                `[SECURITY] No CAPTURE_SECRETS entry for endpoint=${endpointId} in production. Rejecting unsigned payload`,
+            );
+            return json({ error: "Webhook signing not configured" }, 401);
         } else {
             console.warn(
-                `No CAPTURE_SECRETS entry for endpoint=${endpointId}. Accepting unsigned payload (set CAPTURE_SECRETS in prod)`,
+                `No CAPTURE_SECRETS entry for endpoint=${endpointId}. Accepting unsigned payload (dev only — set CAPTURE_SECRETS in prod)`,
             );
         }
 
