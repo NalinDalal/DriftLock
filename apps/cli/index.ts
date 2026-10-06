@@ -564,6 +564,15 @@ Examples:
                     const rel = relative(repoRoot, p).replace(/\\/g, "/");
                     return rel && !rel.startsWith("..") ? rel : p;
                 };
+                // Baseline refresh after a merge reuses the shapes captured
+                // by this run. The analyze result is shadowed by the PR
+                // result inside the loop, so capture its meta here.
+                const refreshMeta = {
+                    testCommand: options.command ?? "npm test",
+                    exitCode: result.exitCode,
+                    duration: result.duration,
+                    trafficCaptured: result.trafficCaptured,
+                };
                 for (const { callSite, drift, fix } of fixes) {
                     const driftEvent = buildDriftEvent(drift);
                     driftEvent.suggestedFix = fix;
@@ -595,7 +604,7 @@ Examples:
                     if (result.status === "merged") {
                         const current = shapes.get(callSite.id);
                         if (current) {
-                            await store.save(callSite.id, current);
+                            await store.save(callSite.id, current, refreshMeta);
                         }
                         console.log(
                             `[EVENT] type=pr_merged ${JSON.stringify({ driftId: driftEvent.id, prNumber: result.number, url: result.url })}`,

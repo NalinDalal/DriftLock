@@ -40,5 +40,14 @@ export function aiConfigFromEnv(
     if (!apiKey || (typed === "cloudflare" && !accountId)) {
         return undefined;
     }
-    return { provider: typed, apiKey, accountId, model };
+    // Custom endpoints only make sense for the OpenAI-compatible path
+    // (local Ollama, gateways, proxies); other providers have fixed
+    // endpoints. Mirrors apps/webhook/capture.ts.
+    const baseUrl =
+        typed === "openai"
+            ? (env.AI_BASE_URL ?? "").trim() ||
+              (env.OPENAI_BASE_URL ?? "").trim() ||
+              undefined
+            : undefined;
+    return { provider: typed, apiKey, accountId, model, baseUrl };
 }
