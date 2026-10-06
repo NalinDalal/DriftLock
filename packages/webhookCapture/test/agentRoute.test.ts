@@ -33,6 +33,15 @@ describe("buildAgentClient maps AI providers to OpenAI-compatible clients", () =
         expect(built?.client.baseURL).toContain("generativelanguage.googleapis.com");
     });
 
+    test("should honor a custom baseURL for openai (e.g. local Ollama)", () => {
+        const built = buildAgentClient({
+            provider: "openai",
+            apiKey: "ollama",
+            baseUrl: "http://127.0.0.1:11434/v1",
+        });
+        expect(built?.client.baseURL).toBe("http://127.0.0.1:11434/v1");
+    });
+
     test("should return null for anthropic with no compat endpoint", () => {
         expect(buildAgentClient({ provider: "anthropic", apiKey: "sk-ant" })).toBeNull();
     });

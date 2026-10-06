@@ -26,6 +26,14 @@ services:
     environment:
       DATABASE_URL: postgresql://driftlock:driftlock@db:5432/driftlock
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      WATCH_ENABLED: ${WATCH_ENABLED:-false}
+      WATCH_INTERVAL_MS: ${WATCH_INTERVAL_MS:-21600000}
+      WATCH_VENDORS: ${WATCH_VENDORS:-stripe}
+      WATCH_BASELINES_DIR: /data/vendor-baselines
+      DRIFTLOCK_PLAN: ${DRIFTLOCK_PLAN:-pro}
+      DRIFTLOCK_MODEL: ${DRIFTLOCK_MODEL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
       PORT: 3000
     depends_on:
       db:
@@ -33,6 +41,7 @@ services:
     volumes:
       - ./apps/be:/app/apps/be
       - ./packages:/app/packages
+      - vendor_baselines:/data/vendor-baselines
 
   webhook:
     build:
@@ -81,3 +90,4 @@ services:
 
 volumes:
   postgres_data:
+  vendor_baselines:

@@ -251,6 +251,7 @@ export type AgentEvent =
     | { type: "iteration"; iteration: number; stage: MigrationStage }
     | { type: "tool"; name: ToolName; ok: boolean; iteration: number }
     | { type: "model_retry"; attempt: number; error: string }
+    | { type: "note"; message: string; iteration: number }
     | { type: "done"; outcome: Outcome; iterations: number };
 
 /** Tools that pause for operator approval. Publishing is the irreversible
@@ -371,6 +372,95 @@ function parseToolCalls(raw: unknown): ToolCall[] {
 function readString(args: Record<string, unknown>, key: string): string {
     const value = args[key];
     return typeof value === "string" ? value : "";
+}
+
+function textCallToArgs(raw: unknown): Record<string, unknown> {
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+        return raw as Record<string, unknown>;
+    }
+    if (typeof raw === "string" && raw.trim()) {
+        try {
+            const parsed = JSON.parse(raw) as unknown;
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                return parsed as Record<string, unknown>;
+            }
+        } catch {
+            // Not JSON — no args recoverable.
+        }
+    }
+    return {};
+}
+
+/**
+ * Fallback for models without native function calling (small local models
+ * served over OpenAI-compatible endpoints): recover a single tool call
+ * written as JSON in the message text, e.g.
+ * `{"name": "searchCode", "arguments": {"query": "source"}}`.
+ *
+ * Strict on purpose: the name must be a real tool, one call max with a
+ * synthesized id, unparseable text yields nothing. Callers run this only
+ * when the native `tool_calls` array came back empty.
+ */
+/** Brace-balanced `{...}` spans, outermost first. Content is small; O(n²) is fine. */
+function balancedSpans(content: string): string[] {
+    const spans: string[] = [];
+    for (let start = 0; start < content.length; start++) {
+        if (content[start] !== "{") continue;
+        let depth = 0;
+        let inString = false;
+        let escaped = false;
+        for (let i = start; i < content.length; i++) {
+            const ch = content[i];
+            if (inString) {
+                if (escaped) escaped = false;
+                else if (ch === "\\") escaped = true;
+                else if (ch === '"') inString = false;
+                continue;
+            }
+            if (ch === '"') inString = true;
+            else if (ch === "{") depth += 1;
+            else if (ch === "}") {
+                depth -= 1;
+                if (depth === 0) {
+                    spans.push(content.slice(start, i + 1));
+                    break;
+                }
+            }
+        }
+    }
+    return spans;
+}
+
+export function parseTextToolCall(content: string): ToolCall[] {
+    if (!content || !content.includes('"name"')) return [];
+    const spans: string[] = [content];
+    for (const match of content.matchAll(/```(?:json)?\s*([\s\S]*?)```/g)) {
+        if (match[1]) spans.push(match[1]);
+    }
+    spans.push(...balancedSpans(content));
+    for (const span of spans) {
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(span) as unknown;
+        } catch {
+            continue;
+        }
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            continue;
+        }
+        const record = parsed as Record<string, unknown>;
+        if (typeof record.name !== "string" || !isToolName(record.name)) {
+            continue;
+        }
+        return [
+            {
+                id: "text-1",
+                name: record.name,
+                args: textCallToArgs(record.arguments ?? record.args),
+            },
+        ];
+    }
+    return [];
 }
 
 async function execute(
@@ -680,6 +770,32 @@ async function staleWarning(
     ].join("\n");
 }
 
+/**
+ * Deterministic honesty footer for PR bodies. The model writes the title
+ * and body, but the file list below is generated from the actual changed
+ * files, so a reader can always check the claim against the diff.
+ */
+export function withVerifiedFilesSection(body: string, files: string[]): string {
+    const section = [
+        "### Files changed (verified)",
+        ...files.map((f) => `- \`${f}\``),
+    ].join("\n");
+    return `${body}\n\n${section}`;
+}
+
+/**
+ * Snapshot-only title gate (pure, exported for tests). Returns a refusal
+ * message when the diff touches only .driftlock/ snapshots but the title
+ * claims a code change, else null.
+ */
+export function checkSnapshotOnlyTitle(filesChanged: string[], title: string): string | null {
+    const sourceChanges = filesChanged.filter((f) => !f.startsWith(".driftlock/"));
+    if (sourceChanges.length === 0 && !/snapshot|baseline/i.test(title)) {
+        return 'Refusing to open this PR: the only changed files are .driftlock/ snapshots, but the title claims a code change. Retitle as a snapshot/baseline update (e.g. "driftlock: update stripe snapshots for payment_intent.succeeded") or make the source edits first, then call createPullRequest again.';
+    }
+    return null;
+}
+
 async function openPullRequest(
     args: Record<string, unknown>,
     packet: ChangePacket,
@@ -703,6 +819,14 @@ async function openPullRequest(
     }
     if (state.filesChanged.length === 0) {
         return { ok: false, output: "Refusing to open a PR with no changed files" };
+    }
+    // Honesty gate: a diff that touches only .driftlock/ snapshots is a
+    // baseline update, never a code fix. #13 shipped a "Replace source with
+    // payment_method" title over a snapshot-only diff; titles must say what
+    // the diff does, so snapshot-only runs must carry that in the title.
+    const snapshotGate = checkSnapshotOnlyTitle(state.filesChanged, title);
+    if (snapshotGate) {
+        return { ok: false, output: snapshotGate };
     }
     if (state.lastTestResult?.passed !== true) {
         return {
@@ -763,7 +887,7 @@ async function openPullRequest(
                 `A publisher and target were not supplied to the agent.`,
                 `Would open${draft ? " as a draft (no vendor contract)" : ""} on branch ${branch} against ${target?.base ?? "<base>"}`,
                 `Title: ${title}`,
-                `Body: ${body}`,
+                `Body: ${withVerifiedFilesSection(body, state.filesChanged)}`,
                 `Diff stat: ${stat || "(no changes)"}`,
                 `Confidence: ${confidence.level} (${confidence.reasons.join("; ")}).`,
             ].join("\n"),
@@ -780,7 +904,7 @@ async function openPullRequest(
         result = await publisher.publish({
             target,
             title,
-            body,
+            body: withVerifiedFilesSection(body, files.map((f) => f.path)),
             branch,
             files,
             commitMessage: commitMessageFor({
@@ -959,10 +1083,28 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
             break;
         }
 
+        if (toolCalls.length === 0 && content.trim()) {
+            // Small models often write the call as text instead of using
+            // native function calling. Recover it rather than dying silent.
+            toolCalls = parseTextToolCall(content);
+            if (toolCalls.length > 0) {
+                emit({
+                    type: "note",
+                    message: `Recovered ${toolCalls[0].name} from model text (no native tool call)`,
+                    iteration: state.iteration,
+                });
+            }
+        }
+
         if (toolCalls.length === 0) {
             state.transcript.push({
                 role: "assistant",
                 content,
+            });
+            emit({
+                type: "note",
+                message: `Model returned no tool calls at iteration ${state.iteration} (${stage}); ending run`,
+                iteration: state.iteration,
             });
             state.done = true;
             state.outcome = decideOutcome(state);

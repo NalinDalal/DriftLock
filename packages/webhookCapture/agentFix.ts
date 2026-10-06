@@ -11,6 +11,7 @@ import {
 } from "@driftlock/agent";
 import type { VendorConfig } from "@driftlock/core";
 import type { DriftAlert } from "./driftDetector";
+import type { AgentEvent } from "@driftlock/agent";
 
 export interface AgentFixInput {
     owner: string;
@@ -30,6 +31,8 @@ export interface AgentFixInput {
     publisher?: PullRequestPublisher;
     /** Override for tests. Defaults to Docker isolation. */
     commandRunner?: CommandRunner;
+    /** Progress observer, forwarded to the agent loop. */
+    onEvent?: (event: AgentEvent) => void;
 }
 
 export interface AgentFixResult {
@@ -80,6 +83,7 @@ export async function createAgentFixPR(input: AgentFixInput): Promise<AgentFixRe
         target: { owner: input.owner, repo: input.repo, base: input.base },
         client: input.client,
         model: input.model,
+        ...(input.onEvent ? { onEvent: input.onEvent } : {}),
     });
 
     const pr = result.state.pullRequest;

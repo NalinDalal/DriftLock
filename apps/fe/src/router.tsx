@@ -15,6 +15,7 @@ const AuthCallbackPage = lazyRouteComponent(() => import("./routes/auth-callback
 const InstallPage = lazyRouteComponent(() => import("./routes/install"), "default");
 const InstallSuccessPage = lazyRouteComponent(() => import("./routes/install-success"), "default");
 const AboutPage = lazyRouteComponent(() => import("./routes/about"), "default");
+const StatisticsPage = lazyRouteComponent(() => import("./routes/statistics"), "default");
 const SecurityPage = lazyRouteComponent(() => import("./routes/security"), "default");
 const PrivacyPage = lazyRouteComponent(() => import("./routes/privacy"), "default");
 const TermsPage = lazyRouteComponent(() => import("./routes/terms"), "default");
@@ -95,6 +96,12 @@ const aboutRoute = createRoute({
     component: AboutPage,
 });
 
+const statisticsRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/statistics",
+    component: StatisticsPage,
+});
+
 const securityRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/security",
@@ -142,6 +149,7 @@ const routeTree = rootRoute.addChildren([
     installRoute,
     installSuccessRoute,
     aboutRoute,
+    statisticsRoute,
     securityRoute,
     privacyRoute,
     termsRoute,

@@ -209,8 +209,11 @@ export async function createWebhookFixPR(
     };
 }
 
-function buildWebhookPRTitle(alert: DriftAlert, works: FixWork[]): string {
+export function buildWebhookPRTitle(alert: DriftAlert, works: FixWork[]): string {
     const primary = works[0];
+    // A custom work comments out the removed field's usages: that flags the
+    // breakage for a human, it does not fix it. The title must say Flag so
+    // the PR never reads as a completed migration.
     const action =
         primary.kind === "field_rename"
             ? "Rename"
@@ -218,7 +221,7 @@ function buildWebhookPRTitle(alert: DriftAlert, works: FixWork[]): string {
               ? "Add null check for"
               : primary.kind === "type_coercion"
                 ? "Update type for"
-                : "Fix";
+                : "Flag";
     return `driftlock: ${action} ${alert.eventType} webhook handler`;
 }
 

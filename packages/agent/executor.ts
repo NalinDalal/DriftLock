@@ -100,27 +100,65 @@ export async function searchCode(
     if (!targetInfo.isDirectory()) {
         return fail(`Search path is not a directory: ${path}`);
     }
+    // Pinned for the nested collector below (narrowing does not
+    // survive into the closure).
+    const searchRoot: string = target;
 
-    try {
-        const files = await collectSourceFiles(target, path);
+    // Models often search dotted schema paths ("data.object.source")
+    // while code holds the leaf ("obj.source"). When the full query finds
+    // nothing and looks like a dotted member path (every segment a valid
+    // identifier, so file names and versions never qualify), retry with
+    // the leaf so the call sites are still found.
+    const looksDottedPath = (q: string): boolean => {
+        if (!q.includes(".")) return false;
+        const segments = q.split(".");
+        return (
+            segments.length >= 2 &&
+            segments.every((s) => /^[A-Za-z_$][\w$]*$/.test(s))
+        );
+    };
+
+    async function collectHits(needle: string): Promise<string[]> {
         const hits: string[] = [];
-        const needle = query.toLowerCase();
-
+        const seen = new Set<string>();
+        const files = await collectSourceFiles(searchRoot, path);
         for (const relative of files) {
             if (hits.length >= MAX_SEARCH_HITS) break;
-            const absolute = `${target}/${relative}`;
+            const absolute = `${searchRoot}/${relative}`;
             const content = await Bun.file(absolute).text();
             const lines = content.split("\n");
             for (let i = 0; i < lines.length; i++) {
                 if (!lines[i].toLowerCase().includes(needle)) continue;
                 const prefix = path ? `${path.replace(/\/$/, "")}/${relative}` : relative;
-                hits.push(`${prefix}:${i + 1}: ${lines[i].trim()}`);
+                const hit = `${prefix}:${i + 1}: ${lines[i].trim()}`;
+                if (seen.has(hit)) continue;
+                seen.add(hit);
+                hits.push(hit);
                 if (hits.length >= MAX_SEARCH_HITS) break;
             }
         }
+        return hits;
+    }
 
-        if (hits.length === 0) return { ok: true, output: `No matches for "${query}"` };
-        return { ok: true, output: hits.join("\n") };
+    try {
+        const needle = query.toLowerCase();
+        const hits = await collectHits(needle);
+        if (hits.length > 0) return { ok: true, output: hits.join("\n") };
+
+        const leaf = needle.slice(needle.lastIndexOf(".") + 1).trim();
+        if (looksDottedPath(needle) && leaf && leaf !== needle) {
+            const leafHits = await collectHits(leaf);
+            if (leafHits.length > 0) {
+                return {
+                    ok: true,
+                    output:
+                        leafHits.join("\n") +
+                        `\n(normalized dotted query "${query}" to leaf "${leaf}")`,
+                };
+            }
+        }
+
+        return { ok: true, output: `No matches for "${query}"` };
     } catch (error) {
         return fail(`searchCode failed: ${String(error)}`);
     }

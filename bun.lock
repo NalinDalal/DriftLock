@@ -23,9 +23,11 @@
       "name": "@driftlock/be",
       "version": "0.1.0",
       "dependencies": {
+        "@driftlock/agent": "workspace:*",
         "@driftlock/core": "workspace:*",
         "@driftlock/db": "workspace:*",
         "@driftlock/pipeline": "workspace:*",
+        "@driftlock/vendorWatch": "workspace:*",
         "simple-git": "^3.23.0",
       },
       "devDependencies": {

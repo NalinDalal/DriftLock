@@ -363,6 +363,7 @@ export default function LandingPage() {
                             <p className="text-[var(--color-ink)]/80">Mocked tests cannot catch drift. DriftLock classifies real versus mocked traffic.</p>
                         </div>
                         <p className="mt-6 border-l-2 border-[var(--color-line-strong)] pl-4 font-mono text-xs leading-4 text-[var(--color-muted)]">I built DriftLock because Prisma 7 broke my app before interviews. What I needed was not a version bump but a code migration. <span className="text-[var(--color-muted)]"> · README</span></p>
+                        <p className="mt-4 font-mono text-xs leading-4 text-[var(--color-muted)]">The numbers behind this are on <Link to="/statistics" className="underline underline-offset-2 hover:text-[var(--color-ink)]">API drift statistics 2026</Link>, and the company behind it is on <Link to="/about" className="underline underline-offset-2 hover:text-[var(--color-ink)]">About DriftLock</Link>.</p>
                     </div>
                 </div>
             </div>

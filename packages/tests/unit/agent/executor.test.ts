@@ -160,6 +160,22 @@ describe("searchCode", () => {
         expect(result.ok).toBe(false);
         expect(result.output).toContain("not a directory");
     });
+
+    test("falls back to the leaf for dotted queries", async () => {
+        const result = await searchCode(root, "data.object.legacy_id");
+        expect(result.ok).toBe(true);
+        expect(result.output).toContain("src/client.ts:1");
+        expect(result.output).toContain(
+            'normalized dotted query "data.object.legacy_id" to leaf "legacy_id"',
+        );
+    });
+
+    test("prefers the full dotted match without a note", async () => {
+        const result = await searchCode(root, "response.legacy_id");
+        expect(result.ok).toBe(true);
+        expect(result.output).toContain("src/client.ts:1");
+        expect(result.output).not.toContain("normalized");
+    });
 });
 
 describe("inspectRepo", () => {

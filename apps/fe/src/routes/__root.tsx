@@ -214,47 +214,86 @@ export default function AppShell() {
             </main>
 
             <footer className="border-t border-[var(--color-line)] bg-[var(--color-paper)]">
-                <div className="mx-auto flex w-full max-w-[1080px] flex-wrap items-center justify-between gap-3 px-6 py-4">
-                    <div className="flex flex-wrap items-center gap-3 text-xs leading-4 text-[var(--color-muted)]">
-                        <span>
-                            DriftLock is a revision bureau. Every drift is a
-                            redline, every fix is a PR. Nothing is merged
-                            without you.
-                        </span>
-                        <Link
-                            to="/about"
-                            className="font-mono text-[11px] tracking-wide text-[var(--color-ink)] underline decoration-[var(--color-line)] underline-offset-2 hover:decoration-[var(--color-ink)]"
-                        >
-                            About
-                        </Link>
-                        <Link
-                            to="/security"
-                            className="font-mono text-[11px] tracking-wide text-[var(--color-ink)] underline decoration-[var(--color-line)] underline-offset-2 hover:decoration-[var(--color-ink)]"
-                        >
-                            Security
-                        </Link>
-                        <Link
-                            to="/privacy"
-                            className="font-mono text-[11px] tracking-wide text-[var(--color-ink)] underline decoration-[var(--color-line)] underline-offset-2 hover:decoration-[var(--color-ink)]"
-                        >
-                            Privacy
-                        </Link>
-                        <Link
-                            to="/terms"
-                            className="font-mono text-[11px] tracking-wide text-[var(--color-ink)] underline decoration-[var(--color-line)] underline-offset-2 hover:decoration-[var(--color-ink)]"
-                        >
-                            Terms
-                        </Link>
-                        <Link
-                            to="/onboarding"
-                            className="font-mono text-[11px] tracking-wide text-[var(--color-ink)] underline decoration-[var(--color-line)] underline-offset-2 hover:decoration-[var(--color-ink)]"
-                        >
-                            Onboarding
-                        </Link>
+                <div className="mx-auto w-full max-w-[1080px] px-6 py-8">
+                    <div className="grid gap-8 sm:grid-cols-[1.2fr_1fr_1fr]">
+                        <div>
+                            <p className="text-xs leading-4 text-[var(--color-muted)]">
+                                DriftLock is a revision bureau. Every drift is a
+                                redline, every fix is a PR. Nothing is merged
+                                without you.
+                            </p>
+                            <p className="mt-3 font-mono text-[11px] tracking-wide text-[var(--color-muted)]">
+                                DEPENDABOT BUT FOR APIS · REV. 01
+                            </p>
+                        </div>
+                        <nav aria-label="Product" className="flex flex-col gap-1">
+                            <p className="font-mono text-[11px] tracking-[0.12em] text-[var(--color-muted)]">PRODUCT</p>
+                            <Link
+                                to="/install"
+                                className="flex min-h-[32px] items-center font-mono text-[12px] tracking-wide text-[var(--color-ink)] hover:underline underline-offset-2"
+                            >
+                                Install GitHub App
+                            </Link>
+                            <Link
+                                to="/webhooks"
+                                className="flex min-h-[32px] items-center font-mono text-[12px] tracking-wide text-[var(--color-ink)] hover:underline underline-offset-2"
+                            >
+                                Webhook Drift Detection
+                            </Link>
+                            <Link
+                                to="/actions"
+                                search={{ repo: undefined }}
+                                className="flex min-h-[32px] items-center font-mono text-[12px] tracking-wide text-[var(--color-ink)] hover:underline underline-offset-2"
+                            >
+                                Run a Fix
+                            </Link>
+                            <Link
+                                to="/accounts"
+                                className="flex min-h-[32px] items-center font-mono text-[12px] tracking-wide text-[var(--color-ink)] hover:underline underline-offset-2"
+                            >
+                                Browse Repositories
+                            </Link>
+                            <Link
+                                to="/statistics"
+                                className="flex min-h-[32px] items-center font-mono text-[12px] tracking-wide text-[var(--color-ink)] hover:underline underline-offset-2"
+                            >
+                                API Drift Statistics 2026
+                            </Link>
+                            <Link
+                                to="/security"
+                                className="flex min-h-[32px] items-center font-mono text-[12px] tracking-wide text-[var(--color-ink)] hover:underline underline-offset-2"
+                            >
+                                Security and Privacy
+                            </Link>
+                        </nav>
+                        <nav aria-label="Company" className="flex flex-col gap-1">
+                            <p className="font-mono text-[11px] tracking-[0.12em] text-[var(--color-muted)]">COMPANY</p>
+                            <Link
+                                to="/about"
+                                className="flex min-h-[32px] items-center font-mono text-[12px] tracking-wide text-[var(--color-ink)] hover:underline underline-offset-2"
+                            >
+                                About DriftLock
+                            </Link>
+                            <Link
+                                to="/onboarding"
+                                className="flex min-h-[32px] items-center font-mono text-[12px] tracking-wide text-[var(--color-ink)] hover:underline underline-offset-2"
+                            >
+                                Onboarding Guide
+                            </Link>
+                            <Link
+                                to="/privacy"
+                                className="flex min-h-[32px] items-center font-mono text-[12px] tracking-wide text-[var(--color-ink)] hover:underline underline-offset-2"
+                            >
+                                Privacy Policy
+                            </Link>
+                            <Link
+                                to="/terms"
+                                className="flex min-h-[32px] items-center font-mono text-[12px] tracking-wide text-[var(--color-ink)] hover:underline underline-offset-2"
+                            >
+                                Terms of Service
+                            </Link>
+                        </nav>
                     </div>
-                    <span className="font-mono text-[11px] tracking-wide text-[var(--color-muted)]">
-                        DEPENDABOT BUT FOR APIS · REV. 01
-                    </span>
                 </div>
             </footer>
 

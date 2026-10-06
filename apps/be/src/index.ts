@@ -33,6 +33,11 @@ import {
 } from "./routes/auth";
 import { handleGitHubSetup } from "./routes/githubSetup";
 import { handleInstallationsSync } from "./routes/installations";
+import { startWatchScheduler } from "./watch";
+
+// Always-on vendor watch loop. No-ops unless WATCH_ENABLED=true; see watch.ts
+// for the interval, vendors, tier gating, and rollback (unset the variable).
+startWatchScheduler();
 
 // Auth routes don't require credentials. /api/health stays public so
 // orchestrators and load balancers can probe without a token.

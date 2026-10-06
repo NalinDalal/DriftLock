@@ -226,6 +226,39 @@ describe("generateAIFix", () => {
         expect(body.temperature).toBe(0.2);
     });
 
+    test("calls a custom OpenAI-compatible endpoint when baseUrl is set", async () => {
+        const request = installFetch(
+            Response.json({
+                choices: [{ message: { content: mockAIResponse } }],
+            }),
+        );
+        const config: AIFixConfig = {
+            provider: "openai",
+            apiKey: "ollama",
+            model: "qwen2.5-coder:7b",
+            baseUrl: "http://127.0.0.1:11434/v1/",
+        };
+
+        const result = await generateAIFix(makeContext(), config);
+        const captured = request();
+
+        expect(result.fixedCode).toContain("payment_method");
+        expect(captured.url).toBe(
+            "http://127.0.0.1:11434/v1/chat/completions",
+        );
+    });
+
+    test("rejects a non-http(s) OpenAI baseUrl", async () => {
+        const config: AIFixConfig = {
+            provider: "openai",
+            apiKey: "x",
+            baseUrl: "ftp://example.com/v1",
+        };
+        await expect(generateAIFix(makeContext(), config)).rejects.toThrow(
+            "must be an http(s) URL",
+        );
+    });
+
     test("calls Gemini without putting the key in the URL", async () => {
         const request = installFetch(
             Response.json({

@@ -21,6 +21,7 @@ interface WebhookConfig {
     aiProvider?: string;
     aiApiKey?: string;
     aiModel?: string;
+    aiBaseUrl?: string;
     cloudflareAccountId?: string;
     forwardUrl?: string;
     confidenceThreshold?: number;
@@ -43,6 +44,8 @@ function logConfigSource(config: WebhookConfig, rowSource: "db" | "env"): void {
         ["repoOwner", "WEBHOOK_OWNER"],
         ["repoName", "WEBHOOK_REPO"],
         ["aiProvider", "AI_PROVIDER"],
+        ["aiModel", "AI_MODEL"],
+        ["aiBaseUrl", "AI_BASE_URL"],
         ["confidenceThreshold", "CONFIDENCE_THRESHOLD"],
     ];
     const parts = fields.map(([key, envKey]) => {
@@ -114,6 +117,7 @@ function getAIConfig(config: WebhookConfig): {
     apiKey: string;
     accountId?: string;
     model?: string;
+    baseUrl?: string;
 } | undefined {
     const provider = getConfigValue(config, "aiProvider", "AI_PROVIDER", "");
     if (!AI_PROVIDERS.has(provider)) {
@@ -149,11 +153,20 @@ function getAIConfig(config: WebhookConfig): {
         return undefined;
     }
 
+    // Custom endpoints only make sense for the OpenAI-compatible path
+    // (local Ollama, proxies); other providers have fixed endpoints.
+    const baseUrl =
+        typedProvider === "openai"
+            ? getConfigValue(config, "aiBaseUrl", "AI_BASE_URL", "") ||
+              undefined
+            : undefined;
+
     return {
         provider: typedProvider,
         apiKey,
         accountId,
         model: model || undefined,
+        baseUrl,
     };
 }
 
@@ -369,6 +382,11 @@ function setupDetectorCallbacks(det: DriftDetector) {
                     vendor: deps.vendor,
                     client: deps.client,
                     model: deps.model,
+                    onEvent: (event) => {
+                        if (event.type === "note") {
+                            console.log(`  [AGENT] ${event.message}`);
+                        }
+                    },
                 });
 
                 if (result.status === "opened") {

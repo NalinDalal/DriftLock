@@ -2,7 +2,13 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runMigrationAgent, type ChangePacket, type CommandRunner } from "@driftlock/agent";
+import {
+    parseTextToolCall,
+    runMigrationAgent,
+    type AgentEvent,
+    type ChangePacket,
+    type CommandRunner,
+} from "@driftlock/agent";
 
 function fakeFailRunner(): CommandRunner {
     return { run: async () => ({ ok: false, output: "fake fail" }) };
@@ -1066,5 +1072,128 @@ describe("runMigrationAgent", () => {
 
         expect(result.receipt.confidence).toBe("low");
         expect(result.receipt.confidenceReasons.join(" ")).toContain("no passing verification");
+    });
+
+    test("recovers a text-written tool call and explains a silent exit", async () => {
+        // Small models without function calling write the call as text.
+        apiCalls = [
+            {
+                choices: [
+                    {
+                        message: {
+                            content:
+                                '{"name": "searchCode", "arguments": {"query": "createCanvas"}}',
+                        },
+                    },
+                ],
+            },
+            finalText("nothing to do"),
+        ];
+
+        const notes: string[] = [];
+        const onEvent = (event: AgentEvent) => {
+            if (event.type === "note") notes.push(event.message);
+        };
+
+        const result = await runMigrationAgent({
+            root,
+            packet,
+            client: fakeClient(),
+            commandRunner: fakeOkRunner(),
+            onEvent,
+        });
+
+        const toolEntry = result.state.transcript.find(
+            (entry) => entry.role === "tool" && entry.toolName === "searchCode",
+        );
+        expect(toolEntry?.content).toContain("src/client.ts");
+        expect(notes.some((m) => m.includes("Recovered searchCode"))).toBe(true);
+        expect(notes.some((m) => m.includes("no tool calls"))).toBe(true);
+        expect(result.state.iteration).toBe(2);
+        expect(result.outcome).toBe("no_action");
+    });
+});
+
+describe("parseTextToolCall", () => {
+    test("recovers a call from clean JSON", () => {
+        const [call] = parseTextToolCall(
+            '{"name": "searchCode", "arguments": {"query": "source"}}',
+        );
+        expect(call.name).toBe("searchCode");
+        expect(call.args).toEqual({ query: "source" });
+        expect(call.id).toBe("text-1");
+    });
+
+    test("recovers nested args from prose", () => {
+        const [call] = parseTextToolCall(
+            'I will search now {"name": "searchCode", "arguments": {"query": "data.object.source", "path": ""}} done',
+        );
+        expect(call.name).toBe("searchCode");
+        expect(call.args).toEqual({ query: "data.object.source", path: "" });
+    });
+
+    test("recovers from a fenced block", () => {
+        const [call] = parseTextToolCall(
+            "```json\n{\"name\": \"readFile\", \"arguments\": {\"path\": \"src/a.ts\"}}\n```",
+        );
+        expect(call.name).toBe("readFile");
+        expect(call.args).toEqual({ path: "src/a.ts" });
+    });
+
+    test("accepts stringified arguments", () => {
+        const [call] = parseTextToolCall(
+            '{"name": "searchCode", "arguments": "{\\"query\\": \\"x\\"}"}',
+        );
+        expect(call.args).toEqual({ query: "x" });
+    });
+
+    test("rejects unknown tool names", () => {
+        expect(
+            parseTextToolCall('{"name": "deleteEverything", "arguments": {}}'),
+        ).toEqual([]);
+    });
+
+    test("returns empty for prose without a call", () => {
+        expect(parseTextToolCall("nothing to do here")).toEqual([]);
+        expect(parseTextToolCall("")).toEqual([]);
+    });
+});
+
+describe("PR honesty guardrails", () => {
+    test("snapshot-only diff with a code-change title is refused", async () => {
+        const { checkSnapshotOnlyTitle } = await import("@driftlock/agent");
+        expect(
+            checkSnapshotOnlyTitle(
+                [".driftlock/snapshots/stripe.json"],
+                "Replace source with payment_method",
+            ),
+        ).toMatch(/snapshot/i);
+    });
+
+    test("snapshot-only diff with an honest title passes the gate", async () => {
+        const { checkSnapshotOnlyTitle } = await import("@driftlock/agent");
+        expect(
+            checkSnapshotOnlyTitle(
+                [".driftlock/snapshots/stripe.json"],
+                "driftlock: update stripe snapshots for payment_intent.succeeded",
+            ),
+        ).toBeNull();
+    });
+
+    test("source edits always pass the gate regardless of title", async () => {
+        const { checkSnapshotOnlyTitle } = await import("@driftlock/agent");
+        expect(
+            checkSnapshotOnlyTitle(["src/payment.ts"], "Replace source with payment_method"),
+        ).toBeNull();
+    });
+
+    test("verified files section lists the actual changed files", async () => {
+        const { withVerifiedFilesSection } = await import("@driftlock/agent");
+        const body = withVerifiedFilesSection("Migrated the handler.", [
+            "src/payment.ts",
+        ]);
+        expect(body).toContain("Migrated the handler.");
+        expect(body).toContain("### Files changed (verified)");
+        expect(body).toContain("- `src/payment.ts`");
     });
 });
