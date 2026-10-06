@@ -85,6 +85,47 @@ describe("fixWorksForDiff", () => {
         expect(works[0].field).toBe("legacy_id");
     });
 
+    test("response rename maps to a field_rename fix with leaf names", () => {
+        const result = diff(
+            { data: { object: { id: "pi_1", source: "tok" } } },
+            { data: { object: { id: "pi_1", payment_method: "pm" } } },
+            { direction: "response" },
+        );
+        const works = fixWorksForDiff(result);
+        expect(works).toHaveLength(1);
+        expect(works[0].kind).toBe("field_rename");
+        expect(works[0].field).toBe("data.object.source");
+        expect(works[0].from).toBe("source");
+        expect(works[0].to).toBe("payment_method");
+    });
+
+    test("response rename fix rewrites member access in code", () => {
+        const result = diff(
+            { data: { object: { id: "pi_1", source: "tok" } } },
+            { data: { object: { id: "pi_1", payment_method: "pm" } } },
+            { direction: "response" },
+        );
+        const works = fixWorksForDiff(result);
+        const fixed = applyFixWork(
+            works[0],
+            "return { chargeFrom: obj.source, cents: obj.amount };",
+        );
+        expect(fixed).toBe(
+            "return { chargeFrom: obj.payment_method, cents: obj.amount };",
+        );
+    });
+
+    test("response rename with mismatched kinds stays a removal", () => {
+        const result = diff(
+            { id: "a", source: "tok" },
+            { id: "a", payment_method: 42 },
+            { direction: "response" },
+        );
+        const works = fixWorksForDiff(result);
+        expect(works.some((w) => w.kind === "field_rename")).toBe(false);
+        expect(works.some((w) => w.kind === "custom")).toBe(true);
+    });
+
     test("non-breaking changes produce no fixes", () => {
         const result = diff({ id: "a" }, { id: "a", fee: 30 });
         expect(result.changes.some((c) => c.breaking)).toBe(false);

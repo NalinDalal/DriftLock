@@ -115,6 +115,53 @@ describe("diffShapes", () => {
             added: ["payment_method"],
         },
         {
+            name: "paired nested response rename is detected as a rename",
+            oldPayload: { data: { object: { id: "pi_1", source: "tok" } } },
+            newPayload: {
+                data: { object: { id: "pi_1", payment_method: "pm" } },
+            },
+            options: { direction: "response" },
+            breaking: [
+                "Renamed field 'data.object.source' to 'data.object.payment_method'",
+            ],
+            removed: [],
+            added: [],
+        },
+        {
+            name: "response rename applies without explicit direction",
+            oldPayload: { amount: 100, source: "tok" },
+            newPayload: { amount: 100, payment_method: "pm" },
+            breaking: ["Renamed field 'source' to 'payment_method'"],
+            removed: [],
+            added: [],
+        },
+        {
+            name: "response rename requires matching kinds",
+            oldPayload: { id: "a", source: "tok" },
+            newPayload: { id: "a", payment_method: 42 },
+            options: { direction: "response" },
+            breaking: ["Removed field 'source'"],
+            removed: ["source"],
+            added: ["payment_method"],
+        },
+        {
+            name: "response rename requires the same parent",
+            oldPayload: { a: { source: "tok" }, b: { x: 1 } },
+            newPayload: { a: {}, b: { x: 1, payment_method: "pm" } },
+            options: { direction: "response" },
+            breaking: ["Removed field 'a.source'"],
+            removed: ["a.source"],
+            added: ["b.payment_method"],
+        },
+        {
+            name: "multiple response pairs are not renames",
+            oldPayload: { a: "x", b: "y" },
+            newPayload: { c: "x", d: "y" },
+            options: { direction: "response" },
+            removed: ["a", "b"],
+            added: ["c", "d"],
+        },
+        {
             name: "present null then absent is a removal, not a null transition",
             oldPayload: { a: null },
             newPayload: {},
@@ -265,6 +312,27 @@ describe("diffShapes metadata", () => {
         const result = diff({ a: null }, { a: "x" });
         expect(result.breakingChanges).toHaveLength(0);
         expect(result.nonBreakingChanges).toContain("Field 'a' is no longer null");
+    });
+
+    test("response rename emits field_renamed and no add/remove entries", () => {
+        const result = diff(
+            { data: { object: { id: "pi_1", source: "tok" } } },
+            { data: { object: { id: "pi_1", payment_method: "pm" } } },
+            { direction: "response" },
+        );
+        expect(
+            result.changes.filter((c) => c.kind === "field_renamed"),
+        ).toEqual([
+            {
+                kind: "field_renamed",
+                field: "data.object.source",
+                from: "source",
+                to: "payment_method",
+                breaking: true,
+            },
+        ]);
+        expect(result.removedFields).toEqual([]);
+        expect(result.addedFields).toEqual([]);
     });
 
     test("node path for nullable with null value is inferred", () => {
