@@ -86,6 +86,28 @@ export function contentMatchesWorks(content: string, works: FixWork[]): boolean 
     return false;
 }
 
+/**
+ * Branch per endpoint + event + change signature. The old per-endpoint
+ * branch meant rapid successive drifts force-pushed over each other, so
+ * fix N clobbered fix N-1. Same change re-detected still maps to the same
+ * branch (already_open dedupe preserved); a different change gets its own
+ * branch and composes. Stays within bot branch charset and length limits.
+ */
+export function branchForAlert(alert: DriftAlert): string {
+    const endpoint = alert.endpointId.slice(0, 8).replace(/[^A-Za-z0-9]/g, "");
+    const event = alert.eventType.replace(/[^A-Za-z0-9]+/g, "-").slice(0, 32).replace(/^-+|-+$/g, "");
+    const sig = [
+        ...alert.diff.added,
+        ...alert.diff.removed,
+        ...alert.diff.typeChanged.map((c) => `${c.field}:${c.from}->${c.to}`),
+    ].sort().join("|");
+    let hash = 0;
+    for (let i = 0; i < sig.length; i++) {
+        hash = (hash * 31 + sig.charCodeAt(i)) >>> 0;
+    }
+    return `driftlock/webhook-${endpoint}-${event}-${hash.toString(16).padStart(8, "0")}`;
+}
+
 function scanForAffectedFiles(
     repoPath: string,
     works: FixWork[],
@@ -172,7 +194,7 @@ export async function createWebhookFixPR(
         return { status: "no_fixable_files", filesChanged: [] };
     }
 
-    const branch = `driftlock/webhook-fix-${input.alert.endpointId.slice(0, 8)}`;
+    const branch = branchForAlert(input.alert);
     const title = buildWebhookPRTitle(input.alert, works);
     const body = buildWebhookPRBody(input.alert, works, files);
     const commitMessage = `driftlock: fix webhook schema drift for ${input.alert.eventType}`;

@@ -393,7 +393,7 @@ function setupDetectorCallbacks(det: DriftDetector) {
                     console.log(`  [PR] Created: ${result.url}`);
                     await store.markDrift(driftRowId, "pr_opened");
                 } else if (result.status === "already_open") {
-                    console.log(`  [PR] Already open: ${result.url}`);
+                    console.log(`  [PR] Already open: ${result.url ?? result.branch}`);
                     await store.markDrift(driftRowId, "pr_opened");
                 } else {
                     console.log(`  [PR] ${result.status} (outcome: ${result.outcome})`);
