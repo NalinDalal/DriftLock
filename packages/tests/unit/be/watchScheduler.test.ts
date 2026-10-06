@@ -163,8 +163,7 @@ describe("runWatchTick", () => {
         expect(result.migrations.map((m) => m.repo)).toEqual(["a/one", "a/two"]);
     });
 
-    test("concurrency bounds parallel migrations and one failure never aborts the batch", async () => {
-        const change = {
+    test("concurrency bounds parallel migrations and one failure never aborts the batch", async () => {        const change = {
             provider: "stripe",
             fromVersion: "v1",
             toVersion: "v2",
@@ -198,6 +197,69 @@ describe("runWatchTick", () => {
         });
         expect(peak).toBeLessThanOrEqual(2);
         expect(result.migrations).toHaveLength(3);
+    });
+
+    test("each repo migration is recorded with outcome and PR url", async () => {
+        const change = {
+            provider: "stripe",
+            fromVersion: "v1",
+            toVersion: "v2",
+            removed: ["source"],
+            added: ["payment_method"],
+            contract: { provider: "stripe" },
+            note: "staged",
+        };
+        const records: Array<{ repo: string; outcome: string; prUrl?: string; ok: boolean }> = [];
+        await runWatchTick(baseConfig(), {
+            poll: (async () => change) as never,
+            listWatchedRepos: async () => [{ owner: "a", name: "one", base: "main" }],
+            clone: (async () => ({ path: "/tmp/one", cleanup: async () => {} })) as never,
+            migrate: (async () => ({
+                outcome: "migrated",
+                filesChanged: ["src/payment.ts"],
+                state: { pullRequest: { url: "https://pr/1", number: 1, branch: "b" } },
+            })) as never,
+            recordTick: (async (repo, entry) => {
+                records.push({ repo: `${repo.owner}/${repo.name}`, outcome: entry.outcome, prUrl: entry.prUrl, ok: entry.ok });
+            }) as never,
+        });
+        expect(records).toEqual([{ repo: "a/one", outcome: "migrated", prUrl: "https://pr/1", ok: true }]);
+    });
+
+    test("a failed repo migration is recorded as failed and the batch continues", async () => {
+        const change = {
+            provider: "stripe",
+            fromVersion: "v1",
+            toVersion: "v2",
+            removed: ["source"],
+            added: [],
+            contract: { provider: "stripe" },
+            note: "staged",
+        };
+        const records: Array<{ repo: string; ok: boolean }> = [];
+        const result = await runWatchTick(baseConfig(), {
+            poll: (async () => change) as never,
+            listWatchedRepos: async () => [
+                { owner: "a", name: "bad", base: "main" },
+                { owner: "a", name: "good", base: "main" },
+            ],
+            clone: (async (_o: string, name: string) => ({
+                path: `/tmp/${name}`,
+                cleanup: async () => {},
+            })) as never,
+            migrate: (async (_v: unknown, _c: unknown, opts: { root: string }) => {
+                if (opts.root.endsWith("/bad")) throw new Error("boom");
+                return { outcome: "no_action", filesChanged: [], state: {} };
+            }) as never,
+            recordTick: (async (repo, entry) => {
+                records.push({ repo: repo.name, ok: entry.ok });
+            }) as never,
+        });
+        expect(records).toEqual([
+            { repo: "bad", ok: false },
+            { repo: "good", ok: true },
+        ]);
+        expect(result.migrations).toHaveLength(1);
     });
 });
 

@@ -76,12 +76,22 @@ export interface WatchedRepo {
     base: string;
 }
 
+export interface TickRecord {
+    vendor: string;
+    outcome: string;
+    prUrl?: string;
+    ok: boolean;
+    note?: string;
+}
+
 export interface WatchTickDeps {
     poll?: typeof checkVendor;
     listWatchedRepos?: () => Promise<WatchedRepo[]>;
     migrate?: typeof runVendorTriggeredMigration;
     makePublisher?: (token: string) => PullRequestPublisher;
     clone?: typeof cloneRepo;
+    /** Persisted per repo per change. Defaults to the runs table; stub in tests. */
+    recordTick?: (repo: WatchedRepo, entry: TickRecord) => Promise<void>;
 }
 
 export interface WatchTickResult {
@@ -108,6 +118,37 @@ async function defaultListWatchedRepos(): Promise<WatchedRepo[]> {
 }
 
 /**
+ * Default tick recorder: one finished run per repo per vendor change, so
+ * time-to-merge is measurable from the runs table instead of scattered
+ * logs. Failures recording the record must never fail the tick.
+ */
+async function defaultRecordTick(repo: WatchedRepo, entry: TickRecord): Promise<void> {
+    try {
+        const store = getStore();
+        const repository = await store.ensureRepository({
+            owner: repo.owner,
+            name: repo.name,
+            fullName: `${repo.owner}/${repo.name}`,
+        });
+        const run = await store.recordRun({ repositoryId: repository.id, status: "running" });
+        await store.finishRun({
+            id: run.id,
+            status: entry.ok ? "succeeded" : "failed",
+            exitCode: entry.ok ? 0 : 1,
+            notes:
+                `watch ${entry.vendor}: ${entry.outcome}` +
+                (entry.prUrl ? ` ${entry.prUrl}` : "") +
+                (entry.note ? ` (${entry.note})` : ""),
+        });
+    } catch (error) {
+        console.error(
+            `[WATCH] tick record failed for ${repo.owner}/${repo.name}:`,
+            (error as Error).message,
+        );
+    }
+}
+
+/**
  * One scheduler pass: poll each vendor spec, and on a breaking change run
  * the migration agent against every watched repo. Seams are injectable so
  * tests prove the loop without network, models, or git.
@@ -121,6 +162,7 @@ export async function runWatchTick(
     const migrate = deps.migrate ?? runVendorTriggeredMigration;
     const makePublisher = deps.makePublisher ?? createGitHubPublisher;
     const clone = deps.clone ?? cloneRepo;
+    const recordTick = deps.recordTick ?? defaultRecordTick;
     const result: WatchTickResult = {
         vendorsChecked: [],
         breakingVendors: [],
@@ -198,6 +240,22 @@ export async function runWatchTick(
                         ? { prUrl: migration.state.pullRequest.url }
                         : {}),
                 });
+                await recordTick(repo, {
+                    vendor: vendor.name,
+                    outcome: migration.outcome,
+                    ok: true,
+                    ...(migration.state.pullRequest
+                        ? { prUrl: migration.state.pullRequest.url }
+                        : {}),
+                });
+            } catch (error) {
+                await recordTick(repo, {
+                    vendor: vendor.name,
+                    outcome: "error",
+                    ok: false,
+                    note: (error as Error)?.message ?? String(error),
+                });
+                throw error;
             } finally {
                 await cleanup();
             }
