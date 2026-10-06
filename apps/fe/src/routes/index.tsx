@@ -441,6 +441,31 @@ export default function LandingPage() {
                 </div>
             </div>
 
+            <div className="reveal mx-auto max-w-[1080px] px-6 py-10 sm:py-14">
+                <div className="mx-auto max-w-[720px]">
+                    <h2 className="heading-section text-[var(--color-ink)]">Questions teams ask before installing</h2>
+                    <div className="mt-8 space-y-6">
+                        <div>
+                            <h3 className="font-mono text-xs font-semibold tracking-[0.08em] text-[var(--color-ink)]">DO I HAVE TO MERGE EVERY PR?</h3>
+                            <p className="mt-1 font-mono text-xs leading-5 text-[var(--color-ink)]/80">No. Every change is a PR. Nothing is merged without you. Preview first with driftlock fix --dry-run.</p>
+                        </div>
+                        <div>
+                            <h3 className="font-mono text-xs font-semibold tracking-[0.08em] text-[var(--color-ink)]">HOW IS THIS DIFFERENT FROM RENOVATE?</h3>
+                            <p className="mt-1 font-mono text-xs leading-5 text-[var(--color-ink)]/80">Renovate bumps the version in package.json. DriftLock migrates the code at the call site, for example source to payment_method.</p>
+                        </div>
+                        <div>
+                            <h3 className="font-mono text-xs font-semibold tracking-[0.08em] text-[var(--color-ink)]">WHAT DOES IT COST?</h3>
+                            <p className="mt-1 font-mono text-xs leading-5 text-[var(--color-ink)]/80">Free in beta. Install the GitHub App, select repos, review PRs.</p>
+                        </div>
+                        <div>
+                            <h3 className="font-mono text-xs font-semibold tracking-[0.08em] text-[var(--color-ink)]">WHAT STACK IS SUPPORTED?</h3>
+                            <p className="mt-1 font-mono text-xs leading-5 text-[var(--color-ink)]/80">TypeScript and JavaScript, Stripe first. Twilio and Shopify are on the roadmap.</p>
+                        </div>
+                    </div>
+                    <p className="mt-6 font-mono text-xs leading-4 text-[var(--color-muted)]">More detail on <Link to="/features" className="underline underline-offset-2 hover:text-[var(--color-ink)]">Features</Link>, setup on <Link to="/docs" className="underline underline-offset-2 hover:text-[var(--color-ink)]">Docs</Link>.</p>
+                </div>
+            </div>
+
             <div className="border-t border-[var(--color-line-strong)] bg-[var(--color-surface)]">
                 <div className="mx-auto max-w-[1080px] px-6 py-10 text-center">
                     <h2 className="heading-section text-[var(--color-ink)]">Stay current without the migration tax.</h2>

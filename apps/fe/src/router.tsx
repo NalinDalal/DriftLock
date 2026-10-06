@@ -22,6 +22,10 @@ const PrivacyPage = lazyRouteComponent(() => import("./routes/privacy"), "defaul
 const TermsPage = lazyRouteComponent(() => import("./routes/terms"), "default");
 const OnboardingPage = lazyRouteComponent(() => import("./routes/onboarding"), "default");
 const ActionsPage = lazyRouteComponent(() => import("./routes/actions"), "default");
+const FeaturesPage = lazyRouteComponent(() => import("./routes/features"), "default");
+const DocsPage = lazyRouteComponent(() => import("./routes/docs"), "default");
+const ContactPage = lazyRouteComponent(() => import("./routes/contact"), "default");
+const NotFoundRoutePage = lazyRouteComponent(() => import("./routes/404"), "default");
 
 const rootRoute = createRootRoute({ component: AppShell, notFoundComponent: NotFoundPage });
 
@@ -144,6 +148,30 @@ const actionsRoute = createRoute({
     component: ActionsPage,
 });
 
+const featuresRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/features",
+    component: FeaturesPage,
+});
+
+const docsRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/docs",
+    component: DocsPage,
+});
+
+const contactRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/contact",
+    component: ContactPage,
+});
+
+const notFoundExplicitRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/404",
+    component: NotFoundRoutePage,
+});
+
 const routeTree = rootRoute.addChildren([
     indexRoute,
     accountsRoute,
@@ -163,6 +191,10 @@ const routeTree = rootRoute.addChildren([
     termsRoute,
     onboardingRoute,
     actionsRoute,
+    featuresRoute,
+    docsRoute,
+    contactRoute,
+    notFoundExplicitRoute,
 ]);
 
 export const router = createRouter({ routeTree });
