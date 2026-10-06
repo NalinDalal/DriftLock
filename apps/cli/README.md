@@ -146,20 +146,23 @@ Snapshots live in `<repo>/.driftlock/snapshots/`. They are ordinary files: commi
 
 ## Publishing (maintainers)
 
-The published package ships a single bundled file, because the ten `@driftlock/*` workspace dependencies are not on npm. `prepublishOnly` rebuilds the bundle, so publishing is:
+The published package ships a single bundled file, because the ten `@driftlock/*` workspace dependencies are not on npm. Two things cannot be bundled and are handled explicitly:
+
+- Native modules (`tree-sitter` grammars) stay external: they install from the registry on the target machine, built for its platform. Bundling them breaks (the parser crashes at startup).
+- `cpu-features` stays external: it is absent on some runners and `ssh2` tolerates that via try/catch.
+
+`prepublishOnly` runs the build plus `scripts/prepare-publish.ts`, which writes a publishable `dist/package.json` (bundled code + the three native registry deps, no `workspace:*` ranges). You publish the `dist` directory itself:
 
 ```bash
 cd apps/cli
 npm login
-npm publish --access public
+bun run build
+bun scripts/prepare-publish.ts
+npm pack ./dist            # inspect: index.js + package.json only
+# offline proof: install the tarball in an empty dir, then run the bin
+npm install --prefix /tmp/pkgtest ./driftlock-cli-0.1.0.tgz
+/tmp/pkgtest/node_modules/.bin/driftlock analyze ./some/repo
+npm publish ./dist --access public
 ```
 
-Before that, sanity-check what ships without credentials:
-
-```bash
-bun run build --filter=@driftlock/cli   # from repo root; writes apps/cli/dist/ (gitignored)
-npm pack --dry-run                      # expect dist/index.js + .node asset only
-./dist/index.js --help                   # smoke-test the bundle
-```
-
-Release flow: bump `version` in `apps/cli/package.json`, run the checks above, `npm publish --access public`, then tag `cli-vX.Y.Z` so the Change (`templates/driftlock.yml` pins `bunx @driftlock/cli`, which resolves `latest`). Verify on a clean machine with `bunx @driftlock/cli --help`. Never re-add `"private": true` (npm refuses to publish it) and never point `bin` back at TypeScript source (runners have no workspace to resolve it from).
+Release flow: bump `version` in `apps/cli/package.json`, run the checks above, publish, then tag `cli-vX.Y.Z` (`templates/driftlock.yml` pins `bunx @driftlock/cli`, which resolves `latest`). Verify on a clean machine with `bunx @driftlock/cli --help`. Never re-add `"private": true` (npm refuses to publish it), never point `bin` back at TypeScript source (runners have no workspace to resolve it from), and never remove a `--external` flag without re-running the tarball proof (the last removal crashed the parser).
