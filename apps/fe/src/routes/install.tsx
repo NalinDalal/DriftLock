@@ -284,7 +284,14 @@ export default function InstallPage() {
                 </h1>
                 <p className="mt-1 font-mono text-xs leading-4 text-[var(--color-muted)]">
                     Select where DriftLock should scan for API call sites and
-                    open fix PRs.
+                    open fix PRs.{" "}
+                    <a
+                        href="/security"
+                        className="underline underline-offset-2 hover:text-[var(--color-ink)]"
+                    >
+                        How we handle your code
+                    </a>
+                    : no training, ephemeral clones, nothing merged without you.
                 </p>
             </div>
 

@@ -140,7 +140,7 @@ export default function SecurityPage() {
                 <li>Logs redact tokens and PII. Raw payloads are never logged.</li>
             </ul>
 
-            <h2 className="mt-12 border-t border-[var(--color-line-strong)] pt-6 heading-section text-[var(--color-ink)]">Subprocessors</h2>
+            <h2 className="mt-12 border-t border-[var(--color-line-strong)] pt-6 heading-section text-[var(--color-ink)]">Subprocessors And DPA</h2>
             <div className="mt-4 overflow-x-auto border border-[var(--color-line-strong)]">
                 <table className="w-full border-collapse font-mono text-xs">
                     <tbody className="divide-y divide-[var(--color-line)]">
@@ -150,6 +150,9 @@ export default function SecurityPage() {
                     </tbody>
                 </table>
             </div>
+            <p className="mt-3 max-w-[65ch] text-sm leading-5 text-[var(--color-ink)]/80">
+                DPA available on request: <a href="mailto:nalin@nerdev.in?subject=DPA%20request%20for%20DriftLock" className="underline underline-offset-2 hover:text-[var(--color-ink)]">nalin@nerdev.in</a>. No SOC 2 yet. Controls above are in place and an audit is planned after beta.
+            </p>
 
             <h2 className="mt-12 border-t border-[var(--color-line-strong)] pt-6 heading-section text-[var(--color-ink)]">Frequently Asked Questions</h2>
             <div className="mt-6 space-y-6">

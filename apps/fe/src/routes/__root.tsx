@@ -234,6 +234,18 @@ export default function AppShell() {
                             Security
                         </Link>
                         <Link
+                            to="/privacy"
+                            className="font-mono text-[11px] tracking-wide text-[var(--color-ink)] underline decoration-[var(--color-line)] underline-offset-2 hover:decoration-[var(--color-ink)]"
+                        >
+                            Privacy
+                        </Link>
+                        <Link
+                            to="/terms"
+                            className="font-mono text-[11px] tracking-wide text-[var(--color-ink)] underline decoration-[var(--color-line)] underline-offset-2 hover:decoration-[var(--color-ink)]"
+                        >
+                            Terms
+                        </Link>
+                        <Link
                             to="/onboarding"
                             className="font-mono text-[11px] tracking-wide text-[var(--color-ink)] underline decoration-[var(--color-line)] underline-offset-2 hover:decoration-[var(--color-ink)]"
                         >

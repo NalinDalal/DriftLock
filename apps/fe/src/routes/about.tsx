@@ -135,7 +135,11 @@ export default function AboutPage() {
                 DriftLock scans your codebase for API call sites, captures vendor traffic to build shape snapshots, diffs new payloads against the baseline, and creates a PR with a deterministic fix. It supports both outbound drift for APIs you call and inbound drift for webhooks you receive. The first vendor is Stripe, with Twilio and Shopify on the roadmap.
             </p>
             <p className="mt-3 max-w-[65ch] text-[14px] leading-6 text-[var(--color-muted)]">
-                The product is built for teams that maintain Stripe integrations in TypeScript and JavaScript codebases and want to stay current without hand editing every call site.
+                The product is built for teams that maintain Stripe integrations in TypeScript and JavaScript codebases and want to stay current without hand editing every call site. Security and privacy are at{" "}
+                <Link to="/security" className="underline underline-offset-2 hover:text-[var(--color-ink)]">
+                    /security
+                </Link>
+                : no training on your code, minimal retention, nothing merged without you.
             </p>
 
             {/* Section 2: Core Services */}

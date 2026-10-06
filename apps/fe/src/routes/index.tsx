@@ -448,7 +448,7 @@ export default function LandingPage() {
                         <Link to="/install" className="bg-[var(--color-ink)] px-6 py-2.5 font-mono text-xs tracking-wide text-[var(--color-paper)] hover:bg-[var(--color-ink)]/90 active:scale-[0.98] transition-[transform,background]">INSTALL GITHUB APP</Link>
                         <Link to="/accounts" className="border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-6 py-2.5 font-mono text-xs tracking-wide text-[var(--color-ink)] hover:bg-[var(--color-paper)] active:scale-[0.98] transition-[transform,background]">VIEW DASHBOARD</Link>
                     </div>
-                    <p className="mt-4 font-mono text-[11px] tracking-wide text-[var(--color-muted)]">Free in beta · Self-host webhook capture · No code merged without you</p>
+                    <p className="mt-4 font-mono text-[11px] tracking-wide text-[var(--color-muted)]">Free in beta · Self-host webhook capture · No code merged without you · <Link to="/security" className="underline underline-offset-2 hover:text-[var(--color-ink)]">No training. No retention.</Link></p>
                 </div>
             </div>
         </div>
