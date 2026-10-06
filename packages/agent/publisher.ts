@@ -31,6 +31,16 @@ export type PullRequestInfo = {
 
 export interface PullRequestPublisher {
     publish(input: PublishInput): Promise<PullRequestInfo>;
+    /**
+     * Post a follow-up comment on an opened PR (e.g. the automated review).
+     * Optional so stub publishers in tests can ignore it. Callers must
+     * treat comment failure as non-fatal: the PR already exists.
+     */
+    comment?(input: {
+        target: PullRequestTarget;
+        number: number;
+        body: string;
+    }): Promise<void>;
 }
 
 export const BRANCH_PREFIX = "driftlock/";
@@ -76,6 +86,14 @@ export function createGitHubPublisher(
                 number: result.number,
                 branch: result.branch,
             };
+        },
+        comment: async (input) => {
+            await runner.comment({
+                owner: input.target.owner,
+                repo: input.target.repo,
+                number: input.number,
+                body: input.body,
+            });
         },
     };
 }

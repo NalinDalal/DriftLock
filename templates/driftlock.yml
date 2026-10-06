@@ -7,10 +7,12 @@
 #        DRIFTLOCK_AI_KEY  = <your model key>     (optional: model fixes instead of deterministic)
 #   3. Save this file as .github/workflows/driftlock.yml and push.
 #
-# WHAT IT DOES (every push + PR to __BRANCH__):
+# WHAT IT DOES (on schedule, every push/PR to __BRANCH__, or manual dispatch):
 #   1. Scans the checkout for vendor API call sites (Stripe today).
 #   2. Runs your test suite in an isolated sandbox and captures API traffic.
 #   3. Diffs captured shapes against the committed baseline to detect drift.
+#     First run only records the baseline and commits it back, so the next
+#     scheduled run has something to compare against.
 #   4. Opens a GitHub PR with the fix. Nothing merges without your review.
 #   5. Reports the run to DriftLock Cloud for metering and your dashboard.
 #
@@ -23,10 +25,15 @@
 name: DriftLock
 
 on:
+  # The agent loop: poll on a schedule so vendor changes are found without
+  # a human pushing code. Tune the cron to your risk appetite.
+  schedule:
+    - cron: "0 */6 * * *"
   push:
     branches: [__BRANCH__]
   pull_request:
     branches: [__BRANCH__]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -49,7 +56,16 @@ jobs:
           # AI_API_KEY: ${{ secrets.DRIFTLOCK_AI_KEY }}
           # AI_MODEL: gpt-4o-mini            # optional: fix model (GEMINI_MODEL for gemini)
         run: |
-          bunx @driftlock/cli fix . --repo __OWNER__/__REPO__ --command "bun test" --json 2>/dev/null \
+          # pipefail: a failed CLI (bad install, crashed sandbox) must fail
+          # the step. Without it the pipe exits 0 via tail, the summary
+          # falls back to zeros, and the cloud records a healthy quiet run.
+          set -o pipefail
+          # Baselines commit back only on trusted runs (schedule, push to the
+          # base branch, manual dispatch). On pull_request runs the token is
+          # read-only and there is nothing durable to persist, so skip it.
+          FLAGS="--commit-baselines"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then FLAGS=""; fi
+          bunx @driftlock/cli fix . --repo __OWNER__/__REPO__ --command "bun test" $FLAGS --json 2>/dev/null \
             | tail -n 1 > driftlock-summary.json
           cat driftlock-summary.json
 

@@ -16,6 +16,12 @@ export interface AIFixConfig {
     accountId?: string;
     model?: string;
     maxTokens?: number;
+    /**
+     * Override the OpenAI-compatible endpoint (e.g. a local Ollama at
+     * http://127.0.0.1:11434/v1). Only honored for `provider: "openai"`;
+     * other providers have fixed endpoints.
+     */
+    baseUrl?: string;
 }
 
 const SYSTEM_PROMPT =
@@ -118,8 +124,17 @@ async function callOpenAI(
 ): Promise<string> {
     const model = config.model || "gpt-4o";
     const maxTokens = config.maxTokens || 4096;
+    const base = (config.baseUrl || "https://api.openai.com/v1").replace(
+        /\/+$/,
+        "",
+    );
+    if (!/^https?:\/\//.test(base)) {
+        throw new Error(
+            "OpenAI baseUrl must be an http(s) URL such as http://127.0.0.1:11434/v1",
+        );
+    }
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch(`${base}/chat/completions`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",

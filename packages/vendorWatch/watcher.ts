@@ -2,9 +2,15 @@ import type { VendorConfig } from "@driftlock/core";
 import {
     diffContracts,
     resolveVendorContract,
+    type RepoFacts,
     type VendorContract,
 } from "@driftlock/agent";
 import type { VendorBaselineStore } from "./baselineStore";
+import {
+    checkVendorPackageDrift,
+    type PackageDrift,
+    type RegistryOptions,
+} from "./registry";
 
 export interface VendorChange {
     provider: string;
@@ -16,6 +22,13 @@ export interface VendorChange {
     added: string[];
     contract: VendorContract;
     note: string;
+    /**
+     * Advisory pinned-vs-latest signal for the vendor's SDK. Present only
+     * when the caller supplied `registry.facts`; never triggers a migration
+     * on its own. A registry failure resolves to null rather than failing
+     * the poll: the spec diff is the trigger, this is context.
+     */
+    registryDrift?: PackageDrift | null;
 }
 
 export interface CheckOptions {
@@ -28,6 +41,14 @@ export interface CheckOptions {
         vendor: VendorConfig,
         version: string,
     ) => Promise<{ contract: VendorContract; note: string }>;
+    /**
+     * Optional registry backstop: fingerprint facts of the customer repo so
+     * the change also reports whether the SDK pin lags the registry.
+     */
+    registry?: {
+        facts: RepoFacts;
+        fetch?: RegistryOptions;
+    };
 }
 
 /**
@@ -67,6 +88,22 @@ export async function checkVendor(
     await store.save(current);
 
     if (removed.length === 0) return null;
+
+    // Registry check runs only when removals require processing: quiet
+    // polls skip the extra network call entirely.
+    let registryDrift: PackageDrift | null = null;
+    if (options.registry) {
+        try {
+            registryDrift = await checkVendorPackageDrift(
+                options.registry.facts,
+                vendor,
+                options.registry.fetch,
+            );
+        } catch {
+            registryDrift = null;
+        }
+    }
+
     return {
         provider: vendor.name,
         fromVersion: baseline.version,
@@ -75,5 +112,6 @@ export async function checkVendor(
         added,
         contract: current,
         note,
+        ...(options.registry ? { registryDrift } : {}),
     };
 }

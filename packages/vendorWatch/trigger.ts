@@ -3,6 +3,8 @@ import {
     changePacketFromDrift,
     createSandboxCommandRunner,
     runMigrationAgent,
+    type AgentTier,
+    type ModelProvider,
     type ObservedDrift,
     type RunResult,
 } from "@driftlock/agent";
@@ -13,8 +15,18 @@ export interface TriggerOptions {
     root: string;
     /** Docs links to attach to the packet. */
     docs?: string[];
+    /** Subscription tier. Free hides createPullRequest; defaults to pro. */
+    tier?: AgentTier;
     /** Model the agent runs with. Defaults to the agent default. */
     model?: string;
+    /** Model provider. Defaults to OpenAI wire protocol; "anthropic" uses tool_use blocks. */
+    modelProvider?: ModelProvider;
+    /** Key for the selected provider. Falls back to its env var. */
+    providerApiKey?: string;
+    /** Base URL override for the selected provider. */
+    providerBaseURL?: string;
+    anthropicApiKey?: string;
+    anthropicBaseURL?: string;
     /** API key when no `client` is supplied. */
     apiKey?: string;
     baseURL?: string;
@@ -69,18 +81,29 @@ export async function runVendorTriggeredMigration(
     const packet = changePacketFromDrift(
         observedDriftFromChange(change, options.docs),
     );
+    // Registry drift is advisory, never a trigger: the spec diff proved the
+    // breakage, this tells the model whether the pin also lags the registry.
+    const summary = change.registryDrift?.drift
+        ? `${packet.summary} Registry signal: ${change.registryDrift.note}.`
+        : packet.summary;
     return runMigrationAgent({
         root: options.root,
+        ...(options.tier ? { tier: options.tier } : {}),
         packet: {
             provider: packet.provider,
             fromVersion: packet.fromVersion,
             toVersion: packet.toVersion,
-            summary: packet.summary,
+            summary,
             migrationDocs: packet.migrationDocs,
         },
         contract: change.contract,
         vendor,
         ...(options.model ? { model: options.model } : {}),
+        ...(options.modelProvider ? { provider: options.modelProvider } : {}),
+        ...(options.providerApiKey ? { providerApiKey: options.providerApiKey } : {}),
+        ...(options.providerBaseURL ? { providerBaseURL: options.providerBaseURL } : {}),
+        ...(options.anthropicApiKey ? { anthropicApiKey: options.anthropicApiKey } : {}),
+        ...(options.anthropicBaseURL ? { anthropicBaseURL: options.anthropicBaseURL } : {}),
         ...(options.apiKey ? { apiKey: options.apiKey } : {}),
         ...(options.baseURL ? { baseURL: options.baseURL } : {}),
         ...(options.client ? { client: options.client } : {}),

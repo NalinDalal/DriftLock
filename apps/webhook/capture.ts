@@ -2,6 +2,7 @@ import { InMemorySchemaStore, DbSchemaStore, DriftDetector, createWebhookFixPR, 
 import type { DriftAlert, RollbackAlert, SchemaStore, SchemaSnapshot, FlatSchema } from "@driftlock/webhookCapture";
 import { getDb } from "@driftlock/db";
 import { settings } from "@driftlock/db/schema";
+import { eq } from "drizzle-orm";
 
 function json(data: unknown, status = 200): Response {
     return new Response(JSON.stringify(data, null, 2), {
@@ -20,6 +21,7 @@ interface WebhookConfig {
     aiProvider?: string;
     aiApiKey?: string;
     aiModel?: string;
+    aiBaseUrl?: string;
     cloudflareAccountId?: string;
     forwardUrl?: string;
     confidenceThreshold?: number;
@@ -30,6 +32,38 @@ let cachedConfig: WebhookConfig | null = null;
 let configLastLoaded = 0;
 const CONFIG_TTL_MS = 30_000;
 
+/**
+ * Log where each effective config value comes from. DB rows override env,
+ * so a stale dashboard-saved row silently wins over freshly exported
+ * variables — this line makes that visible on every (re)load.
+ */
+function logConfigSource(config: WebhookConfig, rowSource: "db" | "env"): void {
+    const fields: Array<[keyof WebhookConfig, string]> = [
+        ["githubToken", "GITHUB_TOKEN"],
+        ["repoPath", "WEBHOOK_REPO_PATH"],
+        ["repoOwner", "WEBHOOK_OWNER"],
+        ["repoName", "WEBHOOK_REPO"],
+        ["aiProvider", "AI_PROVIDER"],
+        ["aiModel", "AI_MODEL"],
+        ["aiBaseUrl", "AI_BASE_URL"],
+        ["confidenceThreshold", "CONFIDENCE_THRESHOLD"],
+    ];
+    const parts = fields.map(([key, envKey]) => {
+        const fromDb =
+            config[key] !== undefined && config[key] !== "" && rowSource === "db";
+        const raw = fromDb
+            ? config[key]
+            : (process.env[envKey] as string | undefined);
+        // Secrets, keys, tokens, and URLs (which can carry credentials or
+        // sensitive query params) log as presence only, never raw values.
+        const sensitive =
+            /token|secret|key|url/i.test(key) || /token|secret|key|url/i.test(envKey);
+        const shown = sensitive ? (raw ? "set" : "missing") : (raw ?? "missing");
+        return `${key}=${shown}(${fromDb ? "db" : "env"})`;
+    });
+    console.log(`[CONFIG] Loaded [row=${rowSource}]: ${parts.join(", ")}`);
+}
+
 async function loadConfig(): Promise<WebhookConfig> {
     const now = Date.now();
     if (cachedConfig && now - configLastLoaded < CONFIG_TTL_MS) {
@@ -38,24 +72,26 @@ async function loadConfig(): Promise<WebhookConfig> {
 
     try {
         const db = getDb();
+        // Query the row directly: a bounded LIMIT scan silently misses
+        // webhookConfig once unrelated rows (e.g. dashboard sessions)
+        // outnumber the limit, falling back to env without a word.
         const rows = await db
             .select()
             .from(settings)
-            .limit(5);
+            .where(eq(settings.key, "webhookConfig"))
+            .limit(1);
 
-        console.log(`[CONFIG] All settings keys: ${rows.map(r => r.key).join(", ")}`);
-
-        const webhookRow = rows.find(r => r.key === "webhookConfig");
+        const webhookRow = rows[0];
         if (webhookRow) {
             cachedConfig = webhookRow.value as WebhookConfig;
-            console.log(`[CONFIG] Loaded: githubToken=${cachedConfig.githubToken ? "set" : "missing"}, repoPath=${cachedConfig.repoPath || "missing"}, repoOwner=${cachedConfig.repoOwner || "missing"}, repoName=${cachedConfig.repoName || "missing"}`);
+            logConfigSource(cachedConfig, "db");
         } else {
             cachedConfig = {};
-            console.log("[CONFIG] No webhookConfig found");
+            logConfigSource(cachedConfig, "env");
         }
     } catch (e) {
         cachedConfig = {};
-        console.log("[CONFIG] DB error:", e);
+        console.log("[CONFIG] DB error, using env only:", e);
     }
 
     configLastLoaded = now;
@@ -80,6 +116,7 @@ function getAIConfig(config: WebhookConfig): {
     apiKey: string;
     accountId?: string;
     model?: string;
+    baseUrl?: string;
 } | undefined {
     const provider = getConfigValue(config, "aiProvider", "AI_PROVIDER", "");
     if (!AI_PROVIDERS.has(provider)) {
@@ -115,11 +152,20 @@ function getAIConfig(config: WebhookConfig): {
         return undefined;
     }
 
+    // Custom endpoints only make sense for the OpenAI-compatible path
+    // (local Ollama, proxies); other providers have fixed endpoints.
+    const baseUrl =
+        typedProvider === "openai"
+            ? getConfigValue(config, "aiBaseUrl", "AI_BASE_URL", "") ||
+              undefined
+            : undefined;
+
     return {
         provider: typedProvider,
         apiKey,
         accountId,
         model: model || undefined,
+        baseUrl,
     };
 }
 
@@ -335,13 +381,22 @@ function setupDetectorCallbacks(det: DriftDetector) {
                     vendor: deps.vendor,
                     client: deps.client,
                     model: deps.model,
+                    onEvent: (event) => {
+                        if (event.type === "note") {
+                            console.log(`  [AGENT] ${event.message}`);
+                        } else if (event.type === "tool") {
+                            console.log(`  [AGENT] tool ${event.name} ok=${event.ok} (iter ${event.iteration})`);
+                        } else if (event.type === "done") {
+                            console.log(`  [AGENT] done outcome=${event.outcome} iterations=${event.iterations}`);
+                        }
+                    },
                 });
 
                 if (result.status === "opened") {
                     console.log(`  [PR] Created: ${result.url}`);
                     await store.markDrift(driftRowId, "pr_opened");
                 } else if (result.status === "already_open") {
-                    console.log(`  [PR] Already open: ${result.url}`);
+                    console.log(`  [PR] Already open: ${result.url ?? result.branch}`);
                     await store.markDrift(driftRowId, "pr_opened");
                 } else {
                     console.log(`  [PR] ${result.status} (outcome: ${result.outcome})`);

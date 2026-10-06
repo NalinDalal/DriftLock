@@ -2,10 +2,12 @@ import { execFileSync } from "child_process";
 import { rm } from "fs/promises";
 import { STRIPE_VENDOR, TWILIO_VENDOR, P5_VENDOR } from "@driftlock/core";
 import type { VendorConfig } from "@driftlock/core";
-import { createGitHubPublisher } from "@driftlock/agent";
+import { createGitHubPublisher, fingerprintRepo, modelProviderEnvKey, resolveAgentTier, type AgentTier, type ModelProvider } from "@driftlock/agent";
 import {
     checkVendor,
+    checkVendorPackageDrift,
     FileVendorBaselineStore,
+    MemoryRegistryCache,
     runVendorTriggeredMigration,
     type CheckOptions,
 } from "@driftlock/vendorWatch";
@@ -25,8 +27,43 @@ export interface WatchOptions {
     trigger?: boolean;
     base?: string;
     model?: string;
+    /** Subscription tier. Explicit flag wins, then DRIFTLOCK_PLAN, then pro. */
+    tier?: string;
+    /** Model provider: "openai" (default) or "anthropic". Flag wins, then DRIFTLOCK_MODEL_PROVIDER. */
+    modelProvider?: string;
     /** Test seam for the spec poll. Production always fetches the vendor spec. */
     poll?: CheckOptions["poll"];
+}
+
+/**
+ * Resolves the agent tier at the process edge (shared helper in
+ * `@driftlock/agent`: unknown values fail closed to free, so a typo must
+ * never grant publishing rights).
+ */
+export function resolveTier(explicit?: string): AgentTier {
+    return resolveAgentTier(explicit ?? process.env.DRIFTLOCK_PLAN ?? "pro");
+}
+
+/**
+ * Resolves the model provider at the process edge. Empty means OpenAI wire
+ * protocol; anything else passes through to the agent's provider registry,
+ * which fails fast naming the known providers. Provider is not a privilege,
+ * so there is nothing to fail closed over here.
+ */
+export function resolveModelProvider(explicit?: string): ModelProvider {
+    const raw = (explicit ?? process.env.DRIFTLOCK_MODEL_PROVIDER ?? "openai").trim().toLowerCase();
+    return raw === "" ? "openai" : raw;
+}
+
+/**
+ * Provider key from the environment, resolved through the registry so new
+ * providers need no per-vendor branches here: GEMINI_API_KEY,
+ * ANTHROPIC_API_KEY, and whatever comes next all flow the same way.
+ */
+export function lookupProviderKey(provider: ModelProvider): string | undefined {
+    if (provider === "openai") return process.env.OPENAI_API_KEY;
+    const envKey = modelProviderEnvKey(provider);
+    return envKey ? process.env[envKey] : undefined;
 }
 
 function resolveVendor(provider: string): VendorConfig {
@@ -62,13 +99,30 @@ async function resolveRoot(repo: string): Promise<{ root: string; cleanup: () =>
 export async function runWatch(opts: WatchOptions): Promise<number> {
     const vendor = resolveVendor(opts.provider);
     const version = opts.version ?? "latest";
+    const tier = resolveTier(opts.tier);
+    const modelProvider = resolveModelProvider(opts.modelProvider);
     const store = new FileVendorBaselineStore(
         opts.baselinesDir ?? ".driftlock/vendor-baselines",
     );
+    // One cache per run bounds registry calls when watching several vendors.
+    const registryCache = new MemoryRegistryCache();
+
+    // Local repos can be fingerprinted before the poll so the change carries
+    // the pinned-vs-latest signal. Remote repos are cloned after the poll,
+    // so their registry check happens post-clone below.
+    const localRoot = opts.repo && !isRemoteRef(opts.repo) ? opts.repo : undefined;
+    const localFacts = localRoot
+        ? await fingerprintRepo(localRoot).catch(() => null)
+        : null;
 
     let change;
     try {
-        change = await checkVendor(vendor, version, store, { poll: opts.poll });
+        change = await checkVendor(vendor, version, store, {
+            poll: opts.poll,
+            ...(localFacts
+                ? { registry: { facts: localFacts, fetch: { cache: registryCache } } }
+                : {}),
+        });
     } catch (e) {
         console.error(`[WATCH] poll failed for ${vendor.name}:`, (e as Error).message);
         return 2;
@@ -86,6 +140,9 @@ export async function runWatch(opts: WatchOptions): Promise<number> {
         for (const member of change.added.slice(0, 20)) console.log(`  + ${member}`);
     }
     console.log(`[WATCH] ${change.note}`);
+    if (change.registryDrift?.drift) {
+        console.log(`[WATCH] registry: ${change.registryDrift.note}`);
+    }
 
     if (!opts.trigger) {
         console.log(`[WATCH] pass --trigger --repo <owner/repo|path> to migrate.`);
@@ -98,14 +155,32 @@ export async function runWatch(opts: WatchOptions): Promise<number> {
 
     const { root, cleanup } = await resolveRoot(opts.repo);
     try {
+        // Remote roots did not exist at poll time: attach the registry
+        // signal now so the triggered packet carries it. Advisory only;
+        // a registry failure never blocks the migration.
+        if (!localFacts && !change.registryDrift) {
+            const facts = await fingerprintRepo(root).catch(() => null);
+            if (facts) {
+                const drift = await checkVendorPackageDrift(facts, vendor, {
+                    cache: registryCache,
+                }).catch(() => null);
+                if (drift) {
+                    change.registryDrift = drift;
+                    if (drift.drift) console.log(`[WATCH] registry: ${drift.note}`);
+                }
+            }
+        }
         const remote = isRemoteRef(opts.repo);
         const [owner, name] = remote ? opts.repo.split("/") : [];
         const token = process.env.GITHUB_TOKEN;
         const result = await runVendorTriggeredMigration(vendor, change, {
             root,
+            tier,
+            modelProvider,
             docs: vendor.docs?.url ? [vendor.docs.url] : [],
             model: opts.model ?? process.env.DRIFTLOCK_MODEL,
             apiKey: process.env.OPENAI_API_KEY,
+            providerApiKey: lookupProviderKey(modelProvider),
             baseURL: process.env.OPENAI_BASE_URL,
             ...(remote && owner && name
                 ? {

@@ -5,9 +5,55 @@ export type ToolName =
     | "editFile"
     | "replaceInFile"
     | "lookupVendorSymbol"
+    | "readContract"
     | "checkCompleteness"
     | "runCommand"
     | "createPullRequest";
+
+/**
+ * Subscription tier. Determined at runtime by the caller (plan check),
+ * not baked into the agent: the same loop runs with fewer tools on free.
+ *
+ * - `free`: local analysis only. Edits and verification run, but publishing
+ *   is hidden so the run ends as preview/review rather than a PR.
+ * - `pro`: full loop including `createPullRequest`.
+ */
+export type AgentTier = "free" | "pro";
+
+/**
+ * Resolve the agent tier from a raw plan string. Unknown values (including
+ * a typo) fail closed to free: nothing must ever grant publishing rights by
+ * accident. Pure function; callers pass `explicit ?? process.env.X`. Single
+ * home for the CLI, the backend scheduler, and tests.
+ */
+export function resolveAgentTier(raw: string | undefined): AgentTier {
+    const v = (raw ?? "pro").trim().toLowerCase();
+    if (v === "free") return "free";
+    if (v === "pro" || v === "") return "pro";
+    return "free";
+}
+
+const FREE_TOOLS: ToolName[] = [
+    "inspectRepo",
+    "searchCode",
+    "readFile",
+    "editFile",
+    "replaceInFile",
+    "lookupVendorSymbol",
+    "readContract",
+    "checkCompleteness",
+    "runCommand",
+];
+
+const PRO_TOOLS: ToolName[] = [
+    ...FREE_TOOLS,
+    "createPullRequest",
+];
+
+export const TIER_TOOLS: Record<AgentTier, readonly ToolName[]> = {
+    free: Object.freeze(FREE_TOOLS) as readonly ToolName[],
+    pro: Object.freeze(PRO_TOOLS) as readonly ToolName[],
+};
 
 export interface ToolDefinition {
     name: ToolName;
@@ -122,6 +168,25 @@ export const tools: ToolDefinition[] = [
         },
     },
     {
+        name: "readContract",
+        description:
+            "Re-read the vendor contract on demand, filtered by an optional prefix and capped by limit. The opening message shows at most 200 members; use this when the member you need is not listed there. Returns matching member paths with the total count. Takes no required arguments.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                prefix: {
+                    type: "string",
+                    description: "Only members starting with this string, e.g. payment_method",
+                },
+                limit: {
+                    type: "string",
+                    description: "Maximum members to list, default 50",
+                },
+            },
+            required: [],
+        },
+    },
+    {
         name: "checkCompleteness",
         description:
             "Sweep the whole repository for reads of fields this migration removed, including files you never touched. Returns every remaining stale read as file:line items. Call this after your last edit and before verification: a green build on 2 of 3 call sites still leaves the third broken. Takes no arguments.",
@@ -170,8 +235,46 @@ export function isToolName(value: string): value is ToolName {
     return tools.some((tool) => tool.name === value);
 }
 
-export function toOpenAITools() {
-    return tools.map((tool) => ({
+/** Tools visible to a tier. Unknown tiers fail closed to free. */
+export function toolsForTier(tier: AgentTier = "pro"): ToolDefinition[] {
+    const allowed = new Set<ToolName>(TIER_TOOLS[tier] ?? TIER_TOOLS.free);
+    return tools.filter((tool) => allowed.has(tool.name));
+}
+
+export function isToolAllowed(name: ToolName, tier: AgentTier = "pro"): boolean {
+    return (TIER_TOOLS[tier] ?? TIER_TOOLS.free).includes(name);
+}
+
+/**
+ * Rejects malformed tool args at parse time, before the executor runs.
+ *
+ * The model speaks JSON, not types: a missing `path` or a non-string
+ * `query` used to travel all the way into the executor and come back as a
+ * confusing tool failure, burning an iteration. This names the exact
+ * missing or mistyped field so the retry succeeds. Returns null when the
+ * args satisfy the tool's schema.
+ */
+export function validateToolArgs(name: ToolName, args: Record<string, unknown>): string | null {
+    const def = tools.find((tool) => tool.name === name);
+    if (!def) return `Unknown tool: ${name}`;
+    for (const key of def.inputSchema.required) {
+        const value = args[key];
+        const expected = def.inputSchema.properties[key]?.type ?? "string";
+        // Presence and type only. Emptiness is each tool's own call: an
+        // empty `newText` is a legal delete, while an empty `query` is
+        // refused by searchCode with a better message than this can give.
+        if (value === undefined || value === null) {
+            return `${name} requires "${key}" (${expected}). Retry the call with it set.`;
+        }
+        if (typeof value !== expected) {
+            return `${name} requires "${key}" to be ${expected}, got ${typeof value}. Retry with the correct type.`;
+        }
+    }
+    return null;
+}
+
+export function toOpenAITools(tier: AgentTier = "pro") {
+    return toolsForTier(tier).map((tool) => ({
         type: "function" as const,
         function: {
             name: tool.name,

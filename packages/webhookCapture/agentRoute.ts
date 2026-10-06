@@ -7,6 +7,12 @@ export interface AgentAIConfig {
     apiKey: string;
     accountId?: string;
     model?: string;
+    /**
+     * Override the OpenAI-compatible endpoint (e.g. a local Ollama at
+     * http://127.0.0.1:11434/v1). Only honored for `provider: "openai"`;
+     * gemini/cloudflare have fixed endpoints.
+     */
+    baseUrl?: string;
 }
 
 export interface AgentClient {
@@ -30,7 +36,10 @@ export function buildAgentClient(config: AgentAIConfig): AgentClient | null {
     switch (config.provider) {
         case "openai":
             return {
-                client: new OpenAI({ apiKey: config.apiKey }),
+                client: new OpenAI({
+                    apiKey: config.apiKey,
+                    baseURL: config.baseUrl ?? OPENAI_BASE_URL,
+                }),
                 model: config.model,
             };
         case "gemini":

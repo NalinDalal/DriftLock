@@ -186,12 +186,19 @@ export function fixBranchName(callSiteId: string): string {
 /** PR title from a detected fix. */
 export function buildFixPRTitle(metadata: FixPRMetadata): string {
     const { fix, callSite } = metadata;
+    // A custom fix comments out the removed field's usages: that flags the
+    // breakage for a human, it does not fix it. Same honesty rule as the
+    // webhook path (Flag, never Fix).
     const action =
         fix.type === "field_rename"
             ? "Rename"
             : fix.type === "type_coercion"
               ? "Update type for"
-              : "Fix";
+              : fix.type === "null_check"
+                ? "Add null check for"
+                : fix.type === "custom"
+                  ? "Flag"
+                  : "Fix";
     return `driftlock: ${action} ${callSite.method} in ${callSite.filePath}`;
 }
 
@@ -298,6 +305,25 @@ export class FixPRRunner {
             number: created.number,
             branch: created.branch,
         };
+    }
+
+    /**
+     * Post a comment on a pull request (PRs share the issues comment API).
+     * Used for the automated second-pass review after publishing a fix.
+     * Best effort: callers must not fail the run when commenting fails.
+     */
+    async comment(input: {
+        owner: string;
+        repo: string;
+        number: number;
+        body: string;
+    }): Promise<void> {
+        await this.octokit.rest.issues.createComment({
+            owner: input.owner,
+            repo: input.repo,
+            issue_number: input.number,
+            body: input.body,
+        });
     }
 
     private async deleteBranchIfExists(

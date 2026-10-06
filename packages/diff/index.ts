@@ -33,6 +33,7 @@ export interface SemanticChange {
     kind:
         | "field_removed"
         | "field_added"
+        | "field_renamed"
         | "type_changed"
         | "became_nullable"
         | "became_non_null"
@@ -385,6 +386,11 @@ export function diffShapes(
     let topLevelRemoved: string[] = [];
     let topLevelAdded: string[] = [];
 
+    const parentOf = (p: string): string =>
+        p.includes(".") ? p.slice(0, p.lastIndexOf(".")) : "";
+    const leafOf = (p: string): string =>
+        p.includes(".") ? p.slice(p.lastIndexOf(".") + 1) : p;
+
     if (direction === "request" && removedPaths.length === 1 && addedPaths.length === 1) {
         const removedPath = removedPaths[0];
         const addedPath = addedPaths[0];
@@ -410,6 +416,49 @@ export function diffShapes(
             });
             breakingChanges.push(
                 `Renamed request parameter '${removedPath}' to '${addedPath}'`,
+            );
+        } else {
+            topLevelRemoved = removedPaths;
+            topLevelAdded = addedPaths;
+        }
+    } else if (
+        direction !== "request" &&
+        removedPaths.length === 1 &&
+        addedPaths.length === 1
+    ) {
+        // Response rename: exactly one field removed and one added under the
+        // same parent with the same type (e.g. data.object.source removed,
+        // data.object.payment_method added). from/to carry leaf names so the
+        // deterministic fixer matches member access in code (`obj.source`),
+        // not the dotted schema path. Strict on purpose: multiple pairs,
+        // different parents, array paths, or kind mismatches stay a plain
+        // removal + addition.
+        const removedPath = removedPaths[0];
+        const addedPath = addedPaths[0];
+        const removedNode = oldByPath.get(removedPath);
+        const addedNode = newByPath.get(addedPath);
+        const fromLeaf = leafOf(removedPath);
+        const toLeaf = leafOf(addedPath);
+        if (
+            removedNode &&
+            addedNode &&
+            removedNode.kind === addedNode.kind &&
+            removedNode.kind !== "null" &&
+            removedNode.kind !== "unknown" &&
+            !removedPath.includes("[") &&
+            !addedPath.includes("[") &&
+            parentOf(removedPath) === parentOf(addedPath) &&
+            fromLeaf !== toLeaf
+        ) {
+            changes.push({
+                kind: "field_renamed",
+                field: removedPath,
+                from: fromLeaf,
+                to: toLeaf,
+                breaking: true,
+            });
+            breakingChanges.push(
+                `Renamed field '${removedPath}' to '${addedPath}'`,
             );
         } else {
             topLevelRemoved = removedPaths;
@@ -535,6 +584,21 @@ export function fixWorksForDiff(result: ShapeDiffResult): FixWork[] {
                 });
                 break;
             }
+            case "field_renamed": {
+                if (!change.from || !change.to) {
+                    break;
+                }
+                works.push({
+                    kind: "field_rename",
+                    field: change.field,
+                    from: change.from,
+                    to: change.to,
+                    description: `Rename '${change.from}' to '${change.to}'`,
+                    template: `rename '${change.from}' to '${change.to}'`,
+                    confidence: result.confidence,
+                });
+                break;
+            }
             case "request_added": {
                 if (change.field.includes("[") || change.field.includes("]")) {
                     break;
@@ -642,21 +706,31 @@ export function applyFixWork(work: FixWork, source: string): string | null {
             }
             const fieldParts = work.field.split(".");
             const leaf = fieldParts[fieldParts.length - 1];
+            const escLeaf = leaf.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
             const fieldRegex = new RegExp(
-                `[\\w$]+(?:\\.[\\w$]+)*\\.${leaf.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
+                `[\\w$]+(?:\\.[\\w$]+)*\\.${escLeaf}`,
                 "g",
             );
-            if (!fieldRegex.test(source)) {
+            // Brace-bound leaf: destructuring (`const { source } = obj`),
+            // shorthand, and object-literal keys. Kept in sync with
+            // contentMatchesWorks in @driftlock/webhookCapture so every
+            // file the scan flags is also flaggable by the fixer.
+            const bracedRegex = new RegExp(`[{,]\\s*${escLeaf}\\b`, "g");
+            if (!fieldRegex.test(source) && !bracedRegex.test(source)) {
                 return null;
             }
             // Reset: .test() with /g leaves lastIndex mid-string, which
             // would poison every per-line test below into false negatives.
             fieldRegex.lastIndex = 0;
+            bracedRegex.lastIndex = 0;
             // Comment out lines containing the removed field
             const lines = source.split("\n");
             const result = lines.map((line) => {
-                if (fieldRegex.test(line) && !line.trimStart().startsWith("//")) {
-                    fieldRegex.lastIndex = 0; // reset regex
+                const hit =
+                    fieldRegex.test(line) || bracedRegex.test(line);
+                fieldRegex.lastIndex = 0; // reset regex
+                bracedRegex.lastIndex = 0;
+                if (hit && !line.trimStart().startsWith("//")) {
                     return `// ${line}`;
                 }
                 return line;

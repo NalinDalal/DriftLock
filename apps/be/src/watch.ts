@@ -1,0 +1,374 @@
+import { STRIPE_VENDOR, TWILIO_VENDOR, type VendorConfig } from "@driftlock/core";
+import {
+    checkVendor,
+    FileVendorBaselineStore,
+    runVendorTriggeredMigration,
+    type VendorBaselineStore,
+    type VendorChange,
+} from "@driftlock/vendorWatch";
+import {
+    createGitHubPublisher,
+    resolveAgentTier,
+    type AgentTier,
+    type PullRequestPublisher,
+} from "@driftlock/agent";
+import { getStore } from "./store";
+import { cloneRepo } from "./clone";
+
+const KNOWN_VENDORS: Record<string, VendorConfig> = {
+    stripe: STRIPE_VENDOR,
+    twilio: TWILIO_VENDOR,
+};
+
+export interface WatchConfig {
+    enabled: boolean;
+    intervalMs: number;
+    vendors: VendorConfig[];
+    baselinesDir: string;
+    tier: AgentTier;
+    /** Max watched repos migrated per vendor change (oldest first). */
+    maxRepos: number;
+    /** How many repo migrations run at once. */
+    concurrency: number;
+    model?: string;
+    apiKey?: string;
+    baseURL?: string;
+    githubToken?: string;
+}
+
+/**
+ * Read scheduler config from the environment. Disabled by default: the
+ * operator opts in with WATCH_ENABLED=true once baselines and a token are
+ * in place. Rollback is unsetting the variable.
+ */
+export function readWatchConfig(
+    env: Record<string, string | undefined> = process.env,
+): WatchConfig {
+    const rawInterval = parseInt(env.WATCH_INTERVAL_MS ?? "", 10);
+    const vendors = (env.WATCH_VENDORS ?? "stripe")
+        .split(",")
+        .map((v) => v.trim().toLowerCase())
+        .filter(Boolean)
+        .map((v) => KNOWN_VENDORS[v])
+        .filter((v): v is VendorConfig => !!v);
+    const rawMax = parseInt(env.WATCH_MAX_REPOS ?? "", 10);
+    const rawConcurrency = parseInt(env.WATCH_CONCURRENCY ?? "", 10);
+    return {
+        enabled: (env.WATCH_ENABLED ?? "false").trim().toLowerCase() === "true",
+        intervalMs: Math.max(
+            60_000,
+            Number.isFinite(rawInterval) ? rawInterval : 6 * 3_600_000,
+        ),
+        vendors,
+        baselinesDir: env.WATCH_BASELINES_DIR ?? ".driftlock/vendor-baselines",
+        tier: resolveAgentTier(env.DRIFTLOCK_PLAN ?? "pro"),
+        maxRepos: Math.max(1, Number.isFinite(rawMax) ? rawMax : 50),
+        concurrency: Math.max(1, Number.isFinite(rawConcurrency) ? rawConcurrency : 2),
+        model: env.DRIFTLOCK_MODEL || undefined,
+        apiKey: env.OPENAI_API_KEY || undefined,
+        baseURL: env.OPENAI_BASE_URL || undefined,
+        githubToken: env.GITHUB_TOKEN || undefined,
+    };
+}
+
+export interface WatchedRepo {
+    owner: string;
+    name: string;
+    base: string;
+}
+
+export interface TickRecord {
+    vendor: string;
+    outcome: string;
+    prUrl?: string;
+    ok: boolean;
+    note?: string;
+}
+
+export interface WatchTickDeps {
+    poll?: typeof checkVendor;
+    listWatchedRepos?: () => Promise<WatchedRepo[]>;
+    migrate?: typeof runVendorTriggeredMigration;
+    makePublisher?: (token: string) => PullRequestPublisher;
+    clone?: typeof cloneRepo;
+    /** Persisted per repo per change. Defaults to the runs table; stub in tests. */
+    recordTick?: (repo: WatchedRepo, entry: TickRecord) => Promise<void>;
+}
+
+export interface WatchTickResult {
+    vendorsChecked: string[];
+    breakingVendors: string[];
+    migrations: Array<{
+        vendor: string;
+        repo: string;
+        outcome: string;
+        prUrl?: string;
+    }>;
+}
+
+async function defaultListWatchedRepos(): Promise<WatchedRepo[]> {
+    const store = getStore();
+    const repos = await store.listRepositories();
+    return repos
+        .filter((r) => r.watched !== false && r.owner && r.name)
+        .map((r) => ({
+            owner: r.owner,
+            name: r.name,
+            base: r.defaultBranch ?? "main",
+        }));
+}
+
+/**
+ * Buffers baseline writes so a failed tick never advances past a change.
+ * checkVendor saves the advanced baseline as a side effect of reporting;
+ * without this wrapper, failed migrations or maxRepos-skipped repos would
+ * lose the change forever (the next poll compares against the already-new
+ * baseline and sees nothing). The tick commits only when every watched
+ * repo was attempted and none failed; otherwise the pending write is
+ * dropped and the next tick re-detects the same change.
+ */
+export class DeferredBaselineStore implements VendorBaselineStore {
+    private pending = new Map<string, Parameters<VendorBaselineStore["save"]>[0]>();
+
+    constructor(private readonly inner: VendorBaselineStore) {}
+
+    load(provider: string) {
+        return this.inner.load(provider);
+    }
+
+    async save(contract: Parameters<VendorBaselineStore["save"]>[0]): Promise<void> {
+        this.pending.set(contract.provider, contract);
+    }
+
+    /** Write through all buffered baselines. */
+    async commit(): Promise<void> {
+        for (const contract of this.pending.values()) {
+            await this.inner.save(contract);
+        }
+        this.pending.clear();
+    }
+
+    /** Drop the buffered baselines: changes stay detectable next tick. */
+    drop(): void {
+        this.pending.clear();
+    }
+}
+/**
+ * Default tick recorder: one finished run per repo per vendor change, so
+ * time-to-merge is measurable from the runs table instead of scattered
+ * logs. Failures recording the record must never fail the tick.
+ */
+async function defaultRecordTick(repo: WatchedRepo, entry: TickRecord): Promise<void> {
+    try {
+        const store = getStore();
+        const repository = await store.ensureRepository({
+            owner: repo.owner,
+            name: repo.name,
+            fullName: `${repo.owner}/${repo.name}`,
+        });
+        const run = await store.recordRun({ repositoryId: repository.id, status: "running" });
+        await store.finishRun({
+            id: run.id,
+            status: entry.ok ? "succeeded" : "failed",
+            exitCode: entry.ok ? 0 : 1,
+            notes:
+                `watch ${entry.vendor}: ${entry.outcome}` +
+                (entry.prUrl ? ` ${entry.prUrl}` : "") +
+                (entry.note ? ` (${entry.note})` : ""),
+        });
+    } catch (error) {
+        console.error(
+            `[WATCH] tick record failed for ${repo.owner}/${repo.name}:`,
+            (error as Error).message,
+        );
+    }
+}
+
+/**
+ * One scheduler pass: poll each vendor spec, and on a breaking change run
+ * the migration agent against every watched repo. Seams are injectable so
+ * tests prove the loop without network, models, or git.
+ */
+export async function runWatchTick(
+    config: WatchConfig,
+    deps: WatchTickDeps = {},
+): Promise<WatchTickResult> {
+    const poll = deps.poll ?? checkVendor;
+    const listWatchedRepos = deps.listWatchedRepos ?? defaultListWatchedRepos;
+    const migrate = deps.migrate ?? runVendorTriggeredMigration;
+    const makePublisher = deps.makePublisher ?? createGitHubPublisher;
+    const clone = deps.clone ?? cloneRepo;
+    const recordTick = deps.recordTick ?? defaultRecordTick;
+    const result: WatchTickResult = {
+        vendorsChecked: [],
+        breakingVendors: [],
+        migrations: [],
+    };
+    const baselines = new DeferredBaselineStore(new FileVendorBaselineStore(config.baselinesDir));
+
+    for (const vendor of config.vendors) {
+        result.vendorsChecked.push(vendor.name);
+        let change: VendorChange | null;
+        try {
+            change = await poll(vendor, "latest", baselines);
+        } catch (error) {
+            console.error(
+                `[WATCH] poll failed for ${vendor.name}:`,
+                (error as Error).message,
+            );
+            continue;
+        }
+        if (!change) {
+            console.log(`[WATCH] ${vendor.name}: no removed members since baseline.`);
+            await baselines.commit();
+            continue;
+        }
+        result.breakingVendors.push(vendor.name);
+        console.log(
+            `[WATCH] BREAKING: ${vendor.name} removed ${change.removed.length} member(s), added ${change.added.length} candidate(s).`,
+        );
+
+        const repos = await listWatchedRepos();
+        if (repos.length === 0) {
+            console.log(`[WATCH] ${vendor.name}: breaking change but no watched repos.`);
+            continue;
+        }
+        const eligible = repos.slice(0, config.maxRepos);
+        const skipped = repos.length - eligible.length;
+        if (skipped > 0) {
+            console.log(
+                `[WATCH] ${vendor.name}: ${skipped} watched repo(s) over WATCH_MAX_REPOS=${config.maxRepos}; skipping until next change.`,
+            );
+        }
+        const publisher = config.githubToken
+            ? makePublisher(config.githubToken)
+            : undefined;
+        if (!publisher) {
+            console.log(`[WATCH] no GITHUB_TOKEN: migrations run in preview mode (no PRs).`);
+        }
+        const migrateRepo = async (repo: WatchedRepo): Promise<void> => {
+            const { path, cleanup } = await clone(repo.owner, repo.name, repo.base);
+            try {
+                const migration = await migrate(vendor, change, {
+                    root: path,
+                    tier: config.tier,
+                    ...(config.model ? { model: config.model } : {}),
+                    ...(config.apiKey ? { apiKey: config.apiKey } : {}),
+                    ...(config.baseURL ? { baseURL: config.baseURL } : {}),
+                    docs: vendor.docs?.url ? [vendor.docs.url] : [],
+                    ...(publisher
+                        ? {
+                              publisher,
+                              target: { owner: repo.owner, repo: repo.name, base: repo.base },
+                          }
+                        : {}),
+                });
+                console.log(
+                    `[WATCH] outcome=${migration.outcome} vendor=${vendor.name} repo=${repo.owner}/${repo.name} ` +
+                        `files=${migration.filesChanged.join(", ") || "(none)"}` +
+                        (migration.state.pullRequest
+                            ? ` pr=${migration.state.pullRequest.url}`
+                            : ""),
+                );
+                result.migrations.push({
+                    vendor: vendor.name,
+                    repo: `${repo.owner}/${repo.name}`,
+                    outcome: migration.outcome,
+                    ...(migration.state.pullRequest
+                        ? { prUrl: migration.state.pullRequest.url }
+                        : {}),
+                });
+                await recordTick(repo, {
+                    vendor: vendor.name,
+                    outcome: migration.outcome,
+                    ok: true,
+                    ...(migration.state.pullRequest
+                        ? { prUrl: migration.state.pullRequest.url }
+                        : {}),
+                });
+            } catch (error) {
+                await recordTick(repo, {
+                    vendor: vendor.name,
+                    outcome: "error",
+                    ok: false,
+                    note: (error as Error)?.message ?? String(error),
+                });
+                throw error;
+            } finally {
+                await cleanup();
+            }
+        };
+        // Bounded parallelism: a vendor change must not clone the fleet at
+        // once. One repo's clone/migrate failure (settled, logged) never
+        // aborts the rest of the batch.
+        let failed = 0;
+        for (let i = 0; i < eligible.length; i += config.concurrency) {
+            const settled = await Promise.allSettled(
+                eligible.slice(i, i + config.concurrency).map((repo) => migrateRepo(repo)),
+            );
+            for (const s of settled) {
+                if (s.status === "rejected") {
+                    failed++;
+                    console.error(
+                        `[WATCH] migration failed for ${vendor.name}:`,
+                        (s.reason as Error)?.message ?? String(s.reason),
+                    );
+                }
+            }
+        }
+        // Advance the baseline only when nothing is left pending: every
+        // watched repo attempted and none failed. Otherwise hold it so the
+        // next tick re-detects the same change instead of losing it.
+        if (skipped === 0 && failed === 0) {
+            await baselines.commit();
+        } else {
+            baselines.drop();
+            console.log(
+                `[WATCH] ${vendor.name}: holding baseline (${failed} failed, ${skipped} skipped); will retry next tick.`,
+            );
+        }
+    }
+    return result;
+}
+
+/**
+ * Start the always-on vendor watch loop. No-ops unless WATCH_ENABLED=true.
+ * Overlap guard: a slow tick never piles up behind itself. Returns stop().
+ */
+export function startWatchScheduler(
+    env: Record<string, string | undefined> = process.env,
+    deps: WatchTickDeps = {},
+): () => void {
+    const config = readWatchConfig(env);
+    if (!config.enabled) {
+        return () => {};
+    }
+    if (config.vendors.length === 0) {
+        console.log("[WATCH] enabled but no known vendors in WATCH_VENDORS; idle.");
+        return () => {};
+    }
+    console.log(
+        `[WATCH] enabled: vendors=${config.vendors.map((v) => v.name).join(",")} ` +
+            `interval=${Math.round(config.intervalMs / 60000)}m tier=${config.tier} ` +
+            `baselines=${config.baselinesDir} prs=${config.githubToken ? "on" : "preview-only"} ` +
+            `maxRepos=${config.maxRepos} concurrency=${config.concurrency}`,
+    );
+    let running = false;
+    const tick = async () => {
+        if (running) {
+            console.log("[WATCH] previous tick still running; skipping.");
+            return;
+        }
+        running = true;
+        try {
+            await runWatchTick(config, deps);
+        } catch (error) {
+            console.error("[WATCH] tick failed:", (error as Error).message);
+        } finally {
+            running = false;
+        }
+    };
+    void tick();
+    const timer = setInterval(tick, config.intervalMs);
+    return () => clearInterval(timer);
+}

@@ -3,8 +3,16 @@ import { readdir } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import { join } from "node:path";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
-import { isToolName, toOpenAITools, type ToolName } from "./tools";
-import { SYSTEM_PROMPT } from "./prompt";
+import { isToolAllowed, isToolName, toOpenAITools, toolsForTier, validateToolArgs, type AgentTier, type ToolName } from "./tools";
+import { buildSystemPrompt } from "./prompt";
+import {
+    createProviderClient,
+    modelProviderDefaultModel,
+    modelProviderEnvKey,
+    type ModelClient,
+    type ModelProvider,
+    type ModelTurn,
+} from "./modelClient";
 import {
     assessConfidence,
     buildReceipt,
@@ -34,6 +42,7 @@ import {
     editFile,
     hasUncommittedChanges,
     inspectRepo,
+    isAllowedCommand,
     isGitRepository,
     readFile,
     replaceInFile,
@@ -156,6 +165,26 @@ export type RunOptions = {
     packet: ChangePacket;
     apiKey?: string;
     model?: string;
+    /** Subscription tier. Defaults to pro so existing callers keep full tools. */
+    tier?: AgentTier;
+    /**
+     * Model provider. Resolved through the provider registry ("openai" uses
+     * the OpenAI-compatible client; anything registered — "anthropic" built
+     * in — is built from its factory). Unknown names fail fast.
+     */
+    provider?: ModelProvider;
+    /** Full override for the model call. Wins over `client` and `provider`. */
+    modelClient?: ModelClient;
+    /** Key for the selected provider. Falls back to its env var. */
+    providerApiKey?: string;
+    /** Base URL override for the selected provider. Test seam and proxies. */
+    providerBaseURL?: string;
+    /** Fetch implementation for the selected provider. Test seam. */
+    providerFetchFn?: typeof fetch;
+    /** Kept for backward compatibility; `providerApiKey` wins over it. */
+    anthropicApiKey?: string;
+    anthropicBaseURL?: string;
+    anthropicFetchFn?: typeof fetch;
     baseURL?: string;
     client?: OpenAI;
     publisher?: PullRequestPublisher;
@@ -222,6 +251,7 @@ export type AgentEvent =
     | { type: "iteration"; iteration: number; stage: MigrationStage }
     | { type: "tool"; name: ToolName; ok: boolean; iteration: number }
     | { type: "model_retry"; attempt: number; error: string }
+    | { type: "note"; message: string; iteration: number }
     | { type: "done"; outcome: Outcome; iterations: number };
 
 /** Tools that pause for operator approval. Publishing is the irreversible
@@ -252,28 +282,20 @@ function modelErrorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 
-async function createWithRetry(
-    create: RunnerDeps["create"],
-    body: Parameters<RunnerDeps["create"]>[0],
+async function createWithRetry<T>(
+    run: (signal: AbortSignal) => Promise<T>,
     options: {
         timeoutMs: number;
         maxRetries: number;
         baseDelayMs: number;
         onRetry?: (attempt: number, error: unknown) => void;
     },
-): Promise<
-    Extract<Awaited<ReturnType<RunnerDeps["create"]>>, { choices: unknown }>
-> {
+): Promise<T> {
     for (let attempt = 0; ; attempt += 1) {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), options.timeoutMs);
         try {
-            // The request body never sets `stream`, so the SDK resolves to a
-            // full completion; the cast recovers the overload the union hides.
-            const response = (await create(body, { signal: controller.signal })) as Extract<
-                Awaited<ReturnType<RunnerDeps["create"]>>,
-                { choices: unknown }
-            >;
+            const response = await run(controller.signal);
             clearTimeout(timer);
             return response;
         } catch (error) {
@@ -352,12 +374,116 @@ function readString(args: Record<string, unknown>, key: string): string {
     return typeof value === "string" ? value : "";
 }
 
+function textCallToArgs(raw: unknown): Record<string, unknown> {
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+        return raw as Record<string, unknown>;
+    }
+    if (typeof raw === "string" && raw.trim()) {
+        try {
+            const parsed = JSON.parse(raw) as unknown;
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                return parsed as Record<string, unknown>;
+            }
+        } catch {
+            // Not JSON — no args recoverable.
+        }
+    }
+    return {};
+}
+
+/**
+ * Fallback for models without native function calling (small local models
+ * served over OpenAI-compatible endpoints): recover a single tool call
+ * written as JSON in the message text, e.g.
+ * `{"name": "searchCode", "arguments": {"query": "source"}}`.
+ *
+ * Strict on purpose: the name must be a real tool, one call max with a
+ * synthesized id, unparseable text yields nothing. Callers run this only
+ * when the native `tool_calls` array came back empty.
+ */
+/** Brace-balanced `{...}` spans, outermost first. Content is small; O(n²) is fine. */
+function balancedSpans(content: string): string[] {
+    const spans: string[] = [];
+    for (let start = 0; start < content.length; start++) {
+        if (content[start] !== "{") continue;
+        let depth = 0;
+        let inString = false;
+        let escaped = false;
+        for (let i = start; i < content.length; i++) {
+            const ch = content[i];
+            if (inString) {
+                if (escaped) escaped = false;
+                else if (ch === "\\") escaped = true;
+                else if (ch === '"') inString = false;
+                continue;
+            }
+            if (ch === '"') inString = true;
+            else if (ch === "{") depth += 1;
+            else if (ch === "}") {
+                depth -= 1;
+                if (depth === 0) {
+                    spans.push(content.slice(start, i + 1));
+                    break;
+                }
+            }
+        }
+    }
+    return spans;
+}
+
+export function parseTextToolCall(content: string): ToolCall[] {
+    if (!content || !content.includes('"name"')) return [];
+    const spans: string[] = [content];
+    for (const match of content.matchAll(/```(?:json)?\s*([\s\S]*?)```/g)) {
+        if (match[1]) spans.push(match[1]);
+    }
+    spans.push(...balancedSpans(content));
+    for (const span of spans) {
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(span) as unknown;
+        } catch {
+            continue;
+        }
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            continue;
+        }
+        const record = parsed as Record<string, unknown>;
+        if (typeof record.name !== "string" || !isToolName(record.name)) {
+            continue;
+        }
+        return [
+            {
+                id: "text-1",
+                name: record.name,
+                args: textCallToArgs(record.arguments ?? record.args),
+            },
+        ];
+    }
+    return [];
+}
+
 async function execute(
     name: ToolCall["name"],
     args: Record<string, unknown>,
     options: RunOptions,
     state: AgentState,
 ): Promise<ToolResult> {
+    const tier: AgentTier = options.tier ?? "pro";
+    // Tier gate enforced here, not just in the prompt: a free run that asks
+    // for createPullRequest gets a FAILED result it can react to, not a PR.
+    if (!isToolAllowed(name, tier)) {
+        return {
+            ok: false,
+            output: `${name} is disabled on the ${tier} plan. Summarise the change for review instead.`,
+        };
+    }
+    // Schema check before the executor: a call missing a required arg gets
+    // a precise retry directive instead of a confusing tool failure.
+    const argError = validateToolArgs(name, args);
+    if (argError) {
+        return { ok: false, output: argError };
+    }
     const root = options.root;
     // Human-in-the-loop: high-stakes tools pause for approval first. A denial
     // (or a throwing hook — fail-closed) is an ordinary FAILED result the
@@ -461,6 +587,38 @@ async function execute(
             }
             return { ok: true, output: lines.join("\n") };
         }
+        case "readContract": {
+            const contract = options.contract;
+            if (!contract) {
+                return {
+                    ok: false,
+                    output:
+                        "No vendor contract gates this run, so there is nothing to re-read. Re-read the change packet and search the repository instead.",
+                };
+            }
+            const prefix = readString(args, "prefix").trim();
+            const rawLimit = args["limit"];
+            const parsedLimit =
+                typeof rawLimit === "number"
+                    ? rawLimit
+                    : Number.parseInt(readString(args, "limit"), 10);
+            const limit = Number.isNaN(parsedLimit) ? 50 : Math.min(Math.max(parsedLimit, 1), 200);
+            const matched = contract.members.filter((member) =>
+                prefix ? member === prefix || member.startsWith(`${prefix}.`) || member.startsWith(prefix) : true,
+            );
+            const shown = matched.slice(0, limit);
+            const lines = [
+                `${contract.provider} contract from ${contract.origin}: ${matched.length} member(s)${prefix ? ` starting with "${prefix}"` : ""}.`,
+                ...shown.map((member) => `- ${member}`),
+            ];
+            if (matched.length > shown.length) {
+                lines.push(`...and ${matched.length - shown.length} more. Narrow with prefix or raise limit.`);
+            }
+            if (contract.removed.length > 0) {
+                lines.push(`Removed by the vendor: ${contract.removed.join(", ")}.`);
+            }
+            return { ok: true, output: lines.join("\n") };
+        }
         case "checkCompleteness":
             return checkCompleteness(root, options, state);
         case "runCommand": {
@@ -475,6 +633,18 @@ async function execute(
             }
             state.commandsRun += 1;
             const command = readString(args, "command");
+            // Allowlist enforced here, not in each runner: a custom
+            // CommandRunner is a test seam or an isolation boundary, never a
+            // policy decision. Untrusted model output stops at this line no
+            // matter which runner is plugged in.
+            if (!isAllowedCommand(command)) {
+                const refused = {
+                    ok: false,
+                    output: `Command not allowed: ${command.trim()}. The harness only runs verification commands from the repository facts, copied exactly, with no shell operators.`,
+                };
+                state.lastTestResult = { passed: false, output: refused.output };
+                return refused;
+            }
             if (!options.commandRunner && options.allowHostExecution !== true) {
                 const refused = {
                     ok: false,
@@ -600,6 +770,60 @@ async function staleWarning(
     ].join("\n");
 }
 
+/**
+ * Deterministic honesty footer for PR bodies. The model writes the title
+ * and body, but the file list below is generated from the actual changed
+ * files, so a reader can always check the claim against the diff.
+ */
+export function withVerifiedFilesSection(body: string, files: string[]): string {
+    const section = [
+        "### Files changed (verified)",
+        ...files.map((f) => `- \`${f}\``),
+    ].join("\n");
+    return `${body}\n\n${section}`;
+}
+
+/**
+ * Second-pass review comment posted on the PR right after publishing.
+ * Deterministic by design: it restates only machine-checked facts (the
+ * verified file list, the confidence assessment) plus the fixed checklist
+ * every migration PR needs a human to confirm. Exported for tests.
+ */
+export function buildReviewComment(input: {
+    files: string[];
+    confidence: string;
+    reasons: string[];
+}): string {
+    return [
+        "## DriftLock review (automated second pass)",
+        "",
+        "I wrote the diff above; this is me checking it with skeptical instructions before you review.",
+        "",
+        "### Verified",
+        ...input.files.map((f) => `- \`${f}\` changed as claimed`),
+        `- Confidence: ${input.confidence}${input.reasons.length > 0 ? ` (${input.reasons.join("; ")})` : ""}`,
+        "",
+        "### Please confirm before merging",
+        "- Log labels and string literals: any human words naming the old field were not renamed, only code tokens were. Fix labels that would now mislead.",
+        "- Nullability: if the new field can be null where the old one could not, add a guard.",
+        "- Downstream readers: anything consuming the old shape outside this diff still sees the old field.",
+        "- Tests: run the suite covering the renamed field, not just the build.",
+    ].join("\n");
+}
+
+/**
+ * Snapshot-only title gate (pure, exported for tests). Returns a refusal
+ * message when the diff touches only .driftlock/ snapshots but the title
+ * claims a code change, else null.
+ */
+export function checkSnapshotOnlyTitle(filesChanged: string[], title: string): string | null {
+    const sourceChanges = filesChanged.filter((f) => !f.startsWith(".driftlock/"));
+    if (sourceChanges.length === 0 && !/snapshot|baseline/i.test(title)) {
+        return 'Refusing to open this PR: the only changed files are .driftlock/ snapshots, but the title claims a code change. Retitle as a snapshot/baseline update (e.g. "driftlock: update stripe snapshots for payment_intent.succeeded") or make the source edits first, then call createPullRequest again.';
+    }
+    return null;
+}
+
 async function openPullRequest(
     args: Record<string, unknown>,
     packet: ChangePacket,
@@ -623,6 +847,14 @@ async function openPullRequest(
     }
     if (state.filesChanged.length === 0) {
         return { ok: false, output: "Refusing to open a PR with no changed files" };
+    }
+    // Honesty gate: a diff that touches only .driftlock/ snapshots is a
+    // baseline update, never a code fix. #13 shipped a "Replace source with
+    // payment_method" title over a snapshot-only diff; titles must say what
+    // the diff does, so snapshot-only runs must carry that in the title.
+    const snapshotGate = checkSnapshotOnlyTitle(state.filesChanged, title);
+    if (snapshotGate) {
+        return { ok: false, output: snapshotGate };
     }
     if (state.lastTestResult?.passed !== true) {
         return {
@@ -683,7 +915,7 @@ async function openPullRequest(
                 `A publisher and target were not supplied to the agent.`,
                 `Would open${draft ? " as a draft (no vendor contract)" : ""} on branch ${branch} against ${target?.base ?? "<base>"}`,
                 `Title: ${title}`,
-                `Body: ${body}`,
+                `Body: ${withVerifiedFilesSection(body, state.filesChanged)}`,
                 `Diff stat: ${stat || "(no changes)"}`,
                 `Confidence: ${confidence.level} (${confidence.reasons.join("; ")}).`,
             ].join("\n"),
@@ -700,7 +932,7 @@ async function openPullRequest(
         result = await publisher.publish({
             target,
             title,
-            body,
+            body: withVerifiedFilesSection(body, files.map((f) => f.path)),
             branch,
             files,
             commitMessage: commitMessageFor({
@@ -719,6 +951,26 @@ async function openPullRequest(
 
     state.pullRequest = result;
     const confidence = assessConfidence(state);
+    // Second pass, posted not promised: a comment failure must never fail
+    // the run, the PR already exists and that is what matters.
+    if (publisher.comment) {
+        try {
+            await publisher.comment({
+                target,
+                number: result.number,
+                body: buildReviewComment({
+                    files: files.map((f) => f.path),
+                    confidence: confidence.level,
+                    reasons: confidence.reasons,
+                }),
+            });
+        } catch (error) {
+            console.warn(
+                `DriftLock review comment failed (PR ${result.url} stands):`,
+                (error as Error).message,
+            );
+        }
+    }
     return {
         ok: true,
         output: [
@@ -731,13 +983,6 @@ async function openPullRequest(
 }
 
 export async function runMigrationAgent(options: RunOptions): Promise<RunResult> {
-    const client =
-        options.client ??
-        new OpenAI({
-            apiKey: options.apiKey ?? process.env.OPENAI_API_KEY,
-            ...(options.baseURL ? { baseURL: options.baseURL } : {}),
-        });
-    const deps: RunnerDeps = { create: client.chat.completions.create.bind(client.chat.completions) };
     // Stage 0. Read what the repository is before the model gets a say, so that
     // the opening message contains the real scripts, the real package manager,
     // and the installed version of whatever is being migrated. An agent asked to
@@ -745,16 +990,55 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
     // about a script name is indistinguishable from a real build failure.
     const facts = options.repoFacts ?? (await fingerprintRepo(options.root));
     const state = createInitialState(options.packet, options.contract, facts);
+    const tier: AgentTier = options.tier ?? "pro";
+    const systemPrompt = buildSystemPrompt(tier);
+    const providerName = options.provider ?? "openai";
     // The contract gate needs both halves: the API surface and the config
     // that says which receivers it applies to. Anything less is ungated.
     state.hasContract = Boolean(options.contract && options.vendor);
-    const model = options.model ?? "gpt-4o-mini";
+    // The OpenAI default must not leak into other providers: each registered
+    // provider names its own default, and an explicit model always wins.
+    const model = options.model ?? modelProviderDefaultModel(providerName) ?? "gpt-4o-mini";
     const modelResilience = {
         timeoutMs: options.modelTimeoutMs ?? 120_000,
         maxRetries: options.modelMaxRetries ?? 2,
         baseDelayMs: options.modelRetryBaseMs ?? 1000,
     };
     const budgetChars = options.transcriptBudgetChars ?? 120_000;
+    // Provider resolution: an explicit ModelClient wins (tests, custom
+    // runtimes), then the registry builds the named provider ("openai" keeps
+    // the OpenAI-compatible client below). All paths produce the same
+    // transcript entries downstream. The OpenAI client is built lazily so
+    // other providers never require OPENAI_API_KEY to even be present.
+    const providerBaseURL =
+        options.providerBaseURL ?? (providerName === "anthropic" ? options.anthropicBaseURL : undefined);
+    const providerFetchFn =
+        options.providerFetchFn ?? (providerName === "anthropic" ? options.anthropicFetchFn : undefined);
+    const turnClient: ModelClient | null =
+        options.modelClient ??
+        (providerName === "openai"
+            ? null
+            : createProviderClient(providerName, {
+                  apiKey:
+                      options.providerApiKey ??
+                      (providerName === "anthropic" ? options.anthropicApiKey : undefined) ??
+                      process.env[modelProviderEnvKey(providerName) ?? ""] ??
+                      "",
+                  ...(providerBaseURL ? { baseURL: providerBaseURL } : {}),
+                  ...(providerFetchFn ? { fetchFn: providerFetchFn } : {}),
+              }));
+    const openAiCreate = (): RunnerDeps["create"] => {
+        const client =
+            options.client ??
+            new OpenAI({
+                apiKey: options.apiKey ?? process.env.OPENAI_API_KEY,
+                ...(options.baseURL ? { baseURL: options.baseURL } : {}),
+            });
+        return client.chat.completions.create.bind(client.chat.completions);
+    };
+    // One client for the run, built only for the path taken: non-OpenAI
+    // runs never touch the OpenAI constructor.
+    const openAi = turnClient ? null : openAiCreate();
     // Observer errors must never change what the run does.
     const emit = (event: AgentEvent): void => {
         try {
@@ -787,26 +1071,58 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
 
         // A dead model endpoint must degrade to an outcome, never throw: the
         // edits on disk are real work worth reporting as review_pr.
-        let response: Awaited<ReturnType<typeof createWithRetry>>;
+        let content = "";
+        let toolCalls: ToolCall[] = [];
         try {
-            response = await createWithRetry(
-                deps.create,
-                {
-                    model,
-                    temperature: 0.1,
-                    messages: [
-                        { role: "system", content: SYSTEM_PROMPT },
-                        ...toWireMessages(state.transcript),
-                    ],
-                    tools: toOpenAITools(),
-                    tool_choice: "auto",
-                },
-                {
-                    ...modelResilience,
-                    onRetry: (attempt, error) =>
-                        emit({ type: "model_retry", attempt, error: modelErrorMessage(error) }),
-                },
-            );
+            if (turnClient) {
+                const turn: ModelTurn = await createWithRetry(
+                    (signal) =>
+                        turnClient.create({
+                            model,
+                            temperature: 0.1,
+                            system: systemPrompt,
+                            transcript: state.transcript,
+                            tools: toolsForTier(tier),
+                            signal,
+                        }),
+                    {
+                        ...modelResilience,
+                        onRetry: (attempt, error) =>
+                            emit({ type: "model_retry", attempt, error: modelErrorMessage(error) }),
+                    },
+                );
+                content = turn.content;
+                toolCalls = turn.toolCalls;
+            } else {
+                const response = await createWithRetry(
+                    (signal) =>
+                        openAi!(
+                            {
+                                model,
+                                temperature: 0.1,
+                                messages: [
+                                    { role: "system", content: systemPrompt },
+                                    ...toWireMessages(state.transcript),
+                                ],
+                                tools: toOpenAITools(tier),
+                                tool_choice: "auto",
+                            },
+                            { signal },
+                        ) as Promise<
+                            Extract<Awaited<ReturnType<RunnerDeps["create"]>>, { choices: unknown }>
+                        >,
+                    {
+                        ...modelResilience,
+                        onRetry: (attempt, error) =>
+                            emit({ type: "model_retry", attempt, error: modelErrorMessage(error) }),
+                    },
+                );
+                const message = response.choices[0]?.message;
+                content = (message as { content?: unknown } | undefined)?.content as string ?? "";
+                toolCalls = parseToolCalls(
+                    (message as { tool_calls?: unknown } | undefined)?.tool_calls,
+                );
+            }
         } catch (error) {
             state.transcript.push({
                 role: "assistant",
@@ -817,15 +1133,28 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
             break;
         }
 
-        const message = response.choices[0]?.message;
-        const toolCalls = parseToolCalls(
-            (message as { tool_calls?: unknown } | undefined)?.tool_calls,
-        );
+        if (toolCalls.length === 0 && content.trim()) {
+            // Small models often write the call as text instead of using
+            // native function calling. Recover it rather than dying silent.
+            toolCalls = parseTextToolCall(content);
+            if (toolCalls.length > 0) {
+                emit({
+                    type: "note",
+                    message: `Recovered ${toolCalls[0].name} from model text (no native tool call)`,
+                    iteration: state.iteration,
+                });
+            }
+        }
 
         if (toolCalls.length === 0) {
             state.transcript.push({
                 role: "assistant",
-                content: message?.content ?? "",
+                content,
+            });
+            emit({
+                type: "note",
+                message: `Model returned no tool calls at iteration ${state.iteration} (${stage}); ending run`,
+                iteration: state.iteration,
             });
             state.done = true;
             state.outcome = decideOutcome(state);
@@ -834,7 +1163,7 @@ export async function runMigrationAgent(options: RunOptions): Promise<RunResult>
 
         state.transcript.push({
             role: "assistant",
-            content: message?.content ?? "",
+            content,
             toolCalls,
         });
 

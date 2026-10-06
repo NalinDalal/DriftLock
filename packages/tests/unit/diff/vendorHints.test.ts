@@ -40,9 +40,11 @@ function shapeOf(payload: unknown): Shape {
 
 describe("applyVendorHints", () => {
     test("upgrades a removal work into a rename when the vendor declares one", () => {
+        // Pure removal (no paired addition): the rename heuristic stays out,
+        // leaving a `custom` work for the vendor hint to upgrade.
         const result = diffShapes(
             shapeOf({ id: "pi_1", source: "tok_visa" }),
-            shapeOf({ id: "pi_1", payment_method: "pm_1" }),
+            shapeOf({ id: "pi_1" }),
         );
         const works = fixWorksForDiff(result);
         expect(works.some((w) => w.kind === "custom")).toBe(true);

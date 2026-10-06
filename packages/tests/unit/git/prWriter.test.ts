@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { PRWriter, type WriteFile } from "@driftlock/git";
+import { PRWriter, buildFixPRTitle, type WriteFile } from "@driftlock/git";
 
 function makeFake() {
     const calls: Array<{ name: string; params: any }> = [];
@@ -199,5 +199,26 @@ describe("PRWriter (wordless fix PR)", () => {
         ).rejects.toThrow("no file changes");
 
         expect(fake.byName("git.getRef")).toHaveLength(0);
+    });
+});
+
+describe("buildFixPRTitle honesty", () => {
+    function meta(type: string) {
+        return {
+            driftEvent: {},
+            callSite: { method: "stripe.charges.create", filePath: "src/pay.ts" },
+            fix: { type },
+        } as unknown as Parameters<typeof buildFixPRTitle>[0];
+    }
+
+    test("comment-out (custom) fixes are titled Flag, never Fix", () => {
+        const title = buildFixPRTitle(meta("custom"));
+        expect(title).toMatch(/^driftlock: Flag /);
+        expect(title).not.toMatch(/Fix/);
+    });
+
+    test("null checks keep an honest action title", () => {
+        expect(buildFixPRTitle(meta("null_check"))).toMatch(/^driftlock: Add null check for /);
+        expect(buildFixPRTitle(meta("field_rename"))).toMatch(/^driftlock: Rename /);
     });
 });

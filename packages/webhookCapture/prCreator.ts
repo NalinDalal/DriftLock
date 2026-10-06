@@ -49,6 +49,65 @@ function alertToWorks(alert: DriftAlert): FixWork[] {
     return fixWorksForDiff(responseDiff);
 }
 
+/**
+ * Pure content matcher behind the repo scan, exported for tests. A file is
+ * affected when any work matches: renames by token, null checks by member
+ * access, removals by member access OR by brace-bound leaf
+ * (`const { source } = obj`, `{ source }` shorthand, `{ source: ... }`
+ * keys). The brace arm closes a real miss: files that only destructure the
+ * removed field never matched the dotted-access regex, so their usages
+ * went unfound and no PR opened.
+ */
+export function contentMatchesWorks(content: string, works: FixWork[]): boolean {
+    const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    for (const work of works) {
+        if (work.kind === "field_rename" && work.from && work.to) {
+            const regex = new RegExp(`(?<![\\w])${esc(work.from)}(?![\\w])`, "g");
+            if (regex.test(content)) return true;
+        } else if ((work.kind === "null_check" || work.kind === "type_coercion") && work.field) {
+            const fieldParts = work.field.split(".");
+            const leaf = fieldParts[fieldParts.length - 1];
+            const regex = new RegExp(
+                `(?<![\\w.])[\\w$]+(?:\\.[\\w$]+)*\\.${esc(leaf)}(?![\\w])`,
+                "g",
+            );
+            if (regex.test(content)) return true;
+        } else if (work.kind === "custom" && work.field) {
+            const fieldParts = work.field.split(".");
+            const leaf = fieldParts[fieldParts.length - 1];
+            const access = new RegExp(`[\\w$]+(?:\\.[\\w$]+)*\\.${esc(leaf)}`, "g");
+            // Brace-bound matches may over-match same-named keys in
+            // unrelated objects; that is the safe direction for a
+            // Flag-titled PR a human reviews.
+            const braced = new RegExp(`[{,]\\s*${esc(leaf)}\\b`, "g");
+            if (access.test(content) || braced.test(content)) return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Branch per endpoint + event + change signature. The old per-endpoint
+ * branch meant rapid successive drifts force-pushed over each other, so
+ * fix N clobbered fix N-1. Same change re-detected still maps to the same
+ * branch (already_open dedupe preserved); a different change gets its own
+ * branch and composes. Stays within bot branch charset and length limits.
+ */
+export function branchForAlert(alert: DriftAlert): string {
+    const endpoint = alert.endpointId.slice(0, 8).replace(/[^A-Za-z0-9]/g, "");
+    const event = alert.eventType.replace(/[^A-Za-z0-9]+/g, "-").slice(0, 32).replace(/^-+|-+$/g, "");
+    const sig = [
+        ...alert.diff.added,
+        ...alert.diff.removed,
+        ...alert.diff.typeChanged.map((c) => `${c.field}:${c.from}->${c.to}`),
+    ].sort().join("|");
+    let hash = 0;
+    for (let i = 0; i < sig.length; i++) {
+        hash = (hash * 31 + sig.charCodeAt(i)) >>> 0;
+    }
+    return `driftlock/webhook-${endpoint}-${event}-${hash.toString(16).padStart(8, "0")}`;
+}
+
 function scanForAffectedFiles(
     repoPath: string,
     works: FixWork[],
@@ -73,40 +132,9 @@ function scanForAffectedFiles(
             continue;
         }
 
-        for (const work of works) {
-            if (work.kind === "field_rename" && work.from && work.to) {
-                const regex = new RegExp(
-                    `(?<![\\w])${work.from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w])`,
-                    "g",
-                );
-                if (regex.test(content) && !seen.has(fullPath)) {
-                    results.push({ filePath: file, fullPath });
-                    seen.add(fullPath);
-                }
-            } else if (work.kind === "null_check" && work.field) {
-                const fieldParts = work.field.split(".");
-                const leaf = fieldParts[fieldParts.length - 1];
-                const regex = new RegExp(
-                    `(?<![\\w.])[\\w$]+(?:\\.[\\w$]+)*\\.${leaf.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w])`,
-                    "g",
-                );
-                if (regex.test(content) && !seen.has(fullPath)) {
-                    results.push({ filePath: file, fullPath });
-                    seen.add(fullPath);
-                }
-            } else if (work.kind === "custom" && work.field) {
-                // For removed fields, search for the leaf field name
-                const fieldParts = work.field.split(".");
-                const leaf = fieldParts[fieldParts.length - 1];
-                const regex = new RegExp(
-                    `[\\w$]+(?:\\.[\\w$]+)*\\.${leaf.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
-                    "g",
-                );
-                if (regex.test(content) && !seen.has(fullPath)) {
-                    results.push({ filePath: file, fullPath });
-                    seen.add(fullPath);
-                }
-            }
+        if (contentMatchesWorks(content, works) && !seen.has(fullPath)) {
+            results.push({ filePath: file, fullPath });
+            seen.add(fullPath);
         }
     }
 
@@ -166,7 +194,7 @@ export async function createWebhookFixPR(
         return { status: "no_fixable_files", filesChanged: [] };
     }
 
-    const branch = `driftlock/webhook-fix-${input.alert.endpointId.slice(0, 8)}`;
+    const branch = branchForAlert(input.alert);
     const title = buildWebhookPRTitle(input.alert, works);
     const body = buildWebhookPRBody(input.alert, works, files);
     const commitMessage = `driftlock: fix webhook schema drift for ${input.alert.eventType}`;
@@ -209,8 +237,11 @@ export async function createWebhookFixPR(
     };
 }
 
-function buildWebhookPRTitle(alert: DriftAlert, works: FixWork[]): string {
+export function buildWebhookPRTitle(alert: DriftAlert, works: FixWork[]): string {
     const primary = works[0];
+    // A custom work comments out the removed field's usages: that flags the
+    // breakage for a human, it does not fix it. The title must say Flag so
+    // the PR never reads as a completed migration.
     const action =
         primary.kind === "field_rename"
             ? "Rename"
@@ -218,7 +249,7 @@ function buildWebhookPRTitle(alert: DriftAlert, works: FixWork[]): string {
               ? "Add null check for"
               : primary.kind === "type_coercion"
                 ? "Update type for"
-                : "Fix";
+                : "Flag";
     return `driftlock: ${action} ${alert.eventType} webhook handler`;
 }
 

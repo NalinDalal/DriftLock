@@ -71,11 +71,28 @@ describe("CLI structure", () => {
         expect(pkg.dependencies).toHaveProperty("inquirer");
     });
 
-    test("CLI package.json has bin entry", async () => {
+    test("CLI package.json has bin entry pointing at the published bundle", async () => {
         const pkgPath = path.join(REPO_ROOT, "apps/cli/package.json");
         const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
         expect(pkg.bin).toBeDefined();
-        expect(pkg.bin.driftlock).toBe("./index.ts");
+        // Bundled single-file publish layout: workspace TS is bundled to
+        // dist by prepublishOnly, so the bin must not point at source.
+        expect(pkg.bin.driftlock).toBe("./dist/index.js");
+        expect(pkg.private).toBeUndefined();
+        expect(pkg.files).toContain("dist");
+    });
+
+    test("publish layout keeps native modules external and installable", async () => {
+        const pkgPath = path.join(REPO_ROOT, "apps/cli/package.json");
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+        // tree-sitter grammars are native: bundling them crashes the parser
+        // at startup, so they must stay external AND be real registry deps
+        // (the published tarball has no workspace to resolve them from).
+        for (const dep of ["tree-sitter", "tree-sitter-javascript", "tree-sitter-typescript"]) {
+            expect(pkg.scripts.build).toContain(`--external ${dep}`);
+            expect(pkg.dependencies[dep]).toMatch(/^\d+\.\d+\.\d+$/);
+        }
+        expect(fs.existsSync(path.join(REPO_ROOT, "apps/cli/scripts/prepare-publish.ts"))).toBe(true);
     });
 
     test("CLI bin target exists with a bun shebang", async () => {
