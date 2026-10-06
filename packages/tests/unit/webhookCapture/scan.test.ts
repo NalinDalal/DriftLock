@@ -26,4 +26,10 @@ describe("contentMatchesWorks", () => {
         expect(contentMatchesWorks("return obj.amount;", custom("data.object.source"))).toBe(false);
         expect(contentMatchesWorks("const id = legacy_id;", custom("data.object.source"))).toBe(false);
     });
+
+    test("matches member access for type coercion works", () => {
+        const works = [{ kind: "type_coercion", field: "data.object.amount", description: "", template: "", confidence: "high" as const }];
+        expect(contentMatchesWorks("cents: obj.amount", works)).toBe(true);
+        expect(contentMatchesWorks("return obj.status;", works)).toBe(false);
+    });
 });

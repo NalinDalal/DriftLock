@@ -64,7 +64,7 @@ export function contentMatchesWorks(content: string, works: FixWork[]): boolean 
         if (work.kind === "field_rename" && work.from && work.to) {
             const regex = new RegExp(`(?<![\\w])${esc(work.from)}(?![\\w])`, "g");
             if (regex.test(content)) return true;
-        } else if (work.kind === "null_check" && work.field) {
+        } else if ((work.kind === "null_check" || work.kind === "type_coercion") && work.field) {
             const fieldParts = work.field.split(".");
             const leaf = fieldParts[fieldParts.length - 1];
             const regex = new RegExp(
