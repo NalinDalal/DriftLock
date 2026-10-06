@@ -62,6 +62,14 @@ describe("compareVersions", () => {
         expect(compareVersions("1.9.0", "1.10.0")).toBeLessThan(0);
         expect(compareVersions("2.0.0", "2.0.0-beta.1")).toBeGreaterThan(0);
     });
+
+    test("ignores build metadata and orders prerelease identifiers numerically", () => {
+        expect(compareVersions("1.0.0+build.1", "1.0.0+build.2")).toBe(0);
+        expect(compareVersions("1.0.0+build", "1.0.0")).toBe(0);
+        expect(compareVersions("2.0.0-beta.10", "2.0.0-beta.2")).toBeGreaterThan(0);
+        expect(compareVersions("1.0.0-alpha", "1.0.0-alpha.1")).toBeLessThan(0);
+        expect(compareVersions("^1.2.3", "1.2.3")).toBe(0);
+    });
 });
 
 describe("fetchLatestVersion", () => {

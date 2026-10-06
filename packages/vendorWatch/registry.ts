@@ -211,15 +211,22 @@ export function stripRange(pinned: string): string {
  * Numeric dot-compare ignoring a `-prerelease` suffix for ordering the core.
  * Returns negative when a < b, 0 when equal, positive when a > b.
  * A stable release beats its own prerelease (`2.0.0` > `2.0.0-beta.1`).
+ * Build metadata (`1.0.0+build`) is ignored per semver precedence rules.
+ * Prerelease identifiers compare numerically when both sides are numeric
+ * (`beta.10` > `beta.2`), lexically otherwise. No new dependency on purpose:
+ * this is advisory drift hinting, and the two rules above are the only
+ * semver subtleties this call path needs.
  */
 export function compareVersions(a: string, b: string): number {
-    const core = (v: string): { parts: number[]; pre: string | null } => {
-        const [head, ...rest] = stripRange(v).split("-");
+    const core = (v: string): { parts: number[]; pre: Array<string | number> | null } => {
+        const withoutBuild = stripRange(v).split("+")[0];
+        const [head, ...rest] = withoutBuild.split("-");
         const parts = head.split(".").map((n) => {
             const parsed = Number.parseInt(n, 10);
             return Number.isNaN(parsed) ? 0 : parsed;
         });
-        return { parts, pre: rest.length > 0 ? rest.join("-") : null };
+        const pre = rest.length > 0 ? rest.join("-").split(".").map((id) => (/^\d+$/.test(id) ? Number.parseInt(id, 10) : id)) : null;
+        return { parts, pre };
     };
     const left = core(a);
     const right = core(b);
@@ -228,10 +235,28 @@ export function compareVersions(a: string, b: string): number {
         const diff = (left.parts[i] ?? 0) - (right.parts[i] ?? 0);
         if (diff !== 0) return diff;
     }
-    if (left.pre === right.pre) return 0;
+    if (left.pre === null && right.pre === null) return 0;
     if (left.pre === null) return 1;
     if (right.pre === null) return -1;
-    return left.pre < right.pre ? -1 : 1;
+    const widthPre = Math.max(left.pre.length, right.pre.length);
+    for (let i = 0; i < widthPre; i += 1) {
+        const l = left.pre[i];
+        const r = right.pre[i];
+        // A longer prerelease wins when all shared identifiers are equal.
+        if (l === undefined) return -1;
+        if (r === undefined) return 1;
+        if (typeof l === "number" && typeof r === "number") {
+            if (l !== r) return l - r;
+        } else if (typeof l === "number") {
+            // Numeric identifiers sort below alphanumeric ones (semver 11.4.4).
+            return -1;
+        } else if (typeof r === "number") {
+            return 1;
+        } else if (l !== r) {
+            return l < r ? -1 : 1;
+        }
+    }
+    return 0;
 }
 
 function ecosystemOf(facts: RepoFacts): RegistryEcosystem | null {

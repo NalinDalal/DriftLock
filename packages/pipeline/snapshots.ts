@@ -37,19 +37,27 @@ export class FileSnapshotStore implements SnapshotStore {
             return null;
         }
         try {
-            return JSON.parse(readFileSync(file, "utf8")) as CapturedShapes;
+            const parsed = JSON.parse(readFileSync(file, "utf8")) as
+                | CapturedShapes
+                | { shapes: CapturedShapes; meta: SnapshotMeta };
+            // New envelope `{shapes, meta}`; bare-shapes files predate meta
+            // persistence and still load (meta is advisory, shapes decide drift).
+            if (parsed && typeof parsed === "object" && "shapes" in parsed && parsed.shapes) {
+                return (parsed as { shapes: CapturedShapes }).shapes;
+            }
+            return parsed as CapturedShapes;
         } catch {
             return null;
         }
     }
 
-    async save(callSiteId: string, shapes: CapturedShapes): Promise<void> {
+    async save(callSiteId: string, shapes: CapturedShapes, meta: SnapshotMeta): Promise<void> {
         if (!existsSync(this.directory)) {
             mkdirSync(this.directory, { recursive: true });
         }
         writeFileSync(
             join(this.directory, `${callSiteId}.json`),
-            JSON.stringify(shapes, null, 2),
+            JSON.stringify({ shapes, meta }, null, 2),
         );
     }
 }

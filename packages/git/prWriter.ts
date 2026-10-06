@@ -46,6 +46,24 @@ function normalizeRepoPath(path: string): string {
     return clean;
 }
 
+/** Octokit signals HTTP failures with `status` (RequestError). */
+function isNotFound(error: unknown): boolean {
+    return (
+        typeof error === "object" &&
+        error !== null &&
+        (error as { status?: unknown }).status === 404
+    );
+}
+
+/** Invalid head format for fork setups surfaces as 422. */
+function isUnprocessable(error: unknown): boolean {
+    return (
+        typeof error === "object" &&
+        error !== null &&
+        (error as { status?: unknown }).status === 422
+    );
+}
+
 export class PRWriter {
     private octokit: Octokit;
 
@@ -161,7 +179,11 @@ export class PRWriter {
                 sha,
                 force: true,
             });
-        } catch {
+        } catch (error) {
+            // Only a missing ref justifies creating one. Auth, rate-limit,
+            // and network failures must surface as themselves — falling
+            // through to createRef masks them with a confusing second error.
+            if (!isNotFound(error)) throw error;
             await this.octokit.rest.git.createRef({
                 owner,
                 repo,
@@ -356,19 +378,23 @@ export class FixPRRunner {
                 state: "all",
                 head: `${owner}:${branch}`,
                 base,
-                per_page: 10,
+                per_page: 100,
                 sort: "updated",
                 direction: "desc",
             });
             prs = data;
-        } catch {
+        } catch (error) {
+            // The `owner:branch` head form is wrong for some fork setups
+            // (422); anything else (auth, rate limit, network) must surface
+            // instead of being masked by a doomed second request.
+            if (!isNotFound(error) && !isUnprocessable(error)) throw error;
             const { data } = await this.octokit.rest.pulls.list({
                 owner,
                 repo,
                 state: "all",
                 head: branch,
                 base,
-                per_page: 10,
+                per_page: 100,
                 sort: "updated",
                 direction: "desc",
             });

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync } from "fs";
+import { mkdtempSync, mkdirSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import type { CallSite } from "@driftlock/core";
@@ -106,7 +106,7 @@ describe("FileSnapshotStore", () => {
         const dir = mkdtempSync(join(tmpdir(), "driftlock-pipeline-"));
         const store = new FileSnapshotStore(dir);
         expect(await store.load("cs-1")).toBeNull();
-        await (store as any).save(
+        await store.save(
             "cs-1",
             {
                 request: { amount: { kind: "number" } },
@@ -122,5 +122,20 @@ describe("FileSnapshotStore", () => {
         const loaded = await store.load("cs-1");
         expect(loaded?.request.amount?.kind).toBe("number");
         expect(loaded?.response.id?.kind).toBe("string");
+    });
+
+    test("loads legacy bare-shapes files written before meta persistence", async () => {
+        const dir = mkdtempSync(join(tmpdir(), "driftlock-pipeline-"));
+        const store = new FileSnapshotStore(dir);
+        mkdirSync(join(dir, ".driftlock", "snapshots"), { recursive: true });
+        writeFileSync(
+            join(dir, ".driftlock", "snapshots", "cs-legacy.json"),
+            JSON.stringify({
+                request: { amount: { kind: "number" } },
+                response: { id: { kind: "string" } },
+            }),
+        );
+        const loaded = await store.load("cs-legacy");
+        expect(loaded?.request.amount?.kind).toBe("number");
     });
 });
