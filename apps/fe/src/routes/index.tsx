@@ -466,6 +466,41 @@ export default function LandingPage() {
                 </div>
             </div>
 
+            <div className="reveal mx-auto max-w-[1080px] px-6 py-10 sm:py-14">
+                <div className="mx-auto max-w-[720px]">
+                    <p className="font-mono text-[11px] tracking-[0.14em] text-[var(--color-muted)]">PRICING</p>
+                    <h2 className="heading-section mt-2 text-[var(--color-ink)]">Free in beta. Stated intent after that.</h2>
+                    <p className="mt-2 font-mono text-xs leading-5 text-[var(--color-muted)]">No billing code yet. Team and Scale are coming soon, not for sale today.</p>
+                    <div className="mt-8 grid gap-4 sm:grid-cols-2">
+                        <div className="border border-[var(--color-line-strong)] bg-[var(--color-ink)] p-5 text-[var(--color-paper)]">
+                            <p className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-paper)]/60">BETA · LIVE NOW</p>
+                            <p className="mt-2 font-mono text-2xl font-semibold">$0</p>
+                            <ul className="mt-3 space-y-1.5 font-mono text-xs leading-4 text-[var(--color-paper)]/80"><li>• Everything included</li><li>• Public + private repos</li><li>• All features, AI fixes included</li></ul>
+                            <Link to="/install" className="mt-4 inline-flex bg-[var(--color-paper)] px-4 py-2 font-mono text-xs tracking-wide text-[var(--color-ink)] hover:opacity-90 active:scale-[0.98] transition-[transform,opacity]">INSTALL GITHUB APP</Link>
+                        </div>
+                        <div className="border border-[var(--color-line-strong)] bg-[var(--color-surface)] p-5">
+                            <p className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-muted)]">TEAM · COMING SOON</p>
+                            <p className="mt-2 font-mono text-2xl font-semibold text-[var(--color-ink)]">$99<span className="text-sm font-normal text-[var(--color-muted)]">/mo</span></p>
+                            <ul className="mt-3 space-y-1.5 font-mono text-xs leading-4 text-[var(--color-ink)]/80"><li>• Up to 5 private repos</li><li>• Unlimited seats</li><li>• AI fixes, Slack alerts</li></ul>
+                            <a href="mailto:nalin@nerdev.in?subject=DriftLock%20Team%20plan%20waitlist" className="mt-4 inline-flex border border-[var(--color-line-strong)] bg-[var(--color-paper)] px-4 py-2 font-mono text-xs tracking-wide text-[var(--color-ink)] hover:bg-[var(--color-surface)] active:scale-[0.98] transition-[transform,background]">NOTIFY ME</a>
+                        </div>
+                        <div className="border border-[var(--color-line-strong)] bg-[var(--color-surface)] p-5">
+                            <p className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-muted)]">SCALE · COMING SOON</p>
+                            <p className="mt-2 font-mono text-2xl font-semibold text-[var(--color-ink)]">$299<span className="text-sm font-normal text-[var(--color-muted)]">/mo</span></p>
+                            <ul className="mt-3 space-y-1.5 font-mono text-xs leading-4 text-[var(--color-ink)]/80"><li>• Up to 20 repos</li><li>• Priority vendor coverage</li><li>• Higher run concurrency</li></ul>
+                            <a href="mailto:nalin@nerdev.in?subject=DriftLock%20Scale%20plan%20waitlist" className="mt-4 inline-flex border border-[var(--color-line-strong)] bg-[var(--color-paper)] px-4 py-2 font-mono text-xs tracking-wide text-[var(--color-ink)] hover:bg-[var(--color-surface)] active:scale-[0.98] transition-[transform,background]">NOTIFY ME</a>
+                        </div>
+                        <div className="border border-[var(--color-line-strong)] bg-[var(--color-surface)] p-5">
+                            <p className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-muted)]">ENTERPRISE · TALK TO US</p>
+                            <p className="mt-2 font-mono text-2xl font-semibold text-[var(--color-ink)]">Custom</p>
+                            <ul className="mt-3 space-y-1.5 font-mono text-xs leading-4 text-[var(--color-ink)]/80"><li>• SSO/SAML, self-host</li><li>• SLA, DPA, audit log</li></ul>
+                            <a href="mailto:nalin@nerdev.in?subject=DriftLock%20Enterprise%20plan" className="mt-4 inline-flex border border-[var(--color-line-strong)] bg-[var(--color-paper)] px-4 py-2 font-mono text-xs tracking-wide text-[var(--color-ink)] hover:bg-[var(--color-surface)] active:scale-[0.98] transition-[transform,background]">TALK TO US</a>
+                        </div>
+                    </div>
+                    <p className="mt-6 font-mono text-xs leading-4 text-[var(--color-muted)]">Billing starts at 10 active beta teams or infra over $500/mo, whichever first, with 30 days notice. First 10 design partners stay free 6 months.</p>
+                </div>
+            </div>
+
             <div className="border-t border-[var(--color-line-strong)] bg-[var(--color-surface)]">
                 <div className="mx-auto max-w-[1080px] px-6 py-10 text-center">
                     <h2 className="heading-section text-[var(--color-ink)]">Stay current without the migration tax.</h2>
