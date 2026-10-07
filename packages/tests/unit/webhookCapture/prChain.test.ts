@@ -2,11 +2,18 @@ import { describe, expect, test, mock } from "bun:test";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { InMemorySchemaStore } from "../schemaStore";
-import { DriftDetector } from "../driftDetector";
-import { flattenPayload } from "../schemaFlattener";
-import { diffSchemas } from "../schemaDiff";
+import { InMemorySchemaStore } from "@driftlock/webhookCapture";
+import { DriftDetector } from "@driftlock/webhookCapture";
+import { flattenPayload } from "@driftlock/webhookCapture";
+import { diffSchemas } from "@driftlock/webhookCapture";
 import { isValidAIFix, generateAIFixSync, type FixContext } from "@driftlock/aiFix";
+import type { DriftAlert, RollbackAlert } from "@driftlock/webhookCapture";
+
+/** processPayload returns a drift/rollback union; these tests set up drift. */
+function requireDrift(alert: DriftAlert | RollbackAlert | null): DriftAlert {
+    if (!alert || !("diff" in alert)) throw new Error("expected a DriftAlert");
+    return alert;
+}
 
 function tmpRepo(): string {
     const dir = mkdtempSync(join(tmpdir(), "driftlock-webhook-pr-"));
@@ -276,9 +283,9 @@ describe("Webhook drift → fix chain (unit)", () => {
             },
         );
 
-        expect(alert).not.toBeNull();
-        expect(alert!.diff.added).toContain("payment_method");
-        expect(alert!.diff.removed).toContain("source");
+        const drift = requireDrift(alert);
+        expect(drift.diff.added).toContain("payment_method");
+        expect(drift.diff.removed).toContain("source");
     });
 
     test("generates fix works from schema diff", async () => {

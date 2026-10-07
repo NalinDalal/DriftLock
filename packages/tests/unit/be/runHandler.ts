@@ -20,7 +20,11 @@ const mockStore = {
     saveSnapshot: mock(async (_site: { callSiteId: string }) => ({ id: "snap-1" })),
     getLatestSnapshot: mock(async (_callSiteId: string) => null),
     recordDrift: mock(
-        async (_input: { id: string; suggestedFix: { driftEventId: string } }) => {},
+        async (_input: {
+            id: string;
+            suggestedFix: { driftEventId: string } | null;
+            status: string;
+        }) => {},
     ),
     setCallSiteSnapshotState: mock(async (_callSiteId: string, _state: string) => {}),
     finishRun: mock(async (_input: { id: string; status: string }) => {}),
@@ -196,10 +200,8 @@ async function run() {
         filePath: import.meta.path,
     }));
     const shapes = mockAnalyzeResult.shapes.get("cs-1")!;
-    const { applyDriftFix } = await import("@driftlock/pipeline");
-    const fixMock = applyDriftFix as ReturnType<typeof mock>;
-    const appliedFix = { fix: { driftEventId: `drift-${callSites[0].id}` }, changes: "changed" };
-    fixMock.mockReturnValueOnce(appliedFix);
+    // Agent-only mode: the run route records drift with no suggestedFix.
+    // A migration agent consumes the recorded drift and opens a verified PR.
     (analyzeAndCompare as ReturnType<typeof mock>).mockResolvedValueOnce({
         ...mockAnalyzeResult,
         callSites,
@@ -219,7 +221,8 @@ async function run() {
     expect(mockStore.saveSnapshot.mock.calls.at(-1)![0].callSiteId).toBe(ids[0]);
     const event = mockStore.recordDrift.mock.calls[0][0];
     expect(event.id).toBe(`drift-${ids[0]}`);
-    expect(event.suggestedFix.driftEventId).toBe(event.id);
+    expect(event.suggestedFix).toBeNull();
+    expect(event.status).toBe("detected");
 
     const previousClonePath = mockClone.path;
     mockClone.path = "/tmp/driftlock-another-checkout";

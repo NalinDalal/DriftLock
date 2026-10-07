@@ -512,4 +512,119 @@ describe("changePacketFromDrift", () => {
         });
         expect(packet.summary).toContain("No field level change was observed");
     });
+
+    test("scopes webhook drift to inbound reads and forbids coercion without a type change", () => {
+        const packet = changePacketFromDrift({
+            provider: "stripe",
+            fromVersion: "previous baseline",
+            toVersion: "observed",
+            removed: ["data.object.source"],
+            added: ["data.object.payment_method"],
+            typeChanged: [],
+        });
+
+        expect(packet.summary).toContain("inbound webhook drift");
+        expect(packet.summary).toContain("Do not edit outbound");
+        expect(packet.summary).toContain("Do not coerce");
+    });
+});
+
+describe("webhook outbound coercion guard (PR #14)", () => {
+    const webhookContract = contract({
+        provider: "stripe",
+        source: "recorded",
+        authority: "sampled",
+        origin: "webhook payment_intent.succeeded observed payload",
+        members: ["amount", "id", "payment_method"],
+        removed: ["source"],
+    });
+
+    test("blocks String(amount) on the outbound request and parseInt on unchanged amount", async () => {
+        const { findWebhookOutboundCoercions } = await import("@driftlock/agent");
+        const sources = new Map([
+            [
+                "payment.js",
+                "await stripe.paymentIntents.create({ amount: String(amount), currency });",
+            ],
+            [
+                "src/payment.js",
+                "export function handlePayment(obj) { return { chargeFrom: obj.source, cents: parseInt(obj.amount, 10) }; }",
+            ],
+        ]);
+
+        const findings = findWebhookOutboundCoercions(webhookContract, sources);
+        expect(findings).toHaveLength(2);
+        expect(findings.map((f) => f.file).sort()).toEqual([
+            "payment.js",
+            "src/payment.js",
+        ]);
+    });
+
+    test("lets the correct inbound rename through", async () => {
+        const { findWebhookOutboundCoercions } = await import("@driftlock/agent");
+        const sources = new Map([
+            [
+                "payment.js",
+                "await stripe.paymentIntents.create({ amount, currency });",
+            ],
+            [
+                "src/payment.js",
+                "export function handlePayment(obj) { return { chargeFrom: obj.payment_method, cents: obj.amount }; }",
+            ],
+        ]);
+
+        expect(findWebhookOutboundCoercions(webhookContract, sources)).toEqual([]);
+    });
+
+    test("refuses the PR when the agent repeats the PR #14 edits", async () => {
+        await writeFile(
+            join(root, "payment.js"),
+            "async function createPayment(amount, currency) {\n  return stripe.paymentIntents.create({ amount, currency });\n}\n",
+        );
+        await writeFile(
+            join(root, "src/payment.js"),
+            "export function handlePayment(obj) { return { chargeFrom: obj.source, cents: obj.amount }; }\n",
+        );
+        const add = Bun.spawn(["git", "add", "-A"], { cwd: root, stdout: "pipe" });
+        await add.exited;
+
+        apiCalls = [
+            toolCall(
+                "replaceInFile",
+                {
+                    path: "payment.js",
+                    oldText: "return stripe.paymentIntents.create({ amount, currency });",
+                    newText:
+                        "return stripe.paymentIntents.create({ amount: String(amount), currency });",
+                },
+                "c1",
+            ),
+            toolCall("runCommand", { command: "npm run build" }, "c2"),
+            toolCall("createPullRequest", prArgs, "c3"),
+        ];
+
+        const result = await runMigrationAgent({
+            root,
+            packet: {
+                provider: "stripe",
+                fromVersion: "previous baseline",
+                toVersion: "observed",
+                summary: "source removed",
+                migrationDocs: [],
+            },
+            contract: webhookContract,
+            vendor: STRIPE_VENDOR,
+            client: fakeClient(),
+            commandRunner: fakeOkRunner(),
+        });
+
+        expect(result.state.lastTestResult?.passed).toBe(true);
+        expect(result.state.pullRequest).toBeUndefined();
+        expect(result.outcome).toBe("review_pr");
+        const refusal = result.state.transcript.find(
+            (entry) => entry.toolName === "createPullRequest",
+        );
+        expect(refusal?.content).toContain("Refusing to open a PR");
+        expect(refusal?.content).toContain("amount");
+    });
 });

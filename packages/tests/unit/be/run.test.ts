@@ -5,7 +5,7 @@ import * as path from "path";
 // used in child process cwd resolution — keep for future explicit tests
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const REPO_ROOT = path.resolve(import.meta.dir, "../../..");
-const TEST_SCRIPT = path.join(import.meta.dir, "run-handler.ts");
+const TEST_SCRIPT = path.join(import.meta.dir, "runHandler.ts");
 
 async function runHandlerTest(): Promise<{
     stdout: string;

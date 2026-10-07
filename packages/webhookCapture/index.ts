@@ -42,10 +42,26 @@ export {
     type AgentFixResult,
 } from "./agentFix";
 export {
+    createOutboundAgentFixPR,
+    type OutboundAgentFixInput,
+    type OutboundAgentFixResult,
+    type OutboundDrift,
+} from "./outboundAgent";
+// Agent-layer modules, re-exported so existing callers keep working.
+// New code should import these from "@driftlock/agent" directly.
+export {
+    resolveHybridContract,
+    clearSpecCache,
+    vendorForPackage,
+    runDriftMigration,
+    type HybridContractInput,
+    type DriftMigrationInput,
+    type DriftMigrationResult,
+} from "@driftlock/agent";
+export {
     buildAgentClient,
     resolveAgentFixDeps,
     routeBySeverity,
-    vendorForEndpoint,
     type AgentAIConfig,
     type AgentClient,
     type FixRoute,

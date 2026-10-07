@@ -10,7 +10,7 @@ import {
     driftSummary,
     extractShapesFromCaptures,
     FileSnapshotStore,
-} from "../index";
+} from "@driftlock/pipeline";
 
 function callSite(overrides: Partial<CallSite> = {}): CallSite {
     return {

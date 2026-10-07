@@ -457,17 +457,45 @@ export function contractFromHar(
 }
 
 /**
+ * A sampled contract from observed member paths (one webhook payload, one
+ * set of captured traffic shapes). Each path contributes its full form and
+ * its leaf, because handler code reads leaves off a receiver
+ * (`paymentIntent.source` for observed `data.object.source`), and the leaf
+ * is what the completeness half of the gate matches on. Authority is
+ * `sampled`: one observation is a narrow sample, so only the explicit
+ * `removed` list counts as evidence of removal.
+ */
+export function contractFromObservedMembers(input: {
+    provider: string;
+    version?: string;
+    /** Human readable provenance, e.g. `webhook payment_intent.succeeded observed payload`. */
+    origin: string;
+    /** Member paths known to exist right now. */
+    currentMembers: string[];
+    /** Member paths the vendor stopped sending. */
+    removed: string[];
+}): VendorContract {
+    const withLeaves = (paths: string[]): string[] =>
+        paths.flatMap((path) => {
+            const leaf = path.split(".").pop();
+            return leaf && leaf !== path ? [path, leaf] : [path];
+        });
+    return {
+        ...emptyContract(
+            input.provider,
+            input.version ?? "unversioned",
+            "recorded",
+            "sampled",
+            input.origin,
+        ),
+        members: uniqueSorted(withLeaves(input.currentMembers)),
+        removed: uniqueSorted(withLeaves(input.removed)),
+    };
+}
+
+/**
  * A contract assembled from one webhook drift observation: the flattened
  * baseline schema and the flattened current schema.
- *
- * Flat keys are envelope-relative (`data.object.source`), while handler code
- * reads fields off a receiver (`paymentIntent.source`), so each key
- * contributes both its full path and its leaf name. The leaf is what the
- * completeness half of the gate matches on: a read of a removed leaf is a
- * missed call site wherever it lives. Authority is `sampled` for the same
- * reason as a HAR recording — one payload is a narrow sample, so only the
- * explicit `removed` list (leaves of fields the baseline had and the current
- * payload lacks) counts as evidence of removal.
  */
 export function contractFromWebhookAlert(input: {
     provider: string;
@@ -476,28 +504,13 @@ export function contractFromWebhookAlert(input: {
     previous: Record<string, string>;
     current: Record<string, string>;
 }): VendorContract {
-    const leaves = (schema: Record<string, string>): string[] =>
-        Object.keys(schema).flatMap((path) => {
-            const leaf = path.split(".").pop();
-            return leaf ? [path, leaf] : [path];
-        });
-    const removedLeaves = Object.keys(input.previous)
-        .filter((path) => !(path in input.current))
-        .flatMap((path) => {
-            const leaf = path.split(".").pop();
-            return leaf ? [path, leaf] : [path];
-        });
-    return {
-        ...emptyContract(
-            input.provider,
-            input.version ?? "unversioned",
-            "recorded",
-            "sampled",
-            `webhook ${input.eventType} observed payload`,
-        ),
-        members: uniqueSorted(leaves(input.current)),
-        removed: uniqueSorted(removedLeaves),
-    };
+    return contractFromObservedMembers({
+        provider: input.provider,
+        version: input.version,
+        origin: `webhook ${input.eventType} observed payload`,
+        currentMembers: Object.keys(input.current),
+        removed: Object.keys(input.previous).filter((path) => !(path in input.current)),
+    });
 }
 
 function isOpenApiSpec(value: unknown): value is { components?: { schemas?: Record<string, unknown> } } {
@@ -750,11 +763,20 @@ export function changePacketFromDrift(drift: ObservedDrift): {
             `The vendor started sending these fields: ${drift.added.map(readable).join(", ")}. They are the replacements.`,
         );
     }
-    for (const change of drift.typeChanged) {
+    if (drift.typeChanged.length > 0) {
+        for (const change of drift.typeChanged) {
+            lines.push(
+                `${readable(change.field)} changed type from ${change.from} to ${change.to}. Update any code that assumed the old type.`,
+            );
+        }
+    } else {
         lines.push(
-            `${readable(change.field)} changed type from ${change.from} to ${change.to}. Update any code that assumed the old type.`,
+            `No type change was observed. Do not coerce field types (no String(), Number(), parseInt(), or parseFloat() on observed fields).`,
         );
     }
+    lines.push(
+        `This is inbound webhook drift (vendor to you). Only edit code that reads these fields from webhook payloads or returned vendor objects. Do not edit outbound request arguments such as stripe.paymentIntents.create(); the request surface is a separate contract and is unchanged by this drift.`,
+    );
     if (searchTerms.length > 0) {
         lines.push(
             `Start with these searches, one call each: ${searchTerms.map((term) => `searchCode "${term}"`).join(", ")}. Do not guess file paths before searching.`,
@@ -986,6 +1008,79 @@ export function verifyVendorSymbols(
         }
     }
 
+    return findings;
+}
+
+/**
+ * True for contracts built from a webhook drift observation
+ * (`contractFromWebhookAlert` sets origin to `webhook <event> observed
+ * payload`). Only these runs may assume inbound-only scope: a webhook
+ * payload describes what the vendor sends you, never the shape of an
+ * outbound request you send the vendor.
+ */
+export function isWebhookContract(contract: VendorContract): boolean {
+    return contract.source === "recorded" && contract.origin.startsWith("webhook ");
+}
+
+const OUTBOUND_AMOUNT_COERCION =
+    /amount\s*:\s*(?:String\s*\(|parseInt\s*\(|parseFloat\s*\(|Number\s*\()/;
+// Inbound twin of the same bug (PR #14 also did `cents: parseInt(obj.amount)`
+// with no observed type change). Stripe amounts are integers on the wire;
+// wrapping an unchanged numeric amount is either wrong or needless. Scoped to
+// `.amount` reads only, so a legitimate string->number migration on some other
+// field is unaffected. The one exception — amount itself changing type — is
+// rare, and forcing that case to human review is the safe direction.
+const INBOUND_AMOUNT_COERCION =
+    /:\s*(?:parseInt\s*\(|parseFloat\s*\(|Number\s*\(\s*[^)]*|String\s*\()\s*[A-Za-z_$][\w$]*\.amount\b/;
+
+const STRIP_LINE_COMMENT = /\/\/.*$/;
+const STRIP_BLOCK_COMMENT = /\/\*[\s\S]*?\*\//g;
+
+/**
+ * Deterministic backstop for PR #14: a webhook drift run wrapped an outbound
+ * `stripe.paymentIntents.create({ amount })` in `String(amount)` even though
+ * the observed diff had no type change (`amount: number` in both schemas).
+ * The member gate cannot see this — `amount: String(amount)` is not a member
+ * read — and a green build does not catch it, so it needs its own check.
+ *
+ * For webhook contracts only, flags changed-file lines that coerce `amount`
+ * inside what looks like a request object (`amount: String(...)`). Inbound
+ * `parseInt(obj.amount)` on an unchanged type is covered by the packet guard
+ * instead: blocking all parseInt here would also block the legitimate
+ * string->number migration (fixture 02), where a coercion can be correct.
+ */
+export function findWebhookOutboundCoercions(
+    contract: VendorContract,
+    sources: Map<string, string>,
+): SymbolFinding[] {
+    if (!isWebhookContract(contract)) return [];
+    if (!contract.members.some((m) => (m.split(".").pop() ?? m) === "amount")) {
+        return [];
+    }
+    const findings: SymbolFinding[] = [];
+    for (const [file, raw] of sources) {
+        const lines = raw
+            .replace(STRIP_BLOCK_COMMENT, (m) => m.replace(/[^\n]/g, " "))
+            .split("\n");
+        lines.forEach((text, index) => {
+            const code = text.replace(STRIP_LINE_COMMENT, "");
+            const outbound = OUTBOUND_AMOUNT_COERCION.test(code);
+            const inbound = !outbound && INBOUND_AMOUNT_COERCION.test(code);
+            if (outbound || inbound) {
+                findings.push({
+                    kind: "unresolved",
+                    symbol: "amount",
+                    file,
+                    line: index + 1,
+                    text: text.trim(),
+                    detail:
+                        outbound
+                            ? `webhook drift never changes the outbound request surface: the observed payload kept amount as a number, so wrapping it in String()/parseInt()/Number() for stripe.paymentIntents.create sends the vendor a type it rejects. Keep amount as an integer and only rename payload reads.`
+                            : `no type change was observed for amount, so coercing it (parseInt/parseFloat/Number/String on .amount) is wrong or needless. Keep the value as the vendor sent it and only rename payload reads.`,
+                });
+            }
+        });
+    }
     return findings;
 }
 

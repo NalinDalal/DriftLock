@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { harToConsumerContract, type HarEntry } from "../harCapture";
+import { harToConsumerContract, type HarEntry } from "@driftlock/webhookCapture";
 
 function entry(
     url: string,

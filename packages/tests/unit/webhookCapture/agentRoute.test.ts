@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { STRIPE_VENDOR, TWILIO_VENDOR } from "@driftlock/core";
+import { vendorForEndpoint } from "@driftlock/agent";
 import {
     buildAgentClient,
     resolveAgentFixDeps,
     routeBySeverity,
-    vendorForEndpoint,
-} from "../agentRoute";
+} from "@driftlock/webhookCapture";
 
 describe("buildAgentClient maps AI providers to OpenAI-compatible clients", () => {
     test("should build a default-endpoint client for openai", () => {

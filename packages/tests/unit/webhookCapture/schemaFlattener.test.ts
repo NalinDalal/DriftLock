@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { flattenPayload } from "../schemaFlattener";
+import { flattenPayload } from "@driftlock/webhookCapture";
 
 describe("flattenPayload", () => {
     test("flattens a simple object", () => {

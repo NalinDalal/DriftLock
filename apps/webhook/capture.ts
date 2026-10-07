@@ -1,4 +1,4 @@
-import { InMemorySchemaStore, DbSchemaStore, DriftDetector, createWebhookFixPR, createAgentFixPR, resolveAgentFixDeps, severityForSchemaDiff, routeBySeverity, parseCaptureSecrets, verifyCaptureSignature } from "@driftlock/webhookCapture";
+import { InMemorySchemaStore, DbSchemaStore, DriftDetector, buildAgentClient, createAgentFixPR, resolveAgentFixDeps, severityForSchemaDiff, parseCaptureSecrets, verifyCaptureSignature } from "@driftlock/webhookCapture";
 import type { DriftAlert, RollbackAlert, SchemaStore, SchemaSnapshot, FlatSchema } from "@driftlock/webhookCapture";
 import { getDb } from "@driftlock/db";
 import { settings } from "@driftlock/db/schema";
@@ -354,74 +354,71 @@ function setupDetectorCallbacks(det: DriftDetector) {
         }
 
         try {
-            // Severity routes to the cheapest sufficient path: breaking drift
-            // gets the agent (deterministic fallback), warnings take the
-            // deterministic fixer without a model loop, and pure additions
-            // open nothing.
+            // Agent-only PRs: breaking and warning drift go to the migration
+            // agent (search -> read -> edit -> verify -> contract gate -> PR).
+            // Info-only drift (pure additions) breaks no reader: no PR.
+            // A deterministic regex fix cannot know per-repo semantics, so
+            // it must never open a PR. Drift is still recorded above.
             const severity = severityForSchemaDiff(alert.diff);
-            const deps = resolveAgentFixDeps(ai, alert.endpointId);
-            const route = routeBySeverity(severity, deps !== null);
-            if (route === "none") {
+            if (severity === "info") {
                 console.log(
-                    `  [SKIP] info-only drift (${severity}), no reader can break; no PR opened`,
+                    `  [SKIP] info-only drift, no reader can break; no PR opened`,
                 );
                 return;
             }
-            // Agent path when a model client and a vendor config both resolve;
-            // otherwise the deterministic fixer below. The agent edits,
-            // verifies, clears the contract gate, and publishes.
-            if (route === "agent" && deps) {
-                const result = await createAgentFixPR({
-                    owner: repoOwner,
-                    repo: repoName,
-                    base,
-                    repoPath,
-                    alert,
-                    token: githubToken,
-                    vendor: deps.vendor,
-                    client: deps.client,
-                    model: deps.model,
-                    onEvent: (event) => {
-                        if (event.type === "note") {
-                            console.log(`  [AGENT] ${event.message}`);
-                        } else if (event.type === "tool") {
-                            console.log(`  [AGENT] tool ${event.name} ok=${event.ok} (iter ${event.iteration})`);
-                        } else if (event.type === "done") {
-                            console.log(`  [AGENT] done outcome=${event.outcome} iterations=${event.iterations}`);
-                        }
-                    },
-                });
-
-                if (result.status === "opened") {
-                    console.log(`  [PR] Created: ${result.url}`);
-                    await store.markDrift(driftRowId, "pr_opened");
-                } else if (result.status === "already_open") {
-                    console.log(`  [PR] Already open: ${result.url ?? result.branch}`);
-                    await store.markDrift(driftRowId, "pr_opened");
-                } else {
-                    console.log(`  [PR] ${result.status} (outcome: ${result.outcome})`);
-                }
+            // Known vendor + model client: full agent with contract gate.
+            // Unknown vendor but a model client: draft agent without a
+            // contract — edits and verification still run, but the PR opens
+            // as a draft for human review instead of being skipped.
+            const deps = resolveAgentFixDeps(ai, alert.endpointId);
+            const clientOnly = deps ? null : ai ? buildAgentClient(ai) : null;
+            if (!deps && !clientOnly) {
+                console.log(
+                    `  [SKIP] ${severity} drift but no model client configured; no deterministic PR in agent-only mode`,
+                );
                 return;
             }
-
-            const result = await createWebhookFixPR({
+            if (!deps && clientOnly) {
+                console.log(
+                    `  [AGENT] unknown vendor "${alert.endpointId}": running without a contract (draft PR only)`,
+                );
+            }
+            const result = await createAgentFixPR({
                 owner: repoOwner,
                 repo: repoName,
                 base,
                 repoPath,
                 alert,
                 token: githubToken,
-                ai,
+                ...(deps
+                    ? {
+                        vendor: deps.vendor,
+                        client: deps.client,
+                        ...(deps.model ? { model: deps.model } : {}),
+                    }
+                    : {
+                        client: clientOnly!.client,
+                        ...(clientOnly!.model ? { model: clientOnly!.model } : {}),
+                    }),
+                onEvent: (event) => {
+                    if (event.type === "note") {
+                        console.log(`  [AGENT] ${event.message}`);
+                    } else if (event.type === "tool") {
+                        console.log(`  [AGENT] tool ${event.name} ok=${event.ok} (iter ${event.iteration})`);
+                    } else if (event.type === "done") {
+                        console.log(`  [AGENT] done outcome=${event.outcome} iterations=${event.iterations}`);
+                    }
+                },
             });
 
             if (result.status === "opened") {
                 console.log(`  [PR] Created: ${result.url}`);
                 await store.markDrift(driftRowId, "pr_opened");
             } else if (result.status === "already_open") {
-                console.log(`  [PR] Already open: ${result.url}`);
+                console.log(`  [PR] Already open: ${result.url ?? result.branch}`);
                 await store.markDrift(driftRowId, "pr_opened");
             } else {
-                console.log(`  [PR] ${result.status}`);
+                console.log(`  [PR] ${result.status} (outcome: ${result.outcome})`);
             }
         } catch (error) {
             console.error(`  [PR] Failed to create PR:`, error);
@@ -449,7 +446,16 @@ function setupDetectorCallbacks(det: DriftDetector) {
         }
 
         try {
-            const result = await createWebhookFixPR({
+            // Agent-only mode: rollback also goes through the migration agent.
+            // No deterministic rollback PR — semantics may differ per repo.
+            // Unknown vendor degrades to a draft rather than a skip.
+            const deps = resolveAgentFixDeps(ai, alert.endpointId);
+            const clientOnly = deps ? null : ai ? buildAgentClient(ai) : null;
+            if (!deps && !clientOnly) {
+                console.log(`  [SKIP] rollback but no model client configured; no deterministic PR in agent-only mode`);
+                return;
+            }
+            const result = await createAgentFixPR({
                 owner: repoOwner,
                 repo: repoName,
                 base,
@@ -472,13 +478,22 @@ function setupDetectorCallbacks(det: DriftDetector) {
                     confidence: 100,
                 },
                 token: githubToken,
-                ai,
+                ...(deps
+                    ? {
+                        vendor: deps.vendor,
+                        client: deps.client,
+                        ...(deps.model ? { model: deps.model } : {}),
+                    }
+                    : {
+                        client: clientOnly!.client,
+                        ...(clientOnly!.model ? { model: clientOnly!.model } : {}),
+                    }),
             });
 
             if (result.status === "opened") {
                 console.log(`  [PR] Rollback PR created: ${result.url}`);
             } else {
-                console.log(`  [PR] ${result.status}`);
+                console.log(`  [PR] ${result.status} (outcome: ${result.outcome})`);
             }
         } catch (error) {
             console.error(`  [PR] Failed to create rollback PR:`, error);

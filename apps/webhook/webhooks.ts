@@ -1,5 +1,4 @@
 import { createHash, createHmac, timingSafeEqual } from "crypto";
-import { readFileSync } from "fs";
 import { mkdtemp, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join, relative } from "path";
@@ -7,19 +6,54 @@ import simpleGit from "simple-git";
 import { getDb, createStore, installations, repositories } from "@driftlock/db";
 import {
     analyzeAndCompare,
-    applyDriftFix,
     DbSnapshotStore,
-    buildDriftEvent,
     driftConfidence,
     driftSummary,
 } from "@driftlock/pipeline";
+import { vendorForPackage } from "@driftlock/agent";
 import {
-    FixPRRunner,
-    fixBranchName,
-    buildFixPRTitle,
-    buildFixPRBody,
-} from "@driftlock/git";
+    buildAgentClient,
+    createOutboundAgentFixPR,
+    type AgentAIConfig,
+} from "@driftlock/webhookCapture";
+import { fixBranchName } from "@driftlock/git";
 import { eq } from "drizzle-orm";
+
+/**
+ * Env-only model config for the outbound push path. The inbound capture path
+ * can also read DB-backed settings; a push analysis runs headless, so env is
+ * the whole config. Missing/incomplete config returns undefined and the
+ * drift stays recorded-but-unmigrated rather than opening a guess PR.
+ */
+function pushAgentConfig(): AgentAIConfig | undefined {
+    const provider = (process.env.AI_PROVIDER ?? "").trim();
+    if (provider !== "openai" && provider !== "gemini" && provider !== "cloudflare") {
+        return undefined;
+    }
+    const apiKeyEnv =
+        provider === "cloudflare"
+            ? "CLOUDFLARE_API_TOKEN"
+            : provider === "gemini"
+              ? "GEMINI_API_KEY"
+              : "AI_API_KEY";
+    const apiKey = (process.env[apiKeyEnv] ?? "").trim();
+    if (!apiKey) return undefined;
+    const modelEnv =
+        provider === "cloudflare"
+            ? "CLOUDFLARE_AI_MODEL"
+            : provider === "gemini"
+              ? "GEMINI_MODEL"
+              : "AI_MODEL";
+    const model = (process.env[modelEnv] ?? "").trim() || undefined;
+    if (provider === "cloudflare") {
+        const accountId = (process.env.CLOUDFLARE_ACCOUNT_ID ?? "").trim();
+        if (!accountId) return undefined;
+        return { provider, apiKey, accountId, model };
+    }
+    const baseUrl =
+        provider === "openai" ? (process.env.AI_BASE_URL ?? "").trim() || undefined : undefined;
+    return { provider, apiKey, model, ...(baseUrl ? { baseUrl } : {}) };
+}
 
 const WEBHOOK_SECRET = process.env.GITHUB_WEBHOOK_SECRET || "";
 
@@ -327,13 +361,13 @@ async function analyzePushInBackground(input: {
       result.callSites.map((s) => toDbId(s.id)),
     );
 
-    // Baselines are persisted via DbSnapshotStore inside analyzeAndCompare
-    // (first run saves, later runs diff). Record each drift + open one
-    // idempotent PR per call site when the repo allows writes.
-    const canWrite = (repo.permission ?? "read-write") === "read-write";
+    // Agent-only mode: record drift, then hand breaking/warning drifts to
+    // the migration agent. A static rewrite here is exactly how wrong PRs
+    // shipped; the agent searches, edits, verifies, clears the contract
+    // gate, and publishes. Info-only drift stays recorded without a PR.
+    const pushAi = pushAgentConfig();
     let driftCount = 0;
     let prCount = 0;
-    const prRunner = canWrite ? new FixPRRunner(token) : null;
     for (const drift of result.drifts) {
       const current = result.shapes.get(drift.callSite.id);
       if (!current) continue;
@@ -348,17 +382,14 @@ async function analyzePushInBackground(input: {
         requestShape: current.request,
         responseShape: current.response,
       });
-      const source = readSource(clone.path, drift.callSite.filePath);
-      const applied = source ? await applyDriftFix(drift, source) : null;
       const driftId = `drift-${dbId}`.slice(0, 128);
-      if (applied) applied.fix.driftEventId = driftId;
       await store.recordDrift({
         id: driftId,
         callSiteId: dbId,
         oldSnapshotId: previous?.id ?? saved.id,
         newSnapshotId: saved.id,
         diffSummary: driftSummary(drift) as unknown as Record<string, unknown>,
-        suggestedFix: applied?.fix ?? null,
+        suggestedFix: null,
         confidence: driftConfidence(drift),
         prNumber: null,
         status: "detected",
@@ -372,38 +403,78 @@ async function analyzePushInBackground(input: {
       await store.setCallSiteSnapshotState(dbId, "drifted");
       driftCount += 1;
 
-      if (applied && prRunner) {
-        const driftEvent = buildDriftEvent(drift, { id: driftId });
-        driftEvent.suggestedFix = applied.fix;
-        driftEvent.status = "fix_generated";
-        const pr = await prRunner.run({
+      const removed = [
+        ...drift.requestDiff.removedFields,
+        ...drift.responseDiff.removedFields,
+      ];
+      const typeChanged = [
+        ...drift.requestDiff.typeChanges.map((c) => ({
+          field: c.field,
+          from: c.oldType,
+          to: c.newType,
+        })),
+        ...drift.responseDiff.typeChanges.map((c) => ({
+          field: c.field,
+          from: c.oldType,
+          to: c.newType,
+        })),
+      ];
+      if (removed.length === 0 && typeChanged.length === 0) {
+        console.log(`  [DRIFT] ${drift.callSite.method} info-only, recorded without a PR`);
+        continue;
+      }
+      const vendor = vendorForPackage(drift.callSite.packageName);
+      const built = pushAi ? buildAgentClient(pushAi) : null;
+      if (!built) {
+        console.log(
+          `  [DRIFT] ${drift.callSite.method} recorded; no model client configured so no agent PR (set AI_PROVIDER + key)`,
+        );
+        continue;
+      }
+      if (!vendor) {
+        console.log(
+          `  [AGENT] unknown package "${drift.callSite.packageName}": running without a contract (draft PR only)`,
+        );
+      }
+      try {
+        const agentResult = await createOutboundAgentFixPR({
           owner,
           repo: name,
           base: input.branch,
-          branch: fixBranchName(dbId),
-          title: buildFixPRTitle({ driftEvent, callSite: drift.callSite, fix: applied.fix }),
-          body: buildFixPRBody({ driftEvent, callSite: drift.callSite, fix: applied.fix }, applied.fix.files),
-          commitMessage: `driftlock: apply fix for ${drift.callSite.method}`,
-          files: applied.fix.files.map((f) => ({ path: f.path, content: f.changes })),
+          repoPath: clone.path,
+          drift: {
+            provider: drift.callSite.packageName,
+            method: drift.callSite.method,
+            fromVersion: "captured baseline",
+            toVersion: `observed ${new Date().toISOString()}`,
+            removed,
+            added: [
+              ...drift.requestDiff.addedFields,
+              ...drift.responseDiff.addedFields,
+            ],
+            typeChanged,
+            currentMembers: [...Object.keys(current.request), ...Object.keys(current.response)],
+          },
+          token,
+          ...(vendor ? { vendor } : {}),
+          client: built.client,
+          ...(built.model ? { model: built.model } : {}),
+          onEvent: (event) => {
+            if (event.type === "done") {
+              console.log(`  [AGENT] ${drift.callSite.method} done outcome=${event.outcome} iterations=${event.iterations}`);
+            }
+          },
         });
-        console.log(`  [PR] ${pr.status}: ${pr.url}`);
-        if (pr.status === "opened" || pr.status === "already_open") {
-          await store.updateDriftStatus(driftId, "pr_opened", pr.number);
-          store.emitEvent?.("pr_opened", { driftId, prNumber: pr.number, url: pr.url });
+        console.log(`  [PR] ${drift.callSite.method}: ${agentResult.status} (outcome: ${agentResult.outcome})`);
+        if (agentResult.status === "opened" || agentResult.status === "already_open") {
+          await store.updateDriftStatus(driftId, "pr_opened", agentResult.number);
+          store.emitEvent?.("pr_opened", { driftId, prNumber: agentResult.number, url: agentResult.url });
           prCount += 1;
-        } else if (pr.status === "merged") {
-          await store.updateDriftStatus(driftId, "merged", pr.number);
-          store.emitEvent?.("pr_merged", { driftId, prNumber: pr.number, url: pr.url });
-          const current = result.shapes.get(drift.callSite.id);
-          if (current) {
-            await snapshotStore.save(dbId, current, {
-              testCommand: command,
-              exitCode: result.exitCode,
-              duration: result.duration,
-              trafficCaptured: result.trafficCaptured,
-            });
-          }
         }
+      } catch (error) {
+        // One drift's agent failure must not kill the rest of the loop;
+        // the drift stays recorded and the next push retries.
+        console.error(`  [AGENT] ${drift.callSite.method} failed:`, error);
       }
     }
 
@@ -411,9 +482,9 @@ async function analyzePushInBackground(input: {
       id: run.id,
       status: result.exitCode === 0 ? "succeeded" : "failed",
       exitCode: result.exitCode,
-      notes: `${result.callSites.length} call sites, ${driftCount} drifts, ${prCount} PRs`,
+      notes: `${result.callSites.length} call sites, ${driftCount} drifts, ${prCount} agent PRs`,
     });
-    console.log(`  [PUSH] done: ${result.callSites.length} call sites, ${driftCount} drifts, ${prCount} PRs`);
+    console.log(`  [PUSH] done: ${result.callSites.length} call sites, ${driftCount} drifts, ${prCount} agent PRs`);
   } catch (e) {
     await store
       .finishRun({
@@ -440,15 +511,6 @@ async function cloneRepo(owner: string, name: string, branch: string, token: str
     throw e;
   }
   return { path: dir, cleanup: () => rm(dir, { recursive: true, force: true }) };
-}
-
-function readSource(repoPath: string, filePath: string): string | null {
-  try {
-    const full = filePath.startsWith("/") ? filePath : join(repoPath, filePath);
-    return readFileSync(full, "utf8");
-  } catch {
-    return null;
-  }
 }
 
 async function handlePullRequest(payload: any) {

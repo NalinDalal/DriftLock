@@ -81,15 +81,15 @@ jobs:
         name: Migrate DB
       - run: bun run --cwd packages/db db:push || true
         name: Push DB schema
-      - run: bun test packages/db/
+      - run: bun test packages/tests/integration/db/
         name: Test DB
       - run: bun test packages/tests/unit/diff/
         name: Test Diff
-      - run: bun test packages/pipeline/
+      - run: bun test packages/tests/unit/pipeline/
         name: Test Pipeline
-      - run: bun test packages/webhookCapture/
+      - run: bun test packages/tests/unit/webhookCapture/
         name: Test Webhook Capture
-      - run: bun test packages/aiFix/
+      - run: bun test packages/tests/unit/aiFix/
         name: Test AI Fix
       - run: bun test packages/tests/unit/be/
         name: Test BE

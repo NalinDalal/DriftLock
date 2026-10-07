@@ -4,7 +4,7 @@ import {
     parseCaptureSecrets,
     verifyCaptureSignature,
     signStripePayload,
-} from "../verifySignature";
+} from "@driftlock/webhookCapture";
 
 const SECRET = "whsec_test123";
 const BODY = `{"type":"payment_intent.succeeded","data":{"object":{"id":"pi_123"}}}`;

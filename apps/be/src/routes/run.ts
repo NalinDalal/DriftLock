@@ -1,9 +1,7 @@
 import { createHash } from "crypto";
-import { readFileSync } from "fs";
-import { join, relative } from "path";
+import { relative } from "path";
 import {
     analyzeAndCompare,
-    applyDriftFix,
     DbSnapshotStore,
     driftConfidence,
     driftSummary,
@@ -146,12 +144,9 @@ export async function handleRun(req: Request): Promise<Response> {
                 requestShape: current.request,
                 responseShape: current.response,
             });
-            const source = readSource(clone.path, drift.callSite.filePath);
-            const applied = source ? await applyDriftFix(drift, source) : null;
+            // Agent-only mode: record drift with no suggestedFix.
+            // Deterministic fixes cannot know per-repo semantics.
             const driftId = `drift-${dbCallSiteId}`.slice(0, 128);
-            if (applied) {
-                applied.fix.driftEventId = driftId;
-            }
             await store.recordDrift({
                 id: driftId,
                 callSiteId: dbCallSiteId,
@@ -161,7 +156,7 @@ export async function handleRun(req: Request): Promise<Response> {
                     string,
                     unknown
                 >,
-                suggestedFix: applied?.fix ?? null,
+                suggestedFix: null,
                 confidence: driftConfidence(drift),
                 prNumber: null,
                 status: "detected",
@@ -208,14 +203,5 @@ export async function handleRun(req: Request): Promise<Response> {
         );
     } finally {
         await clone.cleanup();
-    }
-}
-
-function readSource(repoPath: string, filePath: string): string | null {
-    try {
-        const full = filePath.startsWith("/") ? filePath : join(repoPath, filePath);
-        return readFileSync(full, "utf8");
-    } catch {
-        return null;
     }
 }
