@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { decryptSecret, encryptSecret } from "@driftlock/be/src/secrets";
+import { decryptSecret, encryptSecret, sessionKeyStartupError } from "@driftlock/be/src/secrets";
 
 const KEY = "0".repeat(63) + "1";
+const SAVED_NODE_ENV = process.env.NODE_ENV;
 
 afterEach(() => {
     delete process.env.SESSION_ENC_KEY;
+    if (SAVED_NODE_ENV === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = SAVED_NODE_ENV;
 });
 
 describe("access-token encryption", () => {
@@ -47,5 +50,29 @@ describe("access-token encryption", () => {
         const blob = encryptSecret("gho_live_token");
         const tampered = blob.slice(0, -2) + (blob.endsWith("AA") ? "BB" : "AA");
         expect(() => decryptSecret(tampered)).toThrow();
+    });
+});
+
+describe("production startup guard", () => {
+    test("missing key in production is a startup error", () => {
+        process.env.NODE_ENV = "production";
+        expect(sessionKeyStartupError()).toContain("SESSION_ENC_KEY");
+    });
+
+    test("blank key in production is a startup error", () => {
+        process.env.NODE_ENV = "production";
+        process.env.SESSION_ENC_KEY = "   ";
+        expect(sessionKeyStartupError()).toContain("SESSION_ENC_KEY");
+    });
+
+    test("missing key outside production is fine (dev plaintext fallback)", () => {
+        process.env.NODE_ENV = "development";
+        expect(sessionKeyStartupError()).toBeNull();
+    });
+
+    test("configured key in production is fine", () => {
+        process.env.NODE_ENV = "production";
+        process.env.SESSION_ENC_KEY = KEY;
+        expect(sessionKeyStartupError()).toBeNull();
     });
 });

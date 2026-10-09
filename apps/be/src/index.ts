@@ -1,4 +1,5 @@
 import { config } from "./config";
+import { sessionKeyStartupError } from "./secrets";
 import { authenticate } from "./auth";
 import { badRequest, corsHeaders, corsResponse, isCorsPreflight, notFound } from "./utils";
 import { handleHealth } from "./routes/health";
@@ -43,6 +44,14 @@ startWatchScheduler();
 // after this file's AUTH_ROUTES check serves in `open` mode (see auth.ts).
 if (process.env.NODE_ENV === "production" && !process.env.BEARER_TOKEN) {
     console.error("BEARER_TOKEN missing in production. Refusing to start in open mode (set BEARER_TOKEN).");
+    process.exit(1);
+}
+
+// Fail fast in production without token encryption: otherwise stored GitHub
+// OAuth tokens sit in plaintext (see secrets.ts).
+const sessionKeyError = sessionKeyStartupError();
+if (sessionKeyError) {
+    console.error(sessionKeyError);
     process.exit(1);
 }
 

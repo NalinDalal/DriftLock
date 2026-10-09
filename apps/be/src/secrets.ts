@@ -27,6 +27,22 @@ export function encryptionKey(): Buffer | null {
     return key;
 }
 
+/**
+ * Production boot check for token encryption at rest. Returns an error
+ * message when production would store OAuth tokens in plaintext
+ * (missing/blank key); null otherwise. Malformed keys still fail loudly
+ * via encryptionKey() on first use.
+ */
+export function sessionKeyStartupError(
+    env: NodeJS.ProcessEnv = process.env,
+): string | null {
+    if (env.NODE_ENV !== "production") return null;
+    if (!((env.SESSION_ENC_KEY ?? "").trim())) {
+        return "SESSION_ENC_KEY missing in production. Refusing to start with plaintext token storage (set SESSION_ENC_KEY).";
+    }
+    return null;
+}
+
 /** Encrypt to `v1.<iv>.<ciphertext>.<tag>` (base64url). Plaintext when keyless. */
 export function encryptSecret(plaintext: string): string {
     const key = encryptionKey();

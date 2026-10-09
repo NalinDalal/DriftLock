@@ -216,6 +216,7 @@ export function analyzeSpecCoverage(changes: SpecChange[]): {
 export interface SpecDiffSummary {
     changes: SpecChange[];
     breakingChanges: string[];
+    /** Not breaking. Warning-level changes appear here as well as in warnings. */
     nonBreakingChanges: string[];
     /** Level-warning changes (unknown effect): must surface, never silent info. */
     warnings: string[];

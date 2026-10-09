@@ -252,10 +252,10 @@ Use this to understand the impact of a branch before merging.
 
 program
     .command("fix")
-    .description("Detect API drift and generate fix PRs")
+    .description("Detect API drift and suggest static fixes")
     .argument("<path>", "Repository path")
     .option("-b, --base <branch>", "Base branch to compare", "main")
-    .option("-r, --repo <repo>", "GitHub repo (owner/repo) for PR creation")
+    .option("-r, --repo <repo>", "GitHub repo (owner/repo) for the migration-agent PR flow")
     .option("-c, --command <cmd>", "Test command to run for capture", "npm test")
     .option(
         "--forward <pattern>",
@@ -263,7 +263,7 @@ program
         (value: string, previous: string[]) => [...previous, value],
         [],
     )
-    .option("--dry-run", "Show affected call sites without creating PRs")
+    .option("--dry-run", "Show affected call sites and suggested fixes (nothing is pushed)")
     .option("--json", "Print a machine-readable summary as the last stdout line (for CI)")
     .option(
         "--commit-baselines",
@@ -278,10 +278,10 @@ The core DriftLock loop:
   3. First run establishes a baseline snapshot (.driftlock/snapshots)
   4. Later runs compare captured shapes against the baseline to detect drift
   5. Generates deterministic fixes (renames, null checks, coercions) and
-     creates a PR with the fix (if --repo is provided)
+     prints them as suggestions with diffs. Never opens PRs: run the
+     migration agent (packages/agent) for a verified PR.
 
 Environment variables:
-  GITHUB_TOKEN    Required for PR creation (not needed for --dry-run)
   AI_PROVIDER     Optional model fixes: openai, anthropic, gemini, cloudflare
   AI_API_KEY      API key for openai/anthropic (GEMINI_API_KEY and
   AI_MODEL        CLOUDFLARE_API_TOKEN take precedence per provider)
@@ -291,9 +291,8 @@ With --json, the last stdout line is always a JSON summary:
 
 Examples:
   $ driftlock fix ./repo --dry-run
-  $ driftlock fix ./repo --repo owner/repo
   $ driftlock fix ./repo --command "bun test"
-  $ driftlock fix ./repo --repo owner/repo --json 2>/dev/null | tail -n 1 | jq .
+  $ driftlock fix ./repo --dry-run --json 2>/dev/null | tail -n 1 | jq .
 `,
     )
     .action(
@@ -533,6 +532,7 @@ Examples:
                         "\nAgent-only mode: --repo PR creation from static fixes is disabled. Review the suggestions above and run the migration agent for a verified PR.",
                     ),
                 );
+                const baselineCommit = await commitIfEnabled();
                 emitSummary({
                     callSites: allCallSites.length,
                     drifts: drifts.length,
@@ -540,6 +540,7 @@ Examples:
                     prs: [],
                     baselines: baselines.length,
                     pendingCapture: pendingCapture.length,
+                    baselinesCommitted: baselineCommit.pushed,
                 });
                 return;
             } catch (error) {
