@@ -3,6 +3,7 @@ import { P5_VENDOR, STRIPE_VENDOR } from "@driftlock/core";
 import {
     collectBoundNames,
     contractFromHar,
+    contractFromObservedMembers,
     contractFromSpec,
     contractFromWebhookAlert,
     describeContract,
@@ -186,6 +187,48 @@ describe("contractFromWebhookAlert", () => {
         expect(findings).toHaveLength(1);
         expect(findings[0].kind).toBe("stale");
         expect(findings[0].line).toBe(4);
+    });
+});
+
+describe("contractFromObservedMembers", () => {
+    test("expands paths to path+leaf and stays sampled", () => {
+        const built = contractFromObservedMembers({
+            provider: "stripe",
+            origin: "outbound stripe.paymentIntents.create captured shapes",
+            currentMembers: ["amount", "payment_method"],
+            removed: ["data.object.source"],
+        });
+
+        expect(built.source).toBe("recorded");
+        expect(built.authority).toBe("sampled");
+        expect(built.members).toEqual(["amount", "payment_method"]);
+        expect(built.removed).toEqual(["data.object.source", "source"]);
+    });
+
+    test("matches contractFromWebhookAlert on the same observation", () => {
+        const previous = {
+            "data.object.id": "string",
+            "data.object.source": "string",
+        };
+        const current = {
+            "data.object.id": "string",
+            "data.object.payment_method": "string",
+        };
+        const viaAlert = contractFromWebhookAlert({
+            provider: "stripe",
+            eventType: "payment_intent.succeeded",
+            previous,
+            current,
+        });
+        const viaMembers = contractFromObservedMembers({
+            provider: "stripe",
+            origin: "webhook payment_intent.succeeded observed payload",
+            currentMembers: Object.keys(current),
+            removed: Object.keys(previous).filter((path) => !(path in current)),
+        });
+
+        expect(viaMembers.members).toEqual(viaAlert.members);
+        expect(viaMembers.removed).toEqual(viaAlert.removed);
     });
 });
 

@@ -1,12 +1,24 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type OpenAI from "openai";
 import { STRIPE_VENDOR } from "@driftlock/core";
-import { createAgentFixPR } from "../agentFix";
-import type { DriftAlert } from "../driftDetector";
+import { createAgentFixPR } from "@driftlock/webhookCapture";
+import { clearSpecCache } from "@driftlock/agent";
+import type { DriftAlert } from "@driftlock/webhookCapture";
 import type { CommandRunner, PullRequestPublisher } from "@driftlock/agent";
+
+// The agent path now tries the vendor spec first. These tests pin the
+// sampled fallback so they stay hermetic and fast: no network, no timeout.
+const realFetch = globalThis.fetch;
+beforeEach(() => {
+    globalThis.fetch = (() => Promise.reject(new Error("no network in tests"))) as unknown as typeof fetch;
+    clearSpecCache();
+});
+afterEach(() => {
+    globalThis.fetch = realFetch;
+});
 
 function fakeOkRunner(): CommandRunner {
     return { run: async () => ({ ok: true, output: "fake pass" }) };
@@ -152,6 +164,41 @@ describe("createAgentFixPR runs a webhook drift through the migration agent", ()
         const updated = await Bun.file(join(root, "webhook.js")).text();
         expect(updated).toContain("paymentIntent.payment_method");
         expect(updated).not.toContain("paymentIntent.source");
+    });
+
+    test("opens a draft when the vendor is unknown", async () => {
+        const { publisher, seen } = recordingPublisher();
+        const result = await createAgentFixPR({
+            owner: "acme",
+            repo: "widgets",
+            base: "main",
+            repoPath: root,
+            alert: alert(),
+            token: "test-token",
+            publisher,
+            commandRunner: fakeOkRunner(),
+            client: scriptedClient([
+                toolCall(
+                    "replaceInFile",
+                    {
+                        path: "webhook.js",
+                        oldText: "return { source: paymentIntent.source };",
+                        newText:
+                            "return { payment_method: paymentIntent.payment_method };",
+                    },
+                    "c1",
+                ),
+                toolCall("runCommand", { command: "npm run build" }, "c2"),
+                toolCall("createPullRequest", prArgs, "c3"),
+            ]),
+        });
+
+        // No vendor means no contract gate: edits and verification run, but
+        // the PR is a draft for human review rather than skipped.
+        expect(seen).toHaveLength(1);
+        expect(seen[0].draft).toBe(true);
+        expect(result.status).toBe("opened");
+        expect(result.outcome).toBe("draft_pr");
     });
 
     test("reports needs_review when the agent leaves a removed field behind", async () => {

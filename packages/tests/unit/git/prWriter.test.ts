@@ -200,6 +200,24 @@ describe("PRWriter (wordless fix PR)", () => {
 
         expect(fake.byName("git.getRef")).toHaveLength(0);
     });
+
+    test("surfaces non-404 branch lookup failures instead of creating", async () => {
+        const fake = makeFake();
+        const forbidden: any = new Error("Forbidden");
+        forbidden.status = 403;
+        const original = fake.octokit.rest.git.getRef;
+        fake.octokit.rest.git.getRef = async (params: any) => {
+            if (params.ref === "heads/driftlock/prisma-6-7") throw forbidden;
+            return original(params);
+        };
+        const writer = new PRWriter(fake.octokit);
+
+        await expect(
+            writer.writeFixPR({ ...makeInput(), octokit: fake.octokit }),
+        ).rejects.toThrow("Forbidden");
+
+        expect(fake.byName("git.createRef")).toHaveLength(0);
+    });
 });
 
 describe("buildFixPRTitle honesty", () => {

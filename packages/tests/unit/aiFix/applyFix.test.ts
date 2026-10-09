@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { resolveFixedSource } from "../applyFix";
+import { resolveFixedSource } from "@driftlock/aiFix";
 import type { FixWork } from "@driftlock/diff";
 
 const rename: FixWork = {
@@ -51,7 +51,7 @@ ${original}\`\`\`\n\nKept as is.\nConfidence: 30`,
                     ],
                 }),
                 { status: 200, headers: { "content-type": "application/json" } },
-            )) as typeof fetch;
+            )) as unknown as typeof fetch;
         try {
             const result = await resolveFixedSource({
                 works: [rename],

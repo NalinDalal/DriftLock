@@ -8,7 +8,7 @@
 
 API providers announce changes. DriftLock applies them to your codebase.
 
-DriftLock scans your codebase for API call sites, captures vendor traffic to build shape snapshots, detects breaking changes between snapshots, and opens a PR with a suggested fix. AI-powered fix generation is on the roadmap.
+DriftLock scans your codebase for API call sites, captures vendor traffic to build shape snapshots, detects breaking changes between snapshots, and opens a PR with a suggested fix. PRs are opened via the verified migration agent (configurable via `AI_PROVIDER`: openai/gemini/cloudflare). Deterministic suggestions may still be surfaced in non-PR paths, but live PR creation is agent-only.
 
 [Website](https://driftlock.dev) · [Discord](https://discord.gg/driftlock) · [Issues](https://github.com/nerdev-co/DriftLock/issues)
 
@@ -91,7 +91,7 @@ The codebase access is a solved problem (agentic tools proved it); the
 The cost of a vendor change always lands on the consumer. DriftLock moves it
 back to automation: it scans your codebase for API call sites, watches for
 vendor changes, detects how they affect your usages, and opens a PR with the
-fix. AI-powered fix generation is on the roadmap.
+fix. PR creation runs through the verified migration agent (configurable via `AI_PROVIDER`: openai/gemini/cloudflare). Deterministic suggestions may still be surfaced, but live PR creation is agent-only.
 
 ---
 
@@ -165,6 +165,19 @@ flowchart LR
 | **Scan**    | Finds source files referencing changed fields                           |
 | **Fix**     | Applies deterministic renames, null checks, type coercions              |
 | **PR**      | Creates a GitHub PR with the fix via Git Database API                   |
+
+### Inbound vs outbound: what changes, what doesn't
+
+They are separate contracts. A drift in one never authorizes an edit to the other.
+
+| | **Outbound** (you → vendor) | **Inbound** (vendor → you) |
+| --- | --- | --- |
+| Example | `stripe.paymentIntents.create({ amount })` | `event.data.object` in `payment_intent.succeeded` |
+| Drift source | Request/response shape of an API you call | Webhook payload the vendor sends you |
+| Fix edits | Request arguments and response readers | Payload / returned-object readers only |
+| Never touches | Inbound handlers | Outbound request arguments |
+
+Concretely: when Stripe renames webhook field `data.object.source` → `data.object.payment_method`, DriftLock renames `paymentIntent.source` → `paymentIntent.payment_method` in your handlers. It does not wrap `amount` in `String()` at `stripe.paymentIntents.create` — that request surface is unchanged, still expects an integer, and a webhook observation says nothing about it.
 
 ---
 
@@ -438,7 +451,7 @@ Stripe has mature test mode, huge installed base, and plenty of teams stuck on o
 
 Twilio, Shopify, and others are on the roadmap.
 
-AI-powered fix generation is on the roadmap. The current implementation captures traffic shapes, detects drift between snapshots, and applies deterministic fixes; full automated PR generation with AI-generated patches is planned.
+Deterministic fixes (field renames, null checks, type coercions) ship by default; AI-powered fixes are available via `AI_PROVIDER` (openai/anthropic/gemini/cloudflare) and are used when confidence >= 60%, with deterministic fallback otherwise.
 
 ---
 

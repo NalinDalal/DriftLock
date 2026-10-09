@@ -13,6 +13,11 @@ export async function cloneRepo(
     name: string,
     branch?: string,
 ): Promise<CloneResult> {
+    // Owner/name land in a `https://github.com/${owner}/${name}.git` URL —
+    // reject traversal and odd chars early instead of relying on a 404.
+    if (!/^[a-zA-Z0-9_.-]{1,100}$/.test(owner) || !/^[a-zA-Z0-9_.-]{1,100}$/.test(name)) {
+        throw new Error("Invalid owner or repo name");
+    }
     const token = process.env.GITHUB_TOKEN;
     const auth = token
         ? `x-access-token:${encodeURIComponent(token)}@`

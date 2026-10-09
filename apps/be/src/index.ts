@@ -39,6 +39,13 @@ import { startWatchScheduler } from "./watch";
 // for the interval, vendors, tier gating, and rollback (unset the variable).
 startWatchScheduler();
 
+// Fail fast in production without an operator token: otherwise every route
+// after this file's AUTH_ROUTES check serves in `open` mode (see auth.ts).
+if (process.env.NODE_ENV === "production" && !process.env.BEARER_TOKEN) {
+    console.error("BEARER_TOKEN missing in production. Refusing to start in open mode (set BEARER_TOKEN).");
+    process.exit(1);
+}
+
 // Auth routes don't require credentials. /api/health stays public so
 // orchestrators and load balancers can probe without a token.
 const AUTH_ROUTES = new Set([
@@ -100,6 +107,14 @@ async function dispatch(req: Request, url: URL): Promise<Response> {
         return handleUpdateSettings(req);
     }
     if (url.pathname === "/api/settings/rotate") {
+        // Rotating mints a new raw secret — never allow GET (secrets end up
+        // in proxy logs, history, and caches). FE already uses POST.
+        if (req.method !== "POST") {
+            return new Response(JSON.stringify({ error: "Method not allowed" }), {
+                status: 405,
+                headers: { "content-type": "application/json" },
+            });
+        }
         return handleRotateApiKey(url);
     }
     if (url.pathname === "/api/runs" && req.method === "POST") {

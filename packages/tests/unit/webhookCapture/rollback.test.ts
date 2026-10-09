@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { InMemorySchemaStore } from "../schemaStore";
-import { DriftDetector } from "../driftDetector";
+import { InMemorySchemaStore } from "@driftlock/webhookCapture";
+import { DriftDetector } from "@driftlock/webhookCapture";
 
 describe("Rollback detection", () => {
     test("detects when vendor reverts to previous schema", async () => {

@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { createDb, createStore } from "../index";
+import { createDb, createStore } from "@driftlock/db";
 
 const dbUrl = process.env.DATABASE_URL;
 const describeDb = dbUrl ? describe : describe.skip;

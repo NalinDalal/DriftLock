@@ -60,6 +60,7 @@ import {
 } from "./publisher";
 import type { CommandRunner } from "./commandRunner";
 import {
+    findWebhookOutboundCoercions,
     lookupVendorSymbol,
     verifyVendorSymbols,
     type SymbolFinding,
@@ -88,7 +89,10 @@ async function checkChangedFiles(
         if (await handle.exists()) sources.set(file, await handle.text());
     }
     if (sources.size === 0) return [];
-    return verifyVendorSymbols(contract, sources, { vendor });
+    return [
+        ...verifyVendorSymbols(contract, sources, { vendor }),
+        ...findWebhookOutboundCoercions(contract, sources),
+    ];
 }
 
 const CONTRACT_SCAN_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"];

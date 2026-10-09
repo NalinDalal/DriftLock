@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { diffSchemas, isSchemaDiffEmpty, severityForSchemaDiff } from "../schemaDiff";
+import { diffSchemas, isSchemaDiffEmpty, severityForSchemaDiff } from "@driftlock/webhookCapture";
 
 describe("diffSchemas", () => {
     test("detects added fields", () => {

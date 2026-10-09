@@ -10,3 +10,6 @@ export * from "./publisher";
 export * from "./modelClient";
 export * from "./geminiClient";
 export * from "./migrationAgent";
+export * from "./contractSource";
+export * from "./vendors";
+export * from "./driftMigration";

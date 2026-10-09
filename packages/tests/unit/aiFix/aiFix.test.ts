@@ -4,7 +4,7 @@ import {
     generateAIFixSync,
     type FixContext,
     type AIFixConfig,
-} from "../index";
+} from "@driftlock/aiFix";
 import type { FixWork, ShapeDiffResult } from "@driftlock/diff";
 import { applyFixWork } from "@driftlock/diff";
 
@@ -30,11 +30,11 @@ function installFetch(response: Response): () => {
 } {
     let url = "";
     let init: RequestInit | undefined;
-    globalThis.fetch = async (input, requestInit) => {
+    globalThis.fetch = (async (input: string | URL | Request, requestInit?: RequestInit) => {
         url = input.toString();
         init = requestInit;
         return response;
-    };
+    }) as unknown as typeof fetch;
     return () => ({ url, init });
 }
 

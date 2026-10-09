@@ -22,6 +22,8 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
+      # Compose exposes the API on 3000; local `bun run dev` defaults to 8787
+      # (apps/be/src/config.ts). Keep VITE_API_URL below in sync with this mapping.
       - "3000:3000"
     environment:
       DATABASE_URL: postgresql://driftlock:driftlock@db:5432/driftlock

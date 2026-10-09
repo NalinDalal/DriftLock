@@ -4,7 +4,9 @@
 
 - Bun 1.0+
 - Docker Desktop (for sandbox testing)
-- OpenAI API key (for AI-powered analysis)
+- AI provider key for AI-powered fixes (optional; one of `AI_API_KEY` for
+  openai/anthropic, `GEMINI_API_KEY` for gemini, or `CLOUDFLARE_API_TOKEN` +
+  `CLOUDFLARE_ACCOUNT_ID` for cloudflare). Deterministic fixes need no key.
 
 ## Setup
 
@@ -19,8 +21,8 @@ bun install
 # Copy environment config (Bun auto-loads .env from the repo root)
 cp .env.example .env
 
-# Start local services (PostgreSQL)
-docker compose up -d postgres
+# Start local services (PostgreSQL; service name is `db`)
+docker compose up -d db
 
 # Build all packages
 bun run build
@@ -101,11 +103,23 @@ for the PR's target.
 
 - `packages/core` - Shared types and utilities
 - `packages/parser` - AST-based code analysis
-- `packages/agent` - AI-powered analysis and fix generation
+- `packages/agent` - Agent migration loop and vendor contracts
+- `packages/aiFix` - Deterministic + LLM fix generation
+- `packages/pipeline` - Scan, sandbox run, drift detection
+- `packages/diff` - Shape infer/merge/diff and fix planning
 - `packages/sandbox` - Docker test execution
-- `packages/git` - Git operations and tracking
+- `packages/git` - Git operations and PR creation
+- `packages/db` - Drizzle/Postgres persistence
+- `packages/vendorWatch` - Vendor spec polling
+- `packages/webhookCapture` - Inbound webhook capture and fix
 - `apps/cli` - Command-line interface
-- `apps/web` - Web dashboard
+- `apps/be` - Backend API (Bun, default port 8787 locally)
+- `apps/fe` - Web dashboard (Vite, port 5173)
+- `apps/webhook` - GitHub App + inbound capture (port 3001)
+
+> Ports: local `bun run dev` serves the API on **8787**; `docker compose`
+> maps the API to **3000** (`VITE_API_URL=http://localhost:3000`). Webhook
+> capture is **3001** in both.
 
 ### Running in Development
 
@@ -117,14 +131,14 @@ bun run build
 bun run --filter @driftlock/cli dev analyze ./src
 
 # Run web app in development mode
-bun run --filter @driftlock/web dev
+bun run --filter @driftlock/fe dev
 ```
 
 ### Testing
 
 ```bash
-# Run all tests
-bun run test
+# Run all unit tests (canonical suite in packages/tests)
+bun run test:unit
 
 # Run tests for specific package
 bun run --filter @driftlock/parser test
@@ -135,8 +149,15 @@ bun run --filter @driftlock/agent test:watch
 
 ## Configuration
 
-Supply credentials through the `OPENAI_API_KEY` environment variable using your
-shell or CI secret manager. Never put API keys in `.driftlock.yml` or commit them.
+Supply AI credentials through the environment using your shell or CI secret
+manager (see `.env.example` as the canonical matrix). Supported providers:
+
+- `AI_PROVIDER=openai|anthropic` with `AI_API_KEY` (+ optional `AI_MODEL`)
+- `AI_PROVIDER=gemini` with `GEMINI_API_KEY` (+ optional `GEMINI_MODEL`)
+- `AI_PROVIDER=cloudflare` with `CLOUDFLARE_API_TOKEN` +
+  `CLOUDFLARE_ACCOUNT_ID` (+ optional `CLOUDFLARE_AI_MODEL`)
+
+Never put API keys in `.driftlock.yml` or commit them.
 The `init` command does not request or store a key. The CLI does not yet load
 credentials or other settings from this file.
 
@@ -154,13 +175,12 @@ sandbox:
 
 ## Architecture
 
-See [BLUEPRINT.md](./BLUEPRINT.md) for detailed implementation plan.
+See [docs/](./docs/) for the pitch, YC application, and ADRs
+(`docs/adr/`). `PRODUCT.md` states the product positioning and principles.
 
-## Next Steps
+## Current state
 
-1. Complete Step 1: Project Scaffolding
-2. Implement parser package with TypeScript support
-3. Build Docker sandbox environment
-4. Create CLI commands
-5. Build web dashboard
-6. Integrate with GitHub API for PR creation
+Outbound drift (`analyze`/`test`/`diff`/`fix`), inbound webhook capture with
+PR creation, and optional AI fixes across four providers are implemented and
+covered by `bun run test:unit` (692 tests). Stripe is the first live vendor;
+Twilio/Shopify are next.

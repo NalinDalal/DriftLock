@@ -1,6 +1,13 @@
 import { describe, expect, test, mock } from "bun:test";
-import { InMemorySchemaStore } from "../schemaStore";
-import { DriftDetector } from "../driftDetector";
+import { InMemorySchemaStore } from "@driftlock/webhookCapture";
+import { DriftDetector } from "@driftlock/webhookCapture";
+import type { DriftAlert, RollbackAlert } from "@driftlock/webhookCapture";
+
+/** processPayload returns a drift/rollback union; these tests set up drift. */
+function requireDrift(alert: DriftAlert | RollbackAlert | null): DriftAlert {
+    if (!alert || !("diff" in alert)) throw new Error("expected a DriftAlert");
+    return alert;
+}
 
 describe("DriftDetector", () => {
     test("records baseline on first payload", async () => {
@@ -39,12 +46,12 @@ describe("DriftDetector", () => {
             fee: 30,
         });
 
-        expect(alert).not.toBeNull();
-        expect(alert!.diff.added).toEqual(["fee"]);
-        expect(alert!.diff.removed).toEqual([]);
-        expect(alert!.diff.typeChanged).toEqual([]);
-        expect(alert!.endpointId).toBe("ep-1");
-        expect(alert!.eventType).toBe("charge.created");
+        const drift = requireDrift(alert);
+        expect(drift.diff.added).toEqual(["fee"]);
+        expect(drift.diff.removed).toEqual([]);
+        expect(drift.diff.typeChanged).toEqual([]);
+        expect(drift.endpointId).toBe("ep-1");
+        expect(drift.eventType).toBe("charge.created");
         expect(handler).toHaveBeenCalledTimes(1);
     });
 
@@ -99,8 +106,8 @@ describe("DriftDetector", () => {
             status: "active",
         });
 
-        expect(alert).not.toBeNull();
-        expect(alert!.diff.removed).toEqual(["old_field"]);
+        const drift = requireDrift(alert);
+        expect(drift.diff.removed).toEqual(["old_field"]);
     });
 
     test("detects type change as drift", async () => {
@@ -115,8 +122,8 @@ describe("DriftDetector", () => {
             amount: "2000",
         });
 
-        expect(alert).not.toBeNull();
-        expect(alert!.diff.typeChanged).toEqual([
+        const drift = requireDrift(alert);
+        expect(drift.diff.typeChanged).toEqual([
             { field: "amount", from: "number", to: "string" },
         ]);
     });

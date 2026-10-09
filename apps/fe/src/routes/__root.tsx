@@ -46,8 +46,8 @@ export function NotFoundPage() {
                 <Link to="/" className="bg-[var(--color-ink)] px-4 py-2 font-mono text-xs tracking-wide text-[var(--color-paper)] hover:bg-[var(--color-ink)]/90">
                     Back to Home
                 </Link>
-                <Link to="/about" className="border border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-2 font-mono text-xs tracking-wide text-[var(--color-ink)] hover:bg-[var(--color-paper)]">
-                    About DriftLock
+                <Link to="/docs" className="border border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-2 font-mono text-xs tracking-wide text-[var(--color-ink)] hover:bg-[var(--color-paper)]">
+                    Read the Docs
                 </Link>
             </div>
         </div>
@@ -249,6 +249,24 @@ export default function AppShell() {
                         <nav aria-label="Product" className="flex flex-col gap-1">
                             <p className="font-mono text-[11px] tracking-[0.12em] text-[var(--color-muted)]">PRODUCT</p>
                             <Link
+                                to="/features"
+                                className="flex min-h-[32px] items-center font-mono text-[12px] tracking-wide text-[var(--color-ink)] hover:underline underline-offset-2"
+                            >
+                                Features
+                            </Link>
+                            <Link
+                                to="/docs"
+                                className="flex min-h-[32px] items-center font-mono text-[12px] tracking-wide text-[var(--color-ink)] hover:underline underline-offset-2"
+                            >
+                                Docs
+                            </Link>
+                            <Link
+                                to="/pricing"
+                                className="flex min-h-[32px] items-center font-mono text-[12px] tracking-wide text-[var(--color-ink)] hover:underline underline-offset-2"
+                            >
+                                Pricing
+                            </Link>
+                            <Link
                                 to="/install"
                                 className="flex min-h-[32px] items-center font-mono text-[12px] tracking-wide text-[var(--color-ink)] hover:underline underline-offset-2"
                             >
@@ -317,6 +335,12 @@ export default function AppShell() {
                                 className="flex min-h-[32px] items-center font-mono text-[12px] tracking-wide text-[var(--color-ink)] hover:underline underline-offset-2"
                             >
                                 Terms of Service
+                            </Link>
+                            <Link
+                                to="/contact"
+                                className="flex min-h-[32px] items-center font-mono text-[12px] tracking-wide text-[var(--color-ink)] hover:underline underline-offset-2"
+                            >
+                                Contact
                             </Link>
                         </nav>
                     </div>

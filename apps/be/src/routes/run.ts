@@ -1,9 +1,7 @@
 import { createHash } from "crypto";
-import { readFileSync } from "fs";
-import { join, relative } from "path";
+import { relative } from "path";
 import {
     analyzeAndCompare,
-    applyDriftFix,
     DbSnapshotStore,
     driftConfidence,
     driftSummary,
@@ -20,6 +18,32 @@ interface RunBody {
     forward?: unknown;
 }
 
+const ALLOWED_COMMAND_PREFIXES = [
+    "npm test",
+    "npm run test",
+    "bun test",
+    "bun run test",
+    "yarn test",
+    "pnpm test",
+    "npx jest",
+    "node --test",
+] as const;
+
+/**
+ * Commands run inside the Docker sandbox on BE infra. Authenticated users
+ * supply this value, so reject shell metachars and anything outside the
+ * known test-runner prefixes (no `;`, `&&`, backticks, subshells, redirects).
+ */
+export function isAllowedTestCommand(command: string): boolean {
+    const trimmed = command.trim();
+    if (!trimmed || trimmed.length > 500) return false;
+    // eslint-disable-next-line no-control-regex
+    if (/[;&|`$()><\n\r\x00]/.test(trimmed)) return false;
+    return ALLOWED_COMMAND_PREFIXES.some(
+        (prefix) => trimmed === prefix || trimmed.startsWith(`${prefix} `) || trimmed.startsWith(`${prefix}--`),
+    );
+}
+
 export async function handleRun(req: Request): Promise<Response> {
     let body: RunBody;
     try {
@@ -34,8 +58,13 @@ export async function handleRun(req: Request): Promise<Response> {
     }
     const command =
         typeof body.command === "string" && body.command.trim()
-            ? body.command
+            ? body.command.trim()
             : "npm test";
+    if (!isAllowedTestCommand(command)) {
+        return badRequest(
+            "command must be a known test runner (npm/bun/yarn/pnpm test, npx jest, node --test) without shell operators",
+        );
+    }
     const forward = Array.isArray(body.forward)
         ? body.forward.filter(
               (entry): entry is string => typeof entry === "string",
@@ -115,12 +144,9 @@ export async function handleRun(req: Request): Promise<Response> {
                 requestShape: current.request,
                 responseShape: current.response,
             });
-            const source = readSource(clone.path, drift.callSite.filePath);
-            const applied = source ? await applyDriftFix(drift, source) : null;
+            // Agent-only mode: record drift with no suggestedFix.
+            // Deterministic fixes cannot know per-repo semantics.
             const driftId = `drift-${dbCallSiteId}`.slice(0, 128);
-            if (applied) {
-                applied.fix.driftEventId = driftId;
-            }
             await store.recordDrift({
                 id: driftId,
                 callSiteId: dbCallSiteId,
@@ -130,7 +156,7 @@ export async function handleRun(req: Request): Promise<Response> {
                     string,
                     unknown
                 >,
-                suggestedFix: applied?.fix ?? null,
+                suggestedFix: null,
                 confidence: driftConfidence(drift),
                 prNumber: null,
                 status: "detected",
@@ -177,14 +203,5 @@ export async function handleRun(req: Request): Promise<Response> {
         );
     } finally {
         await clone.cleanup();
-    }
-}
-
-function readSource(repoPath: string, filePath: string): string | null {
-    try {
-        const full = filePath.startsWith("/") ? filePath : join(repoPath, filePath);
-        return readFileSync(full, "utf8");
-    } catch {
-        return null;
     }
 }

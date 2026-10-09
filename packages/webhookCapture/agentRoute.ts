@@ -1,5 +1,6 @@
 import OpenAI from "openai";
-import { STRIPE_VENDOR, TWILIO_VENDOR, type VendorConfig } from "@driftlock/core";
+import type { VendorConfig } from "@driftlock/core";
+import { vendorForEndpoint } from "@driftlock/agent";
 import type { DriftSeverity } from "./schemaDiff";
 
 export interface AgentAIConfig {
@@ -65,15 +66,7 @@ export function buildAgentClient(config: AgentAIConfig): AgentClient | null {
     }
 }
 
-const KNOWN_VENDORS: Record<string, VendorConfig> = {
-    stripe: STRIPE_VENDOR,
-    twilio: TWILIO_VENDOR,
-};
-
-/** Webhook endpoint id → vendor config. Unknown endpoints stay unknown. */
-export function vendorForEndpoint(endpointId: string): VendorConfig | undefined {
-    return KNOWN_VENDORS[endpointId.trim().toLowerCase()];
-}
+export { vendorForEndpoint } from "@driftlock/agent";
 
 /**
  * The single seam for the live path: both a model client and a vendor config

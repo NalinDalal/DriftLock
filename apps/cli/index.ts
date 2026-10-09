@@ -1,20 +1,14 @@
 #!/usr/bin/env bun
 import { readdirSync, readFileSync, writeFileSync } from "fs";
-import { isAbsolute, join, relative, resolve } from "path";
+import { isAbsolute, join, resolve } from "path";
 import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
 import inquirer from "inquirer";
 import { TypeScriptExtractor, detectLanguage } from "@driftlock/parser";
 import { SandboxRunner } from "@driftlock/sandbox";
-import {
-    GitTracker,
-    FixPRRunner,
-    fixBranchName,
-    buildFixPRTitle,
-    buildFixPRBody,
-} from "@driftlock/git";
-import { analyzeAndCompare, applyDriftFix, buildDriftEvent } from "@driftlock/pipeline";
+import { GitTracker } from "@driftlock/git";
+import { analyzeAndCompare, applyDriftFix } from "@driftlock/pipeline";
 import type { CallSite, Fix } from "@driftlock/core";
 import type { DriftResult } from "@driftlock/pipeline";
 import { SnapshotStore, commitBaselines } from "./drift";
@@ -530,123 +524,24 @@ Examples:
                     return;
                 }
 
-                const [owner, repo] = options.repo.split("/");
-                if (!owner || !repo) {
-                    console.error(
-                        chalk.red("Invalid --repo format. Use owner/repo."),
-                    );
-                    process.exit(1);
-                }
-
-                const githubToken = process.env.GITHUB_TOKEN;
-                if (!githubToken) {
-                    console.error(
-                        chalk.red(
-                            "GITHUB_TOKEN environment variable is required for PR creation.",
-                        ),
-                    );
-                    process.exit(1);
-                }
-
-                const prSpinner = ora("Creating PR...").start();
-                const prRunner = new FixPRRunner(githubToken);
-                const prs: Array<{
-                    driftId: string;
-                    status: string;
-                    url: string;
-                    number: number;
-                }> = [];
-
-                // PR surfaces are repo-relative: absolute disk paths would
-                // leak local layout into titles and create stray files.
-                const repoRoot = resolve(repoPath);
-                const displayPath = (p: string): string => {
-                    const rel = relative(repoRoot, p).replace(/\\/g, "/");
-                    return rel && !rel.startsWith("..") ? rel : p;
-                };
-                for (const { callSite, drift, fix } of fixes) {
-                    const driftEvent = buildDriftEvent(drift);
-                    driftEvent.suggestedFix = fix;
-                    driftEvent.status = "fix_generated";
-                    console.log(
-                        `[EVENT] type=drift_detected ${JSON.stringify({ driftId: driftEvent.id, callSiteId: callSite.id, method: callSite.method })}`,
-                    );
-                    const displaySite = { ...callSite, filePath: displayPath(callSite.filePath) };
-                    const displayFiles = fix.files.map((f) => ({
-                        path: displayPath(f.path),
-                        content: f.changes,
-                    }));
-
-                    const result = await prRunner.run({
-                        owner,
-                        repo,
-                        base: options.base ?? "main",
-                        branch: fixBranchName(callSite.id),
-                        title: buildFixPRTitle({
-                            driftEvent,
-                            callSite: displaySite,
-                            fix,
-                        }),
-                        body: buildFixPRBody({ driftEvent, callSite: displaySite, fix }, displayFiles),
-                        commitMessage: `driftlock: apply fix for ${callSite.method}`,
-                        files: displayFiles,
-                    });
-
-                    if (result.status === "merged") {
-                        const current = shapes.get(callSite.id);
-                        if (current) {
-                            await store.save(callSite.id, current);
-                        }
-                        console.log(
-                            `[EVENT] type=pr_merged ${JSON.stringify({ driftId: driftEvent.id, prNumber: result.number, url: result.url })}`,
-                        );
-                        prs.push({
-                            driftId: driftEvent.id,
-                            status: result.status,
-                            url: result.url,
-                            number: result.number,
-                        });
-                        prSpinner.succeed(
-                            `Fix already merged (${result.url}); baseline refreshed`,
-                        );
-                        continue;
-                    }
-                    if (result.status === "already_open") {
-                        console.log(
-                            `[EVENT] type=pr_opened ${JSON.stringify({ driftId: driftEvent.id, prNumber: result.number, url: result.url })}`,
-                        );
-                        prs.push({
-                            driftId: driftEvent.id,
-                            status: result.status,
-                            url: result.url,
-                            number: result.number,
-                        });
-                        prSpinner.succeed(`PR already open: ${result.url}`);
-                        continue;
-                    }
-                    console.log(
-                        `[EVENT] type=pr_opened ${JSON.stringify({ driftId: driftEvent.id, prNumber: result.number, url: result.url })}`,
-                    );
-                    prs.push({
-                        driftId: driftEvent.id,
-                        status: result.status,
-                        url: result.url,
-                        number: result.number,
-                    });
-                    prSpinner.succeed(`PR created: ${result.url}`);
-                }
-                // Commit after the loop so merged-PR baseline refreshes (saved
-                // to disk above) persist too, not just run-captured ones.
-                const baselineCommit = await commitIfEnabled();
+                // Agent-only mode: static fixes are suggestions, never PRs.
+                // A regex rewrite cannot know per-repo semantics, so opening
+                // a PR here is how wrong PRs shipped. Run the migration
+                // agent (packages/agent) to get a verified PR instead.
+                console.log(
+                    chalk.yellow(
+                        "\nAgent-only mode: --repo PR creation from static fixes is disabled. Review the suggestions above and run the migration agent for a verified PR.",
+                    ),
+                );
                 emitSummary({
                     callSites: allCallSites.length,
                     drifts: drifts.length,
                     fixes: fixes.length,
-                    prs,
+                    prs: [],
                     baselines: baselines.length,
                     pendingCapture: pendingCapture.length,
-                    baselinesCommitted: baselineCommit.pushed,
                 });
+                return;
             } catch (error) {
                 spinner.fail("Fix generation failed");
                 console.error(error);

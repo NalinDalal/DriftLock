@@ -1,6 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { InMemorySchemaStore } from "../schemaStore";
-import { createCaptureMiddleware } from "../captureMiddleware";
+import { InMemorySchemaStore } from "@driftlock/webhookCapture";
+import { createCaptureMiddleware } from "@driftlock/webhookCapture";
+import type { DriftAlert, RollbackAlert } from "@driftlock/webhookCapture";
+
+/** capture returns a drift/rollback union; these tests set up drift. */
+function requireDrift(alert: DriftAlert | RollbackAlert | null): DriftAlert {
+    if (!alert || !("diff" in alert)) throw new Error("expected a DriftAlert");
+    return alert;
+}
 
 describe("createCaptureMiddleware", () => {
     test("captures payload and detects baseline", async () => {
@@ -40,8 +47,7 @@ describe("createCaptureMiddleware", () => {
             fee: 30,
         });
 
-        expect(alert).not.toBeNull();
-        expect(alert!.diff.added).toEqual(["fee"]);
+        expect(requireDrift(alert).diff.added).toEqual(["fee"]);
     });
 
     test("uses custom event type extractor", async () => {

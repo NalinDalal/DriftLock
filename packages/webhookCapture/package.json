@@ -6,7 +6,7 @@
     "types": "./index.ts",
     "scripts": {
         "typecheck": "tsc --noEmit",
-        "test": "bun test"
+        "test": "bun test --pass-with-no-tests"
     },
     "dependencies": {
         "@driftlock/agent": "workspace:*",
