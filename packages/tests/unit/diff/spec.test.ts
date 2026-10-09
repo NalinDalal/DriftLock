@@ -3,6 +3,9 @@ import {
     diffSpecs,
     specFromCallSite,
     normalizeField,
+    deriveSpecLevel,
+    effectForSpecChange,
+    analyzeSpecCoverage,
 } from "@driftlock/diff";
 
 const baseSpec = {
@@ -146,5 +149,99 @@ describe("normalizeField", () => {
     test("collapses id/ID/order_id/orderId atoms", () => {
         expect(normalizeField("id")).toBe(normalizeField("ID"));
         expect(normalizeField("order_id")).toBe(normalizeField("orderId"));
+    });
+});
+
+describe("severity law", () => {
+    test("narrows request is error, widens response is error", () => {
+        expect(deriveSpecLevel("narrows", "request", [])).toBe("error");
+        expect(deriveSpecLevel("narrows", "response", [])).toBe("info");
+        expect(deriveSpecLevel("widens", "request", [])).toBe("info");
+        expect(deriveSpecLevel("widens", "response", [])).toBe("error");
+        expect(deriveSpecLevel("incomparable", "request", [])).toBe("error");
+        expect(deriveSpecLevel("unknown", "request", [])).toBe("warning");
+        expect(deriveSpecLevel("none", "request", [])).toBe("info");
+        expect(deriveSpecLevel("violation", "none", [])).toBe("error");
+    });
+
+    test("guards apply first", () => {
+        expect(deriveSpecLevel("narrows", "request", ["read-only"])).toBe("info");
+        expect(deriveSpecLevel("narrows", "response", ["write-only"])).toBe("info");
+        expect(deriveSpecLevel("narrows", "request", ["sanctioned"])).toBe("info");
+        expect(deriveSpecLevel("narrows", "request", ["non-success"])).toBe("info");
+        expect(deriveSpecLevel("widens", "response", ["negotiated"])).toBe("info");
+    });
+
+    test("response field addition is safe, required request addition breaks", () => {
+        const code = { ...baseSpec, source: "code-usage" as const };
+        const respAdded = diffSpecs(code, {
+            ...baseSpec,
+            source: "vendor-docs" as const,
+            responseFields: [
+                ...baseSpec.responseFields,
+                { name: "extra", type: "string", required: false },
+            ],
+        });
+        expect(respAdded.changes[0]!.kind).toBe("field_added");
+        expect(respAdded.changes[0]!.breaking).toBe(false);
+        expect(respAdded.changes[0]!.level).toBe("info");
+
+        const reqAdded = diffSpecs(code, {
+            ...baseSpec,
+            source: "vendor-docs" as const,
+            requestFields: [
+                ...baseSpec.requestFields,
+                { name: "email", type: "string", required: true },
+            ],
+        });
+        expect(reqAdded.changes[0]!.breaking).toBe(true);
+        expect(reqAdded.changes[0]!.level).toBe("error");
+    });
+
+    test("request removal is safe, response removal breaks", () => {
+        const code = { ...baseSpec, source: "code-usage" as const };
+        const reqRemoved = diffSpecs(code, {
+            ...baseSpec,
+            source: "vendor-docs" as const,
+            requestFields: [{ name: "amount", type: "number", required: true }],
+        });
+        expect(reqRemoved.changes[0]!.kind).toBe("field_removed");
+        expect(reqRemoved.changes[0]!.breaking).toBe(false);
+
+        const respRemoved = diffSpecs(code, {
+            ...baseSpec,
+            source: "vendor-docs" as const,
+            responseFields: [{ name: "id", type: "string", required: true }],
+        });
+        expect(respRemoved.changes[0]!.breaking).toBe(true);
+    });
+
+    test("atomized rename stays warning, never silent info", () => {
+        const code = { ...baseSpec, source: "code-usage" as const };
+        const docs = {
+            ...baseSpec,
+            source: "vendor-docs" as const,
+            responseFields: [
+                { name: "ID", type: "string", required: true },
+                { name: "status", type: "string", required: true },
+            ],
+        };
+        const result = diffSpecs(code, docs);
+        expect(result.changes[0]!.level).toBe("warning");
+        expect(result.changes[0]!.breaking).toBe(false);
+        expect(result.warnings).toHaveLength(1);
+    });
+
+    test("coverage is explicit", () => {
+        const code = { ...baseSpec, source: "code-usage" as const };
+        const docs = {
+            ...baseSpec,
+            source: "vendor-docs" as const,
+            responseFields: [{ name: "id", type: "string", required: true }],
+        };
+        const result = diffSpecs(code, docs);
+        expect(result.coverage.status).toBe("covered");
+        expect(analyzeSpecCoverage(result.changes).status).toBe("covered");
+        expect(effectForSpecChange("type_changed", "response").effect).toBe("incomparable");
     });
 });

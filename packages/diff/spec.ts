@@ -57,19 +57,175 @@ export interface SpecChange {
     newEnumValue?: string;
     oldRequired?: boolean;
     newRequired?: boolean;
+    /** Semantic effect on the wire contract. */
+    effect: SpecEffect;
+    /** Derived severity. `breaking` is kept for compat and equals `level === "error"`. */
+    level: SpecLevel;
     breaking: boolean;
+    guards?: SpecGuard[];
+    coverage: SpecCoverageStatus;
+}
+
+/** Semantic effect of a change on which payloads validate. */
+export type SpecEffect =
+    | "narrows"
+    | "widens"
+    | "incomparable"
+    | "unknown"
+    | "none"
+    | "violation";
+
+export type SpecDirection = "request" | "response" | "none";
+
+export type SpecLevel = "error" | "warning" | "info";
+
+export type SpecGuard =
+    | "read-only"
+    | "write-only"
+    | "sanctioned"
+    | "non-success"
+    | "negotiated"
+    | "has-default";
+
+export type SpecCoverageStatus =
+    | "covered"
+    | "waived"
+    | "non-contract"
+    | "uncovered";
+
+/**
+ * Severity law: guards apply first, then effect x direction decides.
+ * Guards nullify or requalify on the side they speak about; anything that
+ * cannot be proven safe reports as breaking (error), unknowable as warning.
+ */
+export function deriveSpecLevel(
+    effect: SpecEffect,
+    direction: SpecDirection,
+    guards: SpecGuard[] = [],
+): SpecLevel {
+    let eff = effect;
+    let dir = direction;
+    const has = (g: SpecGuard): boolean => guards.includes(g);
+    if (has("read-only") && dir === "request") eff = "none";
+    if (has("write-only") && dir === "response") eff = "none";
+    if (has("non-success") || has("sanctioned")) eff = "none";
+    if (has("negotiated")) dir = "request";
+
+    if (eff === "narrows") return dir === "request" ? "error" : "info";
+    if (eff === "widens") return dir === "response" ? "error" : "info";
+    if (eff === "incomparable" || eff === "violation") return "error";
+    if (eff === "unknown") return "warning";
+    return "info";
+}
+
+/**
+ * Map a named change to its wire effect. Chosen so deriveSpecLevel yields
+ * the correct severity: request narrowing breaks, response widening breaks,
+ * atomized renames stay unknown (warning) rather than silent info.
+ */
+export function effectForSpecChange(
+    kind: SpecChangeKind,
+    side: "request" | "response" | undefined,
+    opts: { newRequired?: boolean } = {},
+): { effect: SpecEffect; direction: SpecDirection } {
+    const direction: SpecDirection = side ?? "none";
+    switch (kind) {
+        case "field_renamed":
+            // Atomized rename (id vs ID): same logical field, cannot prove
+            // wire impact from docs alone. Warning, not silent info.
+            return { effect: "unknown", direction };
+        case "type_changed":
+        case "request_type_changed":
+        case "response_type_changed":
+            return { effect: "incomparable", direction };
+        case "field_removed":
+            // Request removal widens acceptance (safe); response removal
+            // widens what consumers must tolerate (missing field) -> error.
+            return side === "request"
+                ? { effect: "widens", direction }
+                : { effect: "widens", direction };
+        case "field_added":
+            if (side === "request") {
+                // New required request param narrows acceptance -> error.
+                // New optional request param widens acceptance -> info.
+                return opts.newRequired === false
+                    ? { effect: "widens", direction }
+                    : { effect: "narrows", direction };
+            }
+            // New response field: old consumers ignore extras -> safe.
+            return { effect: "narrows", direction };
+        case "became_optional":
+            return { effect: "widens", direction };
+        case "required_field_changed":
+            return { effect: "narrows", direction };
+        case "endpoint_removed":
+            return { effect: "violation", direction: "none" };
+        case "endpoint_added":
+            return { effect: "none", direction: "none" };
+        case "enum_value_removed":
+            return { effect: "narrows", direction };
+        default:
+            return { effect: "unknown", direction };
+    }
+}
+
+/** Build a SpecChange with severity + coverage derived, never hand-rolled. */
+function makeSpecChange(init: {
+    kind: SpecChangeKind;
+    side?: "request" | "response";
+    field?: string;
+    endpoint?: string;
+    from?: string;
+    to?: string;
+    oldType?: string;
+    newType?: string;
+    oldRequired?: boolean;
+    newRequired?: boolean;
+    guards?: SpecGuard[];
+}): SpecChange {
+    const guards = init.guards ?? [];
+    // field_removed on request side is safe (widens request -> info);
+    // field_removed on response side must stay error. effectForSpecChange
+    // returns widens for both, and the law gives widens+request=info,
+    // widens+response=error, so no special-casing needed here.
+    const { effect, direction } = effectForSpecChange(init.kind, init.side, {
+        newRequired: init.newRequired,
+    });
+    const level = deriveSpecLevel(effect, direction, guards);
+    return {
+        ...init,
+        guards,
+        effect,
+        level,
+        breaking: level === "error",
+        coverage: "covered",
+    };
+}
+
+/** Coverage of the named-change space: every emitted kind must map to an effect. */
+export function analyzeSpecCoverage(changes: SpecChange[]): {
+    status: "covered" | "uncovered";
+    uncovered: string[];
+} {
+    const uncovered = changes
+        .filter((c) => c.coverage === "uncovered" || c.effect === undefined)
+        .map((c) => `${c.side ?? "root"}.${c.field ?? c.endpoint ?? c.kind}`);
+    return { status: uncovered.length === 0 ? "covered" : "uncovered", uncovered };
 }
 
 export interface SpecDiffSummary {
     changes: SpecChange[];
     breakingChanges: string[];
     nonBreakingChanges: string[];
+    /** Level-warning changes (unknown effect): must surface, never silent info. */
+    warnings: string[];
     hasDrift: boolean;
     /** high = sandbox-observed; medium = docs-derived; low = pure code guess. */
     confidence: "high" | "medium" | "low";
     /** 0-100 risk score across 4 dimensions.
      *  Inspired by CodeRifts' risk scoring model - adapted for vendor API context. */
     riskScore: RiskScore;
+    coverage: { status: "covered" | "uncovered"; uncovered: string[] };
 }
 
 export interface RiskScore {
@@ -114,11 +270,12 @@ export function diffSpecs(
 
     // Check for endpoint removal (entire endpoint gone)
     if (oldSpec.endpoint && !nextSpec.endpoint) {
-        changes.push({
-            kind: "endpoint_removed",
-            endpoint: oldSpec.endpoint,
-            breaking: true,
-        });
+        changes.push(
+            makeSpecChange({
+                kind: "endpoint_removed",
+                endpoint: oldSpec.endpoint,
+            }),
+        );
     }
 
     // Compare request fields
@@ -137,11 +294,12 @@ export function diffSpecs(
 
     // Check for endpoint addition
     if (!oldSpec.endpoint && nextSpec.endpoint) {
-        changes.push({
-            kind: "endpoint_added",
-            endpoint: nextSpec.endpoint,
-            breaking: false,
-        });
+        changes.push(
+            makeSpecChange({
+                kind: "endpoint_added",
+                endpoint: nextSpec.endpoint,
+            }),
+        );
     }
 
     const riskScore = calculateRiskScore(changes, changes);
@@ -150,9 +308,11 @@ export function diffSpecs(
         changes,
         breakingChanges: changes.filter((c) => c.breaking).map(renderChange),
         nonBreakingChanges: changes.filter((c) => !c.breaking).map(renderChange),
+        warnings: changes.filter((c) => c.level === "warning").map(renderChange),
         hasDrift: changes.length > 0,
         confidence: refreshConfidence(oldSpec, nextSpec),
         riskScore,
+        coverage: analyzeSpecCoverage(changes),
     };
 }
 
@@ -179,22 +339,24 @@ function diffFieldLists(
         if (next) {
             // Same name: type + optionality drift.
             if (next.type !== field.type) {
-                changes.push({
-                    kind: "type_changed",
-                    side,
-                    field: field.name,
-                    oldType: field.type,
-                    newType: next.type,
-                    breaking: true,
-                });
+                changes.push(
+                    makeSpecChange({
+                        kind: "type_changed",
+                        side,
+                        field: field.name,
+                        oldType: field.type,
+                        newType: next.type,
+                    }),
+                );
             }
             if (next.required === false && field.required) {
-                changes.push({
-                    kind: "became_optional",
-                    side,
-                    field: field.name,
-                    breaking: false,
-                });
+                changes.push(
+                    makeSpecChange({
+                        kind: "became_optional",
+                        side,
+                        field: field.name,
+                    }),
+                );
             }
             continue;
         }
@@ -202,33 +364,37 @@ function diffFieldLists(
         const renamedTo = nextByNorm.get(normalizeField(field.name));
         if (renamedTo) {
             renamedNext.add(renamedTo);
-            changes.push({
-                kind: "field_renamed",
-                side,
-                field: field.name,
-                from: field.name,
-                to: renamedTo,
-                breaking: false,
-            });
+            changes.push(
+                makeSpecChange({
+                    kind: "field_renamed",
+                    side,
+                    field: field.name,
+                    from: field.name,
+                    to: renamedTo,
+                }),
+            );
             continue;
         }
 
-        changes.push({
-            kind: "field_removed",
-            side,
-            field: field.name,
-            breaking: true,
-        });
+        changes.push(
+            makeSpecChange({
+                kind: "field_removed",
+                side,
+                field: field.name,
+            }),
+        );
     }
 
     for (const field of nextFields) {
         if (renamedNext.has(field.name) || oldMap.has(field.name)) continue;
-        changes.push({
-            kind: "field_added",
-            side,
-            field: field.name,
-            breaking: true,
-        });
+        changes.push(
+            makeSpecChange({
+                kind: "field_added",
+                side,
+                field: field.name,
+                newRequired: field.required,
+            }),
+        );
     }
 
     return changes;

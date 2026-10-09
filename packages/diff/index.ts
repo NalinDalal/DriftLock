@@ -741,7 +741,7 @@ export function applyFixWork(work: FixWork, source: string): string | null {
             return null;
     }
 }
-export { diffSpecs, specFromCallSite, normalizeField, refreshConfidence } from "./spec";
-export type { EndpointSpec, FieldSpec, SpecSource, SpecChange, SpecChangeKind, SpecDiffSummary } from "./spec";
+export { diffSpecs, specFromCallSite, normalizeField, refreshConfidence, deriveSpecLevel, effectForSpecChange, analyzeSpecCoverage } from "./spec";
+export type { EndpointSpec, FieldSpec, SpecSource, SpecChange, SpecChangeKind, SpecDiffSummary, SpecEffect, SpecDirection, SpecLevel, SpecGuard, SpecCoverageStatus } from "./spec";
 export { matchesCapture, resolveCapturedEndpoints } from "./captureResolver";
 export type { CaptureLike, EndpointFill } from "./captureResolver";
