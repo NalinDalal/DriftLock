@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 function json(data: unknown, status = 200): Response {
     return new Response(JSON.stringify(data, null, 2), {
@@ -9,7 +9,6 @@ function json(data: unknown, status = 200): Response {
 
 describe("Webhook forwarding", () => {
     test("forward returns ok status with forwarding info", async () => {
-        const body = { type: "payment_intent.succeeded", data: {} };
         const response = json({
             status: "ok",
             endpointId: "stripe",

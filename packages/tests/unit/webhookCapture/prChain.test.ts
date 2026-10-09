@@ -1,5 +1,5 @@
-import { describe, expect, test, mock } from "bun:test";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "fs";
+import { describe, expect, test } from "bun:test";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { InMemorySchemaStore } from "@driftlock/webhookCapture";
@@ -350,7 +350,7 @@ export const source = "constant";
         );
 
         const affectedFiles: string[] = [];
-        const files = require("fs").readdirSync(repo, { recursive: true });
+        const files = readdirSync(repo, { recursive: true });
         for (const file of files) {
             if (typeof file !== "string") continue;
             if (!/\.(ts|tsx|js)$/.test(file)) continue;

@@ -1,20 +1,14 @@
 #!/usr/bin/env bun
 import { readdirSync, readFileSync, writeFileSync } from "fs";
-import { isAbsolute, join, relative, resolve } from "path";
+import { isAbsolute, join, resolve } from "path";
 import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
 import inquirer from "inquirer";
 import { TypeScriptExtractor, detectLanguage } from "@driftlock/parser";
 import { SandboxRunner } from "@driftlock/sandbox";
-import {
-    GitTracker,
-    FixPRRunner,
-    fixBranchName,
-    buildFixPRTitle,
-    buildFixPRBody,
-} from "@driftlock/git";
-import { analyzeAndCompare, applyDriftFix, buildDriftEvent } from "@driftlock/pipeline";
+import { GitTracker } from "@driftlock/git";
+import { analyzeAndCompare, applyDriftFix } from "@driftlock/pipeline";
 import type { CallSite, Fix } from "@driftlock/core";
 import type { DriftResult } from "@driftlock/pipeline";
 import { SnapshotStore, commitBaselines } from "./drift";
