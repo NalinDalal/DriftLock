@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { track } from "../lib/analytics";
+import { getMe } from "../api/client";
 
 const SAMPLE_CODE = `import Stripe from "stripe";
 const stripe = new Stripe("sk_test_123");
@@ -208,7 +209,13 @@ function useReveal() {
 
 export default function LandingPage() {
     const [mounted, setMounted] = useState(false);
+    const [user, setUser] = useState<{ name: string; handle: string } | null>(null);
     useReveal();
+    useEffect(() => {
+        getMe()
+            .then(({ user: me }) => setUser(me ?? null))
+            .catch(() => setUser(null));
+    }, []);
     useEffect(() => {
         const id = requestAnimationFrame(() => setMounted(true));
         track("landing_view", { variant: "blueprint-rev01" });
@@ -242,12 +249,25 @@ export default function LandingPage() {
                     </p>
 
                     <div className="mt-6 flex flex-wrap items-center gap-3" style={stagger(3)}>
-                        <Link to="/install" onClick={() => track("install_clicked", { source: "hero" })} className="bg-[var(--color-ink)] px-5 py-2.5 font-mono text-[13px] tracking-wide text-[var(--color-paper)] transition-[transform,background] hover:bg-[var(--color-ink)]/90 active:scale-[0.98]">
-                            INSTALL GITHUB APP
-                        </Link>
-                        <a href="https://github.com/nerdev-co/DriftLock" target="_blank" rel="noreferrer" onClick={() => track("github_cta_clicked", { source: "hero" })} className="border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-5 py-2.5 font-mono text-[13px] tracking-wide text-[var(--color-ink)] transition-[transform,background] hover:bg-[var(--color-paper)] active:scale-[0.98]">
-                            VIEW ON GITHUB
-                        </a>
+                        {user ? (
+                            <>
+                                <Link to="/accounts" className="bg-[var(--color-ink)] px-5 py-2.5 font-mono text-[13px] tracking-wide text-[var(--color-paper)] transition-[transform,background] hover:bg-[var(--color-ink)]/90 active:scale-[0.98]">
+                                    OPEN DASHBOARD
+                                </Link>
+                                <Link to="/docs" className="border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-5 py-2.5 font-mono text-[13px] tracking-wide text-[var(--color-ink)] transition-[transform,background] hover:bg-[var(--color-paper)] active:scale-[0.98]">
+                                    READ THE DOCS
+                                </Link>
+                            </>
+                        ) : (
+                            <>
+                                <Link to="/install" onClick={() => track("install_clicked", { source: "hero" })} className="bg-[var(--color-ink)] px-5 py-2.5 font-mono text-[13px] tracking-wide text-[var(--color-paper)] transition-[transform,background] hover:bg-[var(--color-ink)]/90 active:scale-[0.98]">
+                                    INSTALL GITHUB APP
+                                </Link>
+                                <a href="https://github.com/nerdev-co/DriftLock" target="_blank" rel="noreferrer" onClick={() => track("github_cta_clicked", { source: "hero" })} className="border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-5 py-2.5 font-mono text-[13px] tracking-wide text-[var(--color-ink)] transition-[transform,background] hover:bg-[var(--color-paper)] active:scale-[0.98]">
+                                    VIEW ON GITHUB
+                                </a>
+                            </>
+                        )}
                         <span className="font-mono text-xs text-[var(--color-muted)]">Free in beta · Rev. 01</span>
                     </div>
 
@@ -372,75 +392,6 @@ export default function LandingPage() {
                 <TryPlayground />
             </div>
 
-            <div className="reveal border-y border-[var(--color-line-strong)] bg-[var(--color-surface)]">
-                <div className="mx-auto max-w-[1080px] px-6 py-10 sm:py-12">
-                    <div className="flex flex-wrap items-baseline justify-between gap-2">
-                        <h2 className="heading-section text-[var(--color-ink)]">Scan → Capture → Diff → Fix PR</h2>
-                        <span className="font-mono text-[11px] tracking-wide text-[var(--color-muted)]">TWO SURFACES: OUTBOUND + INBOUND</span>
-                    </div>
-                    <div className="mt-8 relative">
-                        <div className="absolute left-0 right-0 top-[18px] hidden h-px bg-[var(--color-ink)] sm:block" />
-                        <div className="grid gap-5 sm:grid-cols-4 sm:gap-6">
-                            {[
-                                { n: "01", t: "SCAN", d: "AST finds every vendor call.", sub: "TypeScriptExtractor" },
-                                { n: "02", t: "CAPTURE", d: "Sandbox proxy records shapes.", sub: "SandboxRunner" },
-                                { n: "03", t: "DIFF", d: "Added, removed, type changed.", sub: "diffShapes()" },
-                                { n: "04", t: "FIX PR", d: "Deterministic rename, null check.", sub: "FixPRRunner" },
-                            ].map((s) => (
-                                <div key={s.n} className="flex gap-3 sm:block sm:gap-0 bg-[var(--color-surface)] sm:bg-transparent">
-                                    <span className="flex h-[36px] w-[36px] shrink-0 items-center justify-center border border-[var(--color-line-strong)] bg-[var(--color-ink)] font-mono text-xs tracking-wide text-[var(--color-paper)]">{s.n}</span>
-                                    <div className="min-w-0 flex-1">
-                                        <p className="font-mono text-xs font-semibold tracking-[0.08em] text-[var(--color-ink)] sm:mt-3">{s.t}</p>
-                                        <p className="mt-1 font-mono text-xs leading-4 text-[var(--color-muted)] sm:max-w-[18ch]">{s.d}</p>
-                                        <p className="mt-1 font-mono text-[11px] tracking-wide text-[var(--color-muted)] sm:mt-2">{s.sub}</p>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                    <div className="mt-10 grid gap-0 border border-[var(--color-line-strong)] lg:grid-cols-2">
-                        <div className="border-b lg:border-b-0 lg:border-r border-[var(--color-line-strong)] p-5">
-                            <p className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-ink)]">OUTBOUND · APIs you call</p>
-                            <div className="mt-3 bg-[var(--color-ink)] px-3 py-2 font-mono text-xs leading-5 text-[var(--color-paper)]">$ driftlock fix ./repo --dry-run<br /><span className="text-[var(--color-signal-green)]/90">✓</span> 12 call sites · 2 drifted<br /><span className="text-[var(--color-signal-green)]">→</span> stripe.charges.create: source → payment_method</div>
-                        </div>
-                        <div className="p-5">
-                            <p className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-ink)]">INBOUND · Webhooks you receive</p>
-                            <div className="mt-3 border border-[var(--color-line)] bg-[var(--color-paper)] px-3 py-2 font-mono text-xs leading-5 text-[var(--color-ink)]/80">POST /webhooks/capture/stripe → forward → handler<br />flatten data.amount → "number"<br /><span className="text-[var(--color-signal-red)]">diff</span> +payment_method −source · 84%</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div className="reveal bg-[var(--color-paper)]">
-                <div className="mx-auto max-w-[1080px] px-6 py-10 sm:py-14">
-                    <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
-                        <div>
-                            <h3 className="heading-card text-[var(--color-ink)]">They bump the version. We migrate the code.</h3>
-                            <div className="mt-4 space-y-3 font-mono text-xs leading-5 text-[var(--color-ink)]/80">
-                                <p>Renovate updates package.json. When stripe.charges.create needs a new field, they do not touch it.</p>
-                                <p>Semver is a convention. Hunting every call site by hand is why teams stay vulnerable.</p>
-                            </div>
-                            <div className="mt-5 flex gap-2">
-                                <Link to="/install" className="bg-[var(--color-ink)] px-4 py-2 font-mono text-xs tracking-wide text-[var(--color-paper)] hover:bg-[var(--color-ink)]/90 active:scale-[0.98] transition-[transform,background]">INSTALL NOW</Link>
-                                <a href="https://github.com/nerdev-co/DriftLock" target="_blank" rel="noreferrer" className="border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-4 py-2 font-mono text-xs tracking-wide text-[var(--color-ink)] hover:bg-[var(--color-surface)] active:scale-[0.98] transition-[transform,background]">READ THE STORY</a>
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-0 border border-[var(--color-line-strong)]">
-                            <div className="bg-[var(--color-surface)] p-4">
-                                <p className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-muted)]">BEFORE · MANUAL</p>
-                                <ul className="mt-3 space-y-1.5 font-mono text-xs leading-4 text-[var(--color-ink)]/80"><li>• Avoid upgrades</li><li>• Grep, miss one</li><li>• Copy guide by hand</li><li>• Weeks, so you postpone</li></ul>
-                                <p className="mt-4 border-t border-[var(--color-line)] pt-2 font-mono text-[11px] text-[var(--color-signal-red)]">Result: stuck</p>
-                            </div>
-                            <div className="bg-[var(--color-ink)] p-4 text-[var(--color-paper)]">
-                                <p className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-paper)]/60">AFTER · DRIFTLOCK</p>
-                                <ul className="mt-3 space-y-1.5 font-mono text-xs leading-4 text-[var(--color-paper)]/80"><li className="text-[var(--color-paper)]">• Every call found</li><li>• Fix generated</li><li>• PR opened</li><li>• Minutes, not weeks</li></ul>
-                                <p className="mt-4 border-t border-white/15 pt-2 font-mono text-[11px] text-[var(--color-signal-green)]/90">Result: current</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <div className="reveal mx-auto max-w-[1080px] px-6 py-10 sm:py-14">
                 <div className="mx-auto max-w-[720px]">
                     <h2 className="heading-section text-[var(--color-ink)]">Questions teams ask before installing</h2>
@@ -469,35 +420,10 @@ export default function LandingPage() {
             <div className="reveal mx-auto max-w-[1080px] px-6 py-10 sm:py-14">
                 <div className="mx-auto max-w-[720px]">
                     <p className="font-mono text-[11px] tracking-[0.14em] text-[var(--color-muted)]">PRICING</p>
-                    <h2 className="heading-section mt-2 text-[var(--color-ink)]">Free in beta. Stated intent after that.</h2>
-                    <p className="mt-2 font-mono text-xs leading-5 text-[var(--color-muted)]">No billing code yet. Team and Scale are coming soon, not for sale today.</p>
-                    <div className="mt-8 grid gap-4 sm:grid-cols-2">
-                        <div className="border border-[var(--color-line-strong)] bg-[var(--color-ink)] p-5 text-[var(--color-paper)]">
-                            <p className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-paper)]/60">BETA · LIVE NOW</p>
-                            <p className="mt-2 font-mono text-2xl font-semibold">$0</p>
-                            <ul className="mt-3 space-y-1.5 font-mono text-xs leading-4 text-[var(--color-paper)]/80"><li>• Free while in beta</li><li>• Unlimited public repos + 1 private repo</li><li>• Deterministic + AI fixes included</li></ul>
-                            <Link to="/install" className="mt-4 inline-flex bg-[var(--color-paper)] px-4 py-2 font-mono text-xs tracking-wide text-[var(--color-ink)] hover:opacity-90 active:scale-[0.98] transition-[transform,opacity]">INSTALL GITHUB APP</Link>
-                        </div>
-                        <div className="border border-[var(--color-line-strong)] bg-[var(--color-surface)] p-5">
-                            <p className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-muted)]">TEAM · COMING SOON</p>
-                            <p className="mt-2 font-mono text-2xl font-semibold text-[var(--color-ink)]">$99<span className="text-sm font-normal text-[var(--color-muted)]">/mo</span></p>
-                            <ul className="mt-3 space-y-1.5 font-mono text-xs leading-4 text-[var(--color-ink)]/80"><li>• Up to 5 private repos</li><li>• Unlimited seats</li><li>• AI fixes included, fix history dashboard</li></ul>
-                            <a href="mailto:nalin@nerdev.in?subject=DriftLock%20Team%20plan%20waitlist" className="mt-4 inline-flex border border-[var(--color-line-strong)] bg-[var(--color-paper)] px-4 py-2 font-mono text-xs tracking-wide text-[var(--color-ink)] hover:bg-[var(--color-surface)] active:scale-[0.98] transition-[transform,background]">NOTIFY ME</a>
-                        </div>
-                        <div className="border border-[var(--color-line-strong)] bg-[var(--color-surface)] p-5">
-                            <p className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-muted)]">SCALE · COMING SOON</p>
-                            <p className="mt-2 font-mono text-2xl font-semibold text-[var(--color-ink)]">$299<span className="text-sm font-normal text-[var(--color-muted)]">/mo</span></p>
-                            <ul className="mt-3 space-y-1.5 font-mono text-xs leading-4 text-[var(--color-ink)]/80"><li>• Up to 20 repos</li><li>• Unlimited seats</li><li>• Priority vendor coverage</li><li>• Higher run concurrency</li></ul>
-                            <a href="mailto:nalin@nerdev.in?subject=DriftLock%20Scale%20plan%20waitlist" className="mt-4 inline-flex border border-[var(--color-line-strong)] bg-[var(--color-paper)] px-4 py-2 font-mono text-xs tracking-wide text-[var(--color-ink)] hover:bg-[var(--color-surface)] active:scale-[0.98] transition-[transform,background]">NOTIFY ME</a>
-                        </div>
-                        <div className="border border-[var(--color-line-strong)] bg-[var(--color-surface)] p-5">
-                            <p className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-muted)]">ENTERPRISE · TALK TO US</p>
-                            <p className="mt-2 font-mono text-2xl font-semibold text-[var(--color-ink)]">Custom</p>
-                            <ul className="mt-3 space-y-1.5 font-mono text-xs leading-4 text-[var(--color-ink)]/80"><li>• SSO/SAML, self-host</li><li>• SLA, DPA, audit log</li></ul>
-                            <a href="mailto:nalin@nerdev.in?subject=DriftLock%20Enterprise%20plan" className="mt-4 inline-flex border border-[var(--color-line-strong)] bg-[var(--color-paper)] px-4 py-2 font-mono text-xs tracking-wide text-[var(--color-ink)] hover:bg-[var(--color-surface)] active:scale-[0.98] transition-[transform,background]">TALK TO US</a>
-                        </div>
+                    <h2 className="heading-section mt-2 text-[var(--color-ink)]">Free in beta. $99 Team and $299 Scale are coming soon.</h2>
+                    <div className="mt-4">
+                        <Link to="/pricing" className="inline-flex border border-[var(--color-line-strong)] bg-[var(--color-ink)] px-4 py-2 font-mono text-xs tracking-wide text-[var(--color-paper)] hover:bg-[var(--color-ink)]/90 active:scale-[0.98] transition-[transform,background]">SEE PRICING</Link>
                     </div>
-                    <p className="mt-6 font-mono text-xs leading-4 text-[var(--color-muted)]">Billing starts at 10 active beta teams or infra over $500/mo, whichever first, with 30 days notice. First 10 design partners stay free 6 months.</p>
                 </div>
             </div>
 
@@ -506,8 +432,17 @@ export default function LandingPage() {
                     <h2 className="heading-section text-[var(--color-ink)]">Stay current without the migration tax.</h2>
                     <p className="mx-auto mt-2 max-w-[520px] font-mono text-xs leading-4 text-[var(--color-muted)]">Install once. Watches every repo you select. Nothing merged without you.</p>
                     <div className="mt-6 flex flex-wrap justify-center gap-2">
-                        <Link to="/install" className="bg-[var(--color-ink)] px-6 py-2.5 font-mono text-xs tracking-wide text-[var(--color-paper)] hover:bg-[var(--color-ink)]/90 active:scale-[0.98] transition-[transform,background]">INSTALL GITHUB APP</Link>
-                        <Link to="/accounts" className="border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-6 py-2.5 font-mono text-xs tracking-wide text-[var(--color-ink)] hover:bg-[var(--color-paper)] active:scale-[0.98] transition-[transform,background]">VIEW DASHBOARD</Link>
+                        {user ? (
+                            <>
+                                <Link to="/accounts" className="bg-[var(--color-ink)] px-6 py-2.5 font-mono text-xs tracking-wide text-[var(--color-paper)] hover:bg-[var(--color-ink)]/90 active:scale-[0.98] transition-[transform,background]">OPEN DASHBOARD</Link>
+                                <Link to="/docs" className="border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-6 py-2.5 font-mono text-xs tracking-wide text-[var(--color-ink)] hover:bg-[var(--color-paper)] active:scale-[0.98] transition-[transform,background]">READ THE DOCS</Link>
+                            </>
+                        ) : (
+                            <>
+                                <Link to="/install" className="bg-[var(--color-ink)] px-6 py-2.5 font-mono text-xs tracking-wide text-[var(--color-paper)] hover:bg-[var(--color-ink)]/90 active:scale-[0.98] transition-[transform,background]">INSTALL GITHUB APP</Link>
+                                <Link to="/accounts" className="border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-6 py-2.5 font-mono text-xs tracking-wide text-[var(--color-ink)] hover:bg-[var(--color-paper)] active:scale-[0.98] transition-[transform,background]">VIEW DASHBOARD</Link>
+                            </>
+                        )}
                     </div>
                     <p className="mt-4 font-mono text-[11px] tracking-wide text-[var(--color-muted)]">Free in beta · Self-host webhook capture · No code merged without you · <Link to="/security" className="underline underline-offset-2 hover:text-[var(--color-ink)]">No training. No retention.</Link></p>
                 </div>

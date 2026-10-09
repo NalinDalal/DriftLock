@@ -261,6 +261,12 @@ export default function AppShell() {
                                 Docs
                             </Link>
                             <Link
+                                to="/pricing"
+                                className="flex min-h-[32px] items-center font-mono text-[12px] tracking-wide text-[var(--color-ink)] hover:underline underline-offset-2"
+                            >
+                                Pricing
+                            </Link>
+                            <Link
                                 to="/install"
                                 className="flex min-h-[32px] items-center font-mono text-[12px] tracking-wide text-[var(--color-ink)] hover:underline underline-offset-2"
                             >

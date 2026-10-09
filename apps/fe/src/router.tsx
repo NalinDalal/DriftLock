@@ -23,6 +23,7 @@ const TermsPage = lazyRouteComponent(() => import("./routes/terms"), "default");
 const OnboardingPage = lazyRouteComponent(() => import("./routes/onboarding"), "default");
 const ActionsPage = lazyRouteComponent(() => import("./routes/actions"), "default");
 const FeaturesPage = lazyRouteComponent(() => import("./routes/features"), "default");
+const PricingPage = lazyRouteComponent(() => import("./routes/pricing"), "default");
 const DocsPage = lazyRouteComponent(() => import("./routes/docs"), "default");
 const ContactPage = lazyRouteComponent(() => import("./routes/contact"), "default");
 const NotFoundRoutePage = lazyRouteComponent(() => import("./routes/404"), "default");
@@ -154,6 +155,12 @@ const featuresRoute = createRoute({
     component: FeaturesPage,
 });
 
+const pricingRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/pricing",
+    component: PricingPage,
+});
+
 const docsRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/docs",
@@ -192,6 +199,7 @@ const routeTree = rootRoute.addChildren([
     onboardingRoute,
     actionsRoute,
     featuresRoute,
+    pricingRoute,
     docsRoute,
     contactRoute,
     notFoundExplicitRoute,
