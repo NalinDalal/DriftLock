@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { STRIPE_VENDOR } from "@driftlock/core";
-import { clearSpecCache, resolveHybridContract } from "@driftlock/agent";
+import {
+    clearSpecCache,
+    findWebhookOutboundCoercions,
+    isWebhookContract,
+    resolveHybridContract,
+} from "@driftlock/agent";
 
 const realFetch = globalThis.fetch;
 
@@ -79,8 +84,26 @@ describe("resolveHybridContract", () => {
         expect(note).toMatch(/observed removals/);
     });
 
-    test("caches spec members per spec URL", async () => {
-        let calls = 0;
+    test("successful spec fetch keeps the inbound marker so the coercion guard still applies", async () => {
+        globalThis.fetch = (async () =>
+            ({ ok: true, json: async () => SPEC }) as Response) as unknown as typeof fetch;
+        const { contract } = await resolveHybridContract({
+            vendor: STRIPE_VENDOR,
+            provider: "stripe",
+            origin: "webhook payment_intent.succeeded observed payload",
+            currentMembers: ["data.object.amount", "data.object.payment_method"],
+            removed: ["data.object.source"],
+        });
+
+        expect(contract.source).toBe("spec");
+        expect(isWebhookContract(contract)).toBe(true);
+        const sources = new Map([
+            ["pay.js", "await stripe.paymentIntents.create({ amount: String(amount) });"],
+        ]);
+        expect(findWebhookOutboundCoercions(contract, sources)).toHaveLength(1);
+    });
+
+    test("caches spec members per spec URL", async () => {        let calls = 0;
         globalThis.fetch = (async () => {
             calls += 1;
             return { ok: true, json: async () => SPEC } as Response;

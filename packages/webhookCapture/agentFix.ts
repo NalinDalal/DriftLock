@@ -67,6 +67,7 @@ export async function createAgentFixPR(input: AgentFixInput): Promise<AgentFixRe
             removed: input.alert.diff.removed,
             added: input.alert.diff.added,
             typeChanged: input.alert.diff.typeChanged,
+            direction: "inbound",
         },
         contract,
         ...(input.vendor ? { vendor: input.vendor } : {}),

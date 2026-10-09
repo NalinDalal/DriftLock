@@ -8,7 +8,7 @@
 
 API providers announce changes. DriftLock applies them to your codebase.
 
-DriftLock scans your codebase for API call sites, captures vendor traffic to build shape snapshots, detects breaking changes between snapshots, and opens a PR with a suggested fix. PRs are opened via the verified migration agent (configurable via `AI_PROVIDER`: openai/gemini/cloudflare). Deterministic suggestions may still be surfaced in non-PR paths, but live PR creation is agent-only.
+DriftLock scans your codebase for API call sites, captures vendor traffic to build shape snapshots, detects breaking changes between snapshots, and opens a PR with a suggested fix. PRs are opened via the verified migration agent (outbound agent PRs via `AI_PROVIDER`: openai/gemini/cloudflare; capture and model-fix configuration additionally supports anthropic). Deterministic suggestions may still be surfaced in non-PR paths, but live PR creation is agent-only.
 
 [Website](https://driftlock.dev) · [Discord](https://discord.gg/driftlock) · [Issues](https://github.com/nerdev-co/DriftLock/issues)
 
