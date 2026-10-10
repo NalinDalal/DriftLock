@@ -492,7 +492,7 @@ Examples:
                 if (options.dryRun) {
                     console.log(
                         chalk.yellow(
-                            "\nDry run, skipping PR creation. Remove --dry-run to create PRs.",
+                            `\nDry run: ${fixes.length} suggestion(s) above, 0 PRs. Set AI_PROVIDER + key (and --repo) to get them as PRs.`,
                         ),
                     );
                     emitSummary({
@@ -509,7 +509,7 @@ Examples:
                 if (!options.repo) {
                     console.log(
                         chalk.yellow(
-                            "\nNo --repo specified. Skipping PR creation. Use --repo owner/repo to create PRs.",
+                            `\n${fixes.length} suggestion(s) above, 0 as PRs. Your fixes are ready — set AI_PROVIDER + key and pass --repo owner/repo to get them as PRs.`,
                         ),
                     );
                     emitSummary({
@@ -529,7 +529,7 @@ Examples:
                 // agent (packages/agent) to get a verified PR instead.
                 console.log(
                     chalk.yellow(
-                        "\nAgent-only mode: --repo PR creation from static fixes is disabled. Review the suggestions above and run the migration agent for a verified PR.",
+                        "\nAgent-only mode: --repo PR creation from static fixes is disabled. Review the suggestions above and run the migration agent for a verified PR (requires AI_PROVIDER + key).",
                     ),
                 );
                 const baselineCommit = await commitIfEnabled();

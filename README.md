@@ -42,7 +42,7 @@ flowchart LR
 
 ## [The problem statement](https://www.ycombinator.com/rfs)
 
-The original pitch that started DriftLock, verbatim:
+The YC Request for Startups that started DriftLock — "Self-Maintaining APIs" by Harsha Gaddipati (Slashy), quoted verbatim (the "I" below is him, not us):
 
 > Over the past year, I've worked with over 50 API vendors, mostly early-stage
 > startups. One pattern is consistent: API communication is broken.

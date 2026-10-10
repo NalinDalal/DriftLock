@@ -17,6 +17,12 @@ export type ToolCall = {
     /** Always a validated tool name; `parseToolCalls` drops anything else. */
     name: ToolName;
     args: Record<string, unknown>;
+    /**
+     * Opaque provider payload echoed back verbatim on the wire (e.g.
+     * Gemini's `extra_content` thought signature, required on follow-up
+     * turns). Never interpreted, only round-tripped.
+     */
+    extra?: Record<string, unknown>;
 };
 
 export type TranscriptEntry = {

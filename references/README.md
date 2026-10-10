@@ -4,8 +4,8 @@ Problem statement, market signals, and inspiration sources collected during idea
 
 ## Problem statement
 
-- 30%+ of downtime at a major cloud provider traced to unnoticed external API/package changes (author's firsthand experience at AWS).
-- Pattern observed across 50+ API vendor relationships, mostly early-stage startups.
+- 30% of downtime from unnoticed external API/package changes at AWS — reported by the author of YC's "Self-Maintaining APIs" RFS (Harsha Gaddipati) from his AWS tenure, not DriftLock's own measurement.
+- Same pattern across 50+ API vendor relationships — same RFS author's observation.
 
 ## Inspiration
 

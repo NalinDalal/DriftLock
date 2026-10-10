@@ -115,18 +115,6 @@ export default function StatisticsPage() {
                 Each figure links to the original report with its publication context and the period it measured.
             </p>
             <div className="mt-6 space-y-4">
-                <div id="downtime-external-changes" className="border border-[var(--color-line)] bg-[var(--color-surface)] p-4">
-                    <p className="text-sm leading-5 text-[var(--color-ink)]/80">
-                        Over 30 percent of service downtime was caused by external API and package changes going unnoticed, observed during engineering work at AWS.
-                    </p>
-                    <p className="mt-2 font-mono text-xs leading-4 text-[var(--color-muted)]">
-                        Source: DriftLock README problem statement, founder reported. Period measured: founder tenure at AWS. Published in DriftLock README 2024.{" "}
-                        <a href="https://github.com/nerdev-co/DriftLock" target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-[var(--color-ink)]">
-                            Read the problem statement
-                        </a>
-                        .
-                    </p>
-                </div>
                 <div id="stripe-webhook-revenue-leak" className="border border-[var(--color-line)] bg-[var(--color-surface)] p-4">
                     <p className="text-sm leading-5 text-[var(--color-ink)]/80">
                         One Stripe account leaked 2,300 dollars per month for 11 months because invoice.payment_failed returned 200 OK, so Stripe stopped retrying while the handler never revoked access. In a related audit of 6 Stripe accounts, 4 had a critical webhook gap with an average loss of 340 dollars per month.
@@ -221,7 +209,7 @@ export default function StatisticsPage() {
                     <tbody className="divide-y divide-[var(--color-line)]">
                         <tr>
                             <th className="bg-[var(--color-paper)] px-3 py-2 text-left font-semibold tracking-wide text-[var(--color-ink)]">October 2026</th>
-                            <td className="px-3 py-2 text-[var(--color-ink)]/80">Initial publication. 4 industry figures with source links. 3 fixture findings with method, sample, and timeframe.</td>
+                            <td className="px-3 py-2 text-[var(--color-ink)]/80">Initial publication. 3 industry figures with source links. 3 fixture findings with method, sample, and timeframe.</td>
                         </tr>
                         <tr>
                             <th className="bg-[var(--color-paper)] px-3 py-2 text-left font-semibold tracking-wide text-[var(--color-ink)]">Next review</th>

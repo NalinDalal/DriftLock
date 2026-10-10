@@ -426,9 +426,14 @@ async function analyzePushInBackground(input: {
       const vendor = vendorForPackage(drift.callSite.packageName);
       const built = pushAi ? buildAgentClient(pushAi) : null;
       if (!built) {
-        console.log(
-          `  [DRIFT] ${drift.callSite.method} recorded; no model client configured so no agent PR (set AI_PROVIDER + key)`,
-        );
+        const lines = [
+          `  [DRIFT] ${drift.callSite.method} recorded, 0 fixed`,
+          ...removed.map((f) => `    removed: ${f}`),
+          ...typeChanged.map((c) => `    type changed: ${c.field} (${c.from} → ${c.to})`),
+          `  Your fix is ready — set a model key to get it as a PR:`,
+          `    AI_PROVIDER=openai AI_API_KEY=sk-... (Settings → Secrets → Actions)`,
+        ];
+        console.log(lines.join("\n"));
         continue;
       }
       if (!vendor) {

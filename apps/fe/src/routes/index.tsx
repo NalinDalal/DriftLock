@@ -374,7 +374,7 @@ export default function LandingPage() {
                 <div className="mx-auto max-w-[1080px] px-6 py-10 sm:py-14">
                     <div className="mx-auto max-w-[720px]">
                         <h2 className="heading-section text-[var(--color-ink)]">
-                            Changelogs do not get read. 30 percent of <span className="text-[var(--color-signal-red)]">downtime</span> was a vendor change someone missed.
+                            Changelogs do not get read. <span className="text-[var(--color-signal-red)]">Prisma 7</span> broke my app before interviews — a vendor change I missed.
                         </h2>
                         <div className="mt-6 h-px w-full bg-[var(--color-ink)]" />
                         <div className="mt-6 grid gap-6 font-mono text-xs leading-5 sm:grid-cols-3">

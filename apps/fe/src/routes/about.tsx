@@ -112,7 +112,7 @@ export default function AboutPage() {
                 name: "Who founded DriftLock?",
                 acceptedAnswer: {
                     "@type": "Answer",
-                    text: "DriftLock was founded by Nalin Dalal in 2024 after a Prisma 7 breaking change nearly shipped to production before interviews. He is the founder and is reachable at nalin@nerdev.in. Background is engineering at AWS and building with agentic coding tools.",
+                    text: "DriftLock was founded by Nalin Dalal in 2024 after a Prisma 7 breaking change nearly shipped to production before interviews. He is the founder and is reachable at nalin@nerdev.in.",
                 },
             },
             {
@@ -247,7 +247,7 @@ export default function AboutPage() {
             <h2 className="mt-12 border-t border-[var(--color-line-strong)] pt-6 heading-section text-[var(--color-ink)]">The Team Behind DriftLock</h2>
             <p className="mt-3 max-w-[65ch] text-sm leading-5 text-[var(--color-ink)]/80">DriftLock was founded by Nalin Dalal, Founder, in 2024.</p>
             <p className="mt-2 max-w-[65ch] text-sm leading-5 text-[var(--color-ink)]/80">
-                Nalin previously worked in engineering at AWS, where over 30 percent of service downtime traced to external API and package changes going unnoticed. The origin for DriftLock was a Prisma 7 breaking change that nearly shipped to production before interviews. Dependabot told him a dependency was out of date but did not touch the code. He built DriftLock to make APIs self-maintaining, using the agentic coding pattern of scanning customer codebases and opening a PR with the fix.
+                The origin for DriftLock was a Prisma 7 breaking change that nearly shipped to production before interviews. Dependabot told him a dependency was out of date but did not touch the code. He built DriftLock to make APIs self-maintaining, using the agentic coding pattern of scanning customer codebases and opening a PR with the fix.
             </p>
             <p className="mt-2 max-w-[65ch] text-sm leading-5 text-[var(--color-ink)]/80">
                 DriftLock is built by Nalin and contributors at github.com/nerdev-co/DriftLock. Headquarters is remote with an India base. Primary contact is nalin@nerdev.in. Community is at discord.gg/driftlock.

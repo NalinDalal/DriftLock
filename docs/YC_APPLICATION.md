@@ -78,9 +78,9 @@ Validating idea, building initial product. Talking to potential users. Working p
 ## Extra notes (if there's a "Why are you applying?" or similar field)
 
 ```
-API downtime costs teams millions. 30% of outages at major cloud providers trace to unnoticed external API changes. Existing tools handle dependency versions, but nobody handles the layer above: the actual API contract between your code and a vendor's live service. nerdev fills that gap with DriftLock — no vendor cooperation needed, we infer from your code.
+API downtime costs teams millions. I got bitten when Prisma 7 broke my Next.js app before interviews — the fix was hunting every call site by hand. YC's "Self-Maintaining APIs" RFS reports the same pattern at scale (30% of downtime from unnoticed external API changes). Existing tools handle versions, not the contract between code and live service. DriftLock fills it — no vendor cooperation needed, we infer from your code.
 ```
-(378 chars)
+(425 chars)
 
 ---
 
