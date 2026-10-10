@@ -1,0 +1,68 @@
+<!-- Outro vertical (local 0–6.0, comp 9–15). Lock, name, tagline, URL. -->
+<template>
+  <div
+    id="voutro"
+    data-composition-id="voutro"
+    data-width="1080"
+    data-height="1920"
+    data-start="0"
+    data-duration="6.0"
+    style="width: 100%; height: 100%; position: relative;"
+  >
+    <style>
+      @font-face { font-family: "JetBrains Mono"; src: local("JetBrainsMono Nerd Font"); }
+      @font-face { font-family: "SFMono-Regular"; src: local("SFMono-Regular"); }
+      @font-face { font-family: "Instrument Serif"; src: local("Instrument Serif"); }
+      #voutro .fill { position: absolute; inset: 0; background: #0a0a0f; }
+      #voutro .center {
+        position: absolute; inset: 0;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 16px;
+        padding: 0 90px; text-align: center;
+      }
+      #voutro .name {
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 64px; letter-spacing: 0.14em; color: #f8f8f9;
+        opacity: 0; margin-top: 10px;
+      }
+      #voutro .tag {
+        font-family: "Instrument Serif", Georgia, serif;
+        font-style: italic; font-size: 62px; color: #f8f8f9; line-height: 1.25;
+        opacity: 0;
+      }
+      #voutro .url {
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 38px; letter-spacing: 0.06em; color: #a1a1aa;
+        opacity: 0; margin-top: 18px;
+      }
+    </style>
+    <div class="fill" data-layout-ignore></div>
+    <div id="voutro-fade" style="position:absolute; inset:0;">
+      <div class="center">
+        <svg width="150" height="150" viewBox="0 0 24 24" fill="none">
+          <rect id="voutro-box" x="5" y="10" width="14" height="10" rx="2" stroke="#10b981" stroke-width="1.6" pathLength="1" style="stroke-dasharray:1; stroke-dashoffset:1;" />
+          <path id="voutro-shackle" d="M8 10V7a4 4 0 0 1 8 0v3" stroke="#10b981" stroke-width="1.6" pathLength="1" style="stroke-dasharray:1; stroke-dashoffset:1;" />
+          <circle id="voutro-dot" cx="12" cy="15" r="1.6" fill="#10b981" opacity="0" />
+        </svg>
+        <div class="name" id="voutro-name">DriftLock</div>
+        <div class="tag" id="voutro-tag">APIs should maintain themselves.</div>
+        <div class="url" id="voutro-url">driftlock.dev</div>
+      </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      (function () {
+        var tl = gsap.timeline({ paused: true });
+        tl.fromTo("#voutro-fade", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power1.out" }, 0);
+        tl.to("#voutro-shackle", { strokeDashoffset: 0, duration: 0.55, ease: "power2.inOut" }, 0.3);
+        tl.to("#voutro-box", { strokeDashoffset: 0, duration: 0.55, ease: "power2.inOut" }, 0.65);
+        tl.to("#voutro-dot", { opacity: 1, duration: 0.25 }, 1.2);
+        tl.fromTo("#voutro-name", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 0.9);
+        tl.fromTo("#voutro-tag", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" }, 1.5);
+        tl.fromTo("#voutro-url", { opacity: 0 }, { opacity: 1, duration: 0.5 }, 2.3);
+        window.__timelines = window.__timelines || {};
+        window.__timelines["voutro"] = tl;
+      })();
+    </script>
+  </div>
+</template>

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1920, height=1080">
+    <title>DriftLock — brag</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        margin: 0; width: 1920px; height: 1080px;
+        overflow: hidden; background: #0a0a0f;
+      }
+      #root { width: 100%; height: 100%; position: relative; }
+    </style>
+  </head>
+  <body>
+    <div data-hf-id="hf-at0g" id="root" data-composition-id="main" data-start="0" data-duration="20" data-width="1920" data-height="1080">
+      <div data-hf-id="hf-jzsu" id="hook" data-composition-id="hook" data-composition-src="compositions/scene-hook.html" data-start="0" data-duration="3.0" data-track-index="1" data-track-kind="graphics"></div>
+      <div data-hf-id="hf-4sca" id="problem" data-composition-id="problem" data-composition-src="compositions/scene-problem.html" data-start="3" data-duration="5.0" data-track-index="2" data-track-kind="graphics"></div>
+      <div data-hf-id="hf-jbn7" id="fix" data-composition-id="fix" data-composition-src="compositions/scene-fix.html" data-start="8" data-duration="8.0" data-track-index="3" data-track-kind="graphics"></div>
+      <div data-hf-id="hf-2fg1" id="outro" data-composition-id="outro" data-composition-src="compositions/scene-outro.html" data-start="16" data-duration="4" data-track-index="4" data-track-kind="graphics"></div>
+
+      <audio data-hf-id="hf-o1lf" id="music-bed" data-start="0" data-duration="20" data-track-index="10" data-volume="0.32" src="assets/music/happy-beats-business-moves-vol-12-by-ende-dot-app.mp3" data-automation="{&quot;version&quot;:1,&quot;lanes&quot;:[{&quot;target&quot;:&quot;volume&quot;,&quot;points&quot;:[{&quot;t&quot;:0,&quot;v&quot;:0.32},{&quot;t&quot;:17,&quot;v&quot;:0.32},{&quot;t&quot;:19.8,&quot;v&quot;:0.05}]}]}"></audio>
+      <audio data-hf-id="hf-gc9c" id="sfx-drop-l2" data-start="5.0" data-duration="1" data-track-index="11" data-volume="0.7" src="assets/sfx/interface/drop_001.ogg"></audio>
+      <audio data-hf-id="hf-47zb" id="sfx-drop-r1" data-start="8.4" data-duration="1" data-track-index="12" data-volume="0.7" src="assets/sfx/interface/drop_001.ogg"></audio>
+      <audio data-hf-id="hf-bgha" id="sfx-drop-r2" data-start="9.6" data-duration="1" data-track-index="13" data-volume="0.7" src="assets/sfx/interface/drop_001.ogg"></audio>
+      <audio data-hf-id="hf-ltad" id="sfx-tick-1" data-start="11.2" data-duration="0.5" data-track-index="14" data-volume="0.7" src="assets/sfx/keyboard/keypress-001.wav"></audio>
+      <audio data-hf-id="hf-kywm" id="sfx-tick-2" data-start="11.95" data-duration="0.5" data-track-index="15" data-volume="0.7" src="assets/sfx/keyboard/keypress-002.wav"></audio>
+      <audio data-hf-id="hf-5qd5" id="sfx-tick-3" data-start="12.6" data-duration="0.5" data-track-index="16" data-volume="0.7" src="assets/sfx/keyboard/keypress-004.wav"></audio>
+      <audio data-hf-id="hf-jhkg" id="sfx-bell-pr" data-start="13.0" data-duration="2.5" data-track-index="17" data-volume="0.8" src="assets/sfx/impact/impactBell_heavy_000.ogg"></audio>
+      <audio data-hf-id="hf-l92m" id="sfx-tick-4" data-start="13.4" data-duration="0.5" data-track-index="18" data-volume="0.7" src="assets/sfx/keyboard/keypress-005.wav"></audio>
+      <audio data-hf-id="hf-1zim" id="sfx-tick-5" data-start="13.9" data-duration="0.5" data-track-index="19" data-volume="0.7" src="assets/sfx/keyboard/keypress-006.wav"></audio>
+      <audio data-hf-id="hf-fx9r" id="sfx-tick-6" data-start="14.4" data-duration="0.5" data-track-index="20" data-volume="0.7" src="assets/sfx/keyboard/keypress-008.wav"></audio>
+      <audio data-hf-id="hf-hyoh" id="sfx-tick-7" data-start="14.9" data-duration="0.5" data-track-index="21" data-volume="0.7" src="assets/sfx/keyboard/keypress-009.wav"></audio>
+      <audio data-hf-id="hf-i7a3" id="sfx-tick-8" data-start="15.4" data-duration="0.5" data-track-index="22" data-volume="0.7" src="assets/sfx/keyboard/keypress-010.wav"></audio>
+      <audio data-hf-id="hf-y46l" id="sfx-bong-logo" data-start="17.4" data-duration="2.5" data-track-index="23" data-volume="0.7" src="assets/sfx/interface/bong_001.ogg"></audio>
+    </div>
+    <script>
+      var tl = gsap.timeline({ paused: true });
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

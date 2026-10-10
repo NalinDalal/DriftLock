@@ -1,0 +1,86 @@
+<!-- Proof sheet (local 0–9.0, comp 25–34). Before/after PR card + trust line. -->
+<template>
+  <div data-hf-id="hf-70nd" id="proof" data-composition-id="proof" data-width="1920" data-height="1080" data-start="0" data-duration="9.0" style="width: 100%; height: 100%; position: relative;">
+    <style>
+      @font-face { font-family: "JetBrains Mono"; src: local("JetBrainsMono Nerd Font"); }
+      @font-face { font-family: "SFMono-Regular"; src: local("SFMono-Regular"); }
+      @font-face { font-family: "Instrument Serif"; src: local("Instrument Serif"); }
+      #proof .fill {
+        position: absolute; inset: 0; background: #0a0a0f;
+      }
+      #proof .sheet {
+        position: absolute; left: 50%; top: 46%;
+        transform: translate(-50%, -50%);
+        width: 1240px;
+        border: 1px solid #2a2a33; border-radius: 14px;
+        background: #101016;
+        overflow: hidden;
+      }
+      #proof .head {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 20px 34px;
+        background: #0a0a0f;
+        border-bottom: 1px solid #2a2a33;
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 24px; letter-spacing: 0.1em; color: #f8f8f9;
+        opacity: 0;
+      }
+      #proof .pill {
+        font-size: 20px; color: #f59e0b;
+        border: 1px solid #3a2b12; border-radius: 999px;
+        padding: 6px 18px;
+      }
+      #proof .code {
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 38px; line-height: 1.7;
+        padding: 30px 40px 10px;
+      }
+      #proof .row { opacity: 0; white-space: pre; }
+      #proof .del { color: #ff4444; }
+      #proof .add { color: #10b981; }
+      #proof .ctx { color: #a1a1aa; }
+      #proof .foot {
+        display: flex; align-items: center; gap: 16px;
+        padding: 22px 34px;
+        border-top: 1px solid #2a2a33;
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 24px; color: #10b981;
+        opacity: 0;
+      }
+      #proof .trust {
+        position: absolute; top: 830px; width: 100%; text-align: center;
+        font-family: "Instrument Serif", Georgia, serif;
+        font-style: italic; font-size: 48px; color: #f8f8f9;
+        opacity: 0;
+      }
+    </style>
+    <div data-hf-id="hf-k1m2" class="fill" data-layout-ignore=""></div>
+    <div data-hf-id="hf-s9or" id="proof-fade" style="position:absolute; inset:0;">
+      <div data-hf-id="hf-cr6h" class="sheet">
+        <div data-hf-id="hf-4vvd" class="head" id="proof-head"><span data-hf-id="hf-qnam">PR · acme/payments</span><span data-hf-id="hf-zlpn" class="pill">drift detected</span></div>
+        <div data-hf-id="hf-qevj" class="code">
+          <div data-hf-id="hf-t3yd" class="row ctx" id="proof-c0">  amount: 2000,</div>
+          <div data-hf-id="hf-e46d" class="row del" id="proof-c1">− source: "tok_visa"</div>
+          <div data-hf-id="hf-g5hg" class="row add" id="proof-c2">+ payment_method: "pm_123"</div>
+        </div>
+        <div data-hf-id="hf-7d59" class="foot" id="proof-foot"><span data-hf-id="hf-ls52">✓</span><span data-hf-id="hf-1wb4">Checks passed · Review required</span></div>
+      </div>
+      <div data-hf-id="hf-y2l0" class="trust" id="proof-trust">Nothing merges without you.</div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      (function () {
+        var tl = gsap.timeline({ paused: true });
+        tl.fromTo("#proof-fade", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power1.out" }, 0);
+        tl.fromTo("#proof-head", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.45, ease: "power2.out" }, 0.3);
+        tl.fromTo("#proof-c0", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 1.0);
+        tl.fromTo("#proof-c1", { opacity: 0, x: -18 }, { opacity: 1, x: 0, duration: 0.45, ease: "power2.out" }, 1.2);
+        tl.fromTo("#proof-c2", { opacity: 0, x: -18 }, { opacity: 1, x: 0, duration: 0.45, ease: "power2.out" }, 2.6);
+        tl.fromTo("#proof-foot", { opacity: 0 }, { opacity: 1, duration: 0.5 }, 4.2);
+        tl.fromTo("#proof-trust", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" }, 5.4);
+        window.__timelines = window.__timelines || {};
+        window.__timelines["proof"] = tl;
+      })();
+    </script>
+  </div>
+</template>

@@ -279,6 +279,18 @@ export default function LandingPage() {
                                 DRIFT DETECTED
                             </span>
                         </div>
+                        <video
+                            className="block aspect-video w-full border-b border-[var(--color-line-strong)] bg-[var(--color-ink)] object-cover"
+                            src="/hero-loop.mp4"
+                            poster="/hero-loop-poster.png"
+                            autoPlay
+                            muted
+                            loop
+                            playsInline
+                            preload="metadata"
+                            aria-label="DriftLock renaming paymentIntent.source to paymentIntent.payment_method"
+                            onPlay={() => track("hero_video_played", {})}
+                        />
                         <div className="grid sm:grid-cols-[1fr_36px_1fr]">
                             <div className="p-4 sm:p-5">
                                 <p className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-muted)]">BEFORE · YOUR CODE</p>

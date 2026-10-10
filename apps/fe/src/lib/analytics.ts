@@ -16,7 +16,8 @@ type EventName =
     | "actions_repo_selected"
     | "actions_repo_preselected"
     | "actions_key_issued"
-    | "actions_yaml_viewed";
+    | "actions_yaml_viewed"
+    | "hero_video_played";
 
 interface EventProps {
     [key: string]: string | number | boolean | undefined;

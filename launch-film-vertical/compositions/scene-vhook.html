@@ -1,0 +1,64 @@
+<!-- Hook vertical (local 0–3.0, comp 0–3.0). -->
+<template>
+  <div
+    id="vhook"
+    data-composition-id="vhook"
+    data-width="1080"
+    data-height="1920"
+    data-start="0"
+    data-duration="3.0"
+    style="width: 100%; height: 100%; position: relative;"
+  >
+    <style>
+      @font-face { font-family: "JetBrains Mono"; src: local("JetBrainsMono Nerd Font"); }
+      @font-face { font-family: "SFMono-Regular"; src: local("SFMono-Regular"); }
+      #vhook .fill { position: absolute; inset: 0; background: #0a0a0f; }
+      #vhook .glow {
+        position: absolute; left: 50%; top: 48%;
+        width: 900px; height: 700px;
+        transform: translate(-50%, -50%);
+        background: radial-gradient(closest-side, rgba(255,68,68,0.16), rgba(10,10,15,0));
+        opacity: 0.35;
+      }
+      #vhook .center {
+        position: absolute; inset: 0;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 34px;
+        padding: 0 80px; text-align: center;
+      }
+      #vhook .kicker {
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 44px; letter-spacing: 0.04em; color: #a1a1aa;
+        opacity: 0;
+      }
+      #vhook .code {
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 72px; letter-spacing: -1px; color: #f8f8f9;
+        opacity: 0; line-height: 1.3;
+      }
+      #vhook .code .obj { color: #a1a1aa; }
+      #vhook .code .dead { color: #ff4444; text-shadow: 0 0 40px rgba(255,68,68,0.9); }
+    </style>
+    <div class="fill" data-layout-ignore></div>
+    <div id="vhook-fade" style="position:absolute; inset:0;">
+      <div class="glow" id="vhook-glow"></div>
+      <div class="center">
+        <div class="kicker" id="vhook-kicker">Stripe renamed a field.</div>
+        <div class="code" id="vhook-code"><span class="obj">paymentIntent.</span><span class="dead">source</span></div>
+      </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      (function () {
+        var tl = gsap.timeline({ paused: true });
+        tl.fromTo("#vhook-fade", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power1.out" }, 0);
+        tl.fromTo("#vhook-code", { opacity: 0, y: 26 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 0.2);
+        tl.fromTo("#vhook-kicker", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 0.35);
+        tl.to("#vhook-glow", { opacity: 0.62, duration: 1.3, ease: "sine.inOut" }, 0.2);
+        tl.to("#vhook-glow", { opacity: 0.4, duration: 1.3, ease: "sine.inOut" }, 1.5);
+        window.__timelines = window.__timelines || {};
+        window.__timelines["vhook"] = tl;
+      })();
+    </script>
+  </div>
+</template>

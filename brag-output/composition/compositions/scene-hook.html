@@ -1,0 +1,61 @@
+<!-- Scene 1 — Hook (local 0–3.4, comp 0–3.4). The wound. -->
+<template>
+  <div data-hf-id="hf-bj7t" id="hook" data-composition-id="hook" data-width="1920" data-height="1080" data-start="0" data-duration="3.0" style="width: 100%; height: 100%; position: relative;">
+    <style>
+      @font-face { font-family: "JetBrains Mono"; src: local("JetBrainsMono Nerd Font"); }
+      @font-face { font-family: "SFMono-Regular"; src: local("SFMono-Regular"); }
+      @font-face { font-family: "Instrument Serif"; src: local("Instrument Serif"); }
+      #hook .fill {
+        position: absolute; inset: 0; background: #0a0a0f;
+      }
+      #hook .glow {
+        position: absolute; left: 50%; top: 52%;
+        width: 1100px; height: 500px;
+        transform: translate(-50%, -50%);
+        background: radial-gradient(closest-side, rgba(255,68,68,0.16), rgba(10,10,15,0));
+        opacity: 0.35;
+      }
+      #hook .center {
+        position: absolute; inset: 0;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 28px;
+      }
+      #hook .kicker {
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 34px; letter-spacing: 0.04em; color: #a1a1aa;
+        opacity: 0;
+      }
+      #hook .code {
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 76px; letter-spacing: -1px; color: #f8f8f9;
+        opacity: 0;
+      }
+      #hook .code .obj { color: #a1a1aa; }
+      #hook .code .dead {
+        color: #ff4444;
+        text-shadow: 0 0 42px rgba(255,68,68,0.9);
+      }
+    </style>
+    <div data-hf-id="hf-k1m2" class="fill" data-layout-ignore=""></div>
+    <div data-hf-id="hf-igek" id="hook-fade" style="position:absolute; inset:0;">
+      <div data-hf-id="hf-io9a" class="glow" id="hook-glow"></div>
+      <div data-hf-id="hf-0oij" class="center">
+        <div data-hf-id="hf-78xs" class="kicker" id="hook-kicker">Stripe renamed a field.</div>
+        <div data-hf-id="hf-uo9i" class="code" id="hook-code"><span data-hf-id="hf-wsne" class="obj">paymentIntent.</span><span data-hf-id="hf-wmx2" class="dead">source</span></div>
+      </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      (function () {
+        var tl = gsap.timeline({ paused: true });
+        tl.fromTo("#hook-fade", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power1.out" }, 0);
+        tl.fromTo("#hook-code", { opacity: 0, y: 26 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 0.2);
+        tl.fromTo("#hook-kicker", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 0.35);
+        tl.to("#hook-glow", { opacity: 0.62, duration: 1.4, ease: "sine.inOut" }, 0.2);
+        tl.to("#hook-glow", { opacity: 0.4, duration: 1.2, ease: "sine.inOut" }, 1.6);
+        window.__timelines = window.__timelines || {};
+        window.__timelines["hook"] = tl;
+      })();
+    </script>
+  </div>
+</template>

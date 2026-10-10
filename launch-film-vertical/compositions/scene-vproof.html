@@ -1,0 +1,93 @@
+<!-- Proof vertical (local 0–6.0, comp 3–9). PR sheet restacked tall. -->
+<template>
+  <div
+    id="vproof"
+    data-composition-id="vproof"
+    data-width="1080"
+    data-height="1920"
+    data-start="0"
+    data-duration="6.0"
+    style="width: 100%; height: 100%; position: relative;"
+  >
+    <style>
+      @font-face { font-family: "JetBrains Mono"; src: local("JetBrainsMono Nerd Font"); }
+      @font-face { font-family: "SFMono-Regular"; src: local("SFMono-Regular"); }
+      @font-face { font-family: "Instrument Serif"; src: local("Instrument Serif"); }
+      #vproof .fill { position: absolute; inset: 0; background: #0a0a0f; }
+      #vproof .sheet {
+        position: absolute; left: 50%; top: 42%;
+        transform: translate(-50%, -50%);
+        width: 880px;
+        border: 1px solid #2a2a33; border-radius: 18px;
+        background: #101016;
+        overflow: hidden;
+      }
+      #vproof .head {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 28px 36px;
+        background: #0a0a0f;
+        border-bottom: 1px solid #2a2a33;
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 30px; letter-spacing: 0.1em; color: #f8f8f9;
+        opacity: 0;
+      }
+      #vproof .pill {
+        font-size: 24px; color: #f59e0b;
+        border: 1px solid #3a2b12; border-radius: 999px;
+        padding: 8px 22px;
+      }
+      #vproof .code {
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 42px; line-height: 1.8;
+        padding: 34px 44px 14px;
+      }
+      #vproof .row { opacity: 0; white-space: pre; }
+      #vproof .del { color: #ff4444; }
+      #vproof .add { color: #10b981; }
+      #vproof .ctx { color: #a1a1aa; }
+      #vproof .foot {
+        display: flex; align-items: center; gap: 16px;
+        padding: 28px 36px;
+        border-top: 1px solid #2a2a33;
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 28px; color: #10b981;
+        opacity: 0;
+      }
+      #vproof .trust {
+        position: absolute; top: 1330px; width: 100%; text-align: center;
+        padding: 0 90px;
+        font-family: "Instrument Serif", Georgia, serif;
+        font-style: italic; font-size: 56px; color: #f8f8f9;
+        opacity: 0;
+      }
+    </style>
+    <div class="fill" data-layout-ignore></div>
+    <div id="vproof-fade" style="position:absolute; inset:0;">
+      <div class="sheet">
+        <div class="head" id="vproof-head"><span>PR · acme/payments</span><span class="pill">drift detected</span></div>
+        <div class="code">
+          <div class="row ctx" id="vproof-c0">  amount: 2000,</div>
+          <div class="row del" id="vproof-c1">− source: "tok_visa"</div>
+          <div class="row add" id="vproof-c2">+ payment_method: "pm_123"</div>
+        </div>
+        <div class="foot" id="vproof-foot"><span>✓</span><span>Checks passed · Review required</span></div>
+      </div>
+      <div class="trust" id="vproof-trust">Nothing merges without you.</div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      (function () {
+        var tl = gsap.timeline({ paused: true });
+        tl.fromTo("#vproof-fade", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power1.out" }, 0);
+        tl.fromTo("#vproof-head", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.45, ease: "power2.out" }, 0.3);
+        tl.fromTo("#vproof-c0", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 1.0);
+        tl.fromTo("#vproof-c1", { opacity: 0, x: -18 }, { opacity: 1, x: 0, duration: 0.45, ease: "power2.out" }, 1.4);
+        tl.fromTo("#vproof-c2", { opacity: 0, x: -18 }, { opacity: 1, x: 0, duration: 0.45, ease: "power2.out" }, 2.6);
+        tl.fromTo("#vproof-foot", { opacity: 0 }, { opacity: 1, duration: 0.5 }, 3.8);
+        tl.fromTo("#vproof-trust", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" }, 4.6);
+        window.__timelines = window.__timelines || {};
+        window.__timelines["vproof"] = tl;
+      })();
+    </script>
+  </div>
+</template>

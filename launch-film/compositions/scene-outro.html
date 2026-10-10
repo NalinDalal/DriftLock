@@ -1,0 +1,63 @@
+<!-- Scene 4 — Outro (local 0–4.0, comp 16.0–20.0). Lock draws, name, tagline, URL. Hold. -->
+<template>
+  <div data-hf-id="hf-mdg2" id="outro" data-composition-id="outro" data-width="1920" data-height="1080" data-start="0" data-duration="4.0" style="width: 100%; height: 100%; position: relative;">
+    <style>
+      @font-face { font-family: "JetBrains Mono"; src: local("JetBrainsMono Nerd Font"); }
+      @font-face { font-family: "SFMono-Regular"; src: local("SFMono-Regular"); }
+      @font-face { font-family: "Instrument Serif"; src: local("Instrument Serif"); }
+      #outro .fill {
+        position: absolute; inset: 0; background: #0a0a0f;
+      }
+      #outro .center {
+        position: absolute; inset: 0;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 10px;
+      }
+      #outro .name {
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 52px; letter-spacing: 0.14em; color: #f8f8f9;
+        opacity: 0;
+      }
+      #outro .tag {
+        font-family: "Instrument Serif", Georgia, serif;
+        font-style: italic; font-size: 62px; color: #f8f8f9;
+        opacity: 0;
+      }
+      #outro .url {
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 30px; letter-spacing: 0.06em; color: #a1a1aa;
+        opacity: 0; margin-top: 14px;
+      }
+    </style>
+    <div data-hf-id="hf-k1m2" class="fill" data-layout-ignore=""></div>
+    <div data-hf-id="hf-qz16" id="outro-fade" style="position:absolute; inset:0;">
+      <div data-hf-id="hf-0oij" class="center">
+        <svg data-hf-id="hf-y2mu" width="120" height="120" viewBox="0 0 24 24" fill="none">
+          <rect data-hf-id="hf-q55h" id="outro-box" x="5" y="10" width="14" height="10" rx="2" stroke="#10b981" stroke-width="1.6" pathLength="1" style="stroke-dasharray:1; stroke-dashoffset:1;" />
+          <path data-hf-id="hf-4wkq" id="outro-shackle" d="M8 10V7a4 4 0 0 1 8 0v3" stroke="#10b981" stroke-width="1.6" pathLength="1" style="stroke-dasharray:1; stroke-dashoffset:1;" />
+          <circle data-hf-id="hf-3wbh" id="outro-dot" cx="12" cy="15" r="1.6" fill="#10b981" opacity="0" />
+        </svg>
+        <div data-hf-id="hf-zuvg" class="name" id="outro-name">DriftLock</div>
+        <div data-hf-id="hf-bxqb" class="tag" id="outro-tag">APIs should maintain themselves.</div>
+        <div data-hf-id="hf-xozj" class="url" id="outro-url">driftlock.dev</div>
+      </div>
+    </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      (function () {
+        var tl = gsap.timeline({ paused: true });
+        tl.fromTo("#outro-fade", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power1.out" }, 0);
+        // Lock draws 0.3–1.4 (lands ~17.4 comp, near the 17.47 strong cue).
+        tl.to("#outro-shackle", { strokeDashoffset: 0, duration: 0.55, ease: "power2.inOut" }, 0.3);
+        tl.to("#outro-box", { strokeDashoffset: 0, duration: 0.55, ease: "power2.inOut" }, 0.65);
+        tl.to("#outro-dot", { opacity: 1, duration: 0.25 }, 1.2);
+        tl.fromTo("#outro-name", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 0.9);
+        tl.fromTo("#outro-tag", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" }, 1.5);
+        tl.fromTo("#outro-url", { opacity: 0 }, { opacity: 1, duration: 0.5 }, 2.3);
+        window.__timelines = window.__timelines || {};
+        window.__timelines["outro"] = tl;
+      })();
+    </script>
+  
+</template>

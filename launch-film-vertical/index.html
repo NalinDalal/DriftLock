@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <title>DriftLock — launch film vertical</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        margin: 0; width: 1080px; height: 1920px;
+        overflow: hidden; background: #0a0a0f;
+      }
+      #root { width: 100%; height: 100%; position: relative; }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="15"
+      data-width="1080"
+      data-height="1920"
+    >
+      <div id="vhook" data-composition-id="vhook" data-composition-src="compositions/scene-vhook.html" data-start="0" data-duration="3.0" data-track-index="1" data-track-kind="graphics"></div>
+      <div id="vproof" data-composition-id="vproof" data-composition-src="compositions/scene-vproof.html" data-start="3" data-duration="6.0" data-track-index="2" data-track-kind="graphics"></div>
+      <div id="voutro" data-composition-id="voutro" data-composition-src="compositions/scene-voutro.html" data-start="9" data-duration="6" data-track-index="3" data-track-kind="graphics"></div>
+
+      <audio id="music-bed" data-start="0" data-duration="15" data-track-index="10" data-volume="0.32" src="assets/music/happy-beats-business-moves-vol-12-by-ende-dot-app.mp3" data-automation="{&quot;version&quot;:1,&quot;lanes&quot;:[{&quot;target&quot;:&quot;volume&quot;,&quot;points&quot;:[{&quot;t&quot;:0,&quot;v&quot;:0.32},{&quot;t&quot;:12,&quot;v&quot;:0.32},{&quot;t&quot;:14.8,&quot;v&quot;:0.05}]}]}"></audio>
+      <audio id="sfx-drop-1" data-start="3.4" data-duration="1" data-track-index="11" data-volume="0.7" src="assets/sfx/interface/drop_001.ogg"></audio>
+      <audio id="sfx-drop-2" data-start="4.4" data-duration="1" data-track-index="12" data-volume="0.7" src="assets/sfx/interface/drop_001.ogg"></audio>
+      <audio id="sfx-bell-pr" data-start="5.6" data-duration="2.5" data-track-index="13" data-volume="0.8" src="assets/sfx/impact/impactBell_heavy_000.ogg"></audio>
+      <audio id="sfx-bong-logo" data-start="10.4" data-duration="2.5" data-track-index="14" data-volume="0.7" src="assets/sfx/interface/bong_001.ogg"></audio>
+    </div>
+    <script>
+      var tl = gsap.timeline({ paused: true });
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

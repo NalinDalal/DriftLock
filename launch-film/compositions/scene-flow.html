@@ -1,0 +1,67 @@
+<!-- Flow strip (local 0–6.0, comp 11–17). Install → workflow → detected. One click. -->
+<template>
+  <div data-hf-id="hf-vu36" id="flow" data-composition-id="flow" data-width="1920" data-height="1080" data-start="0" data-duration="6.0" style="width: 100%; height: 100%; position: relative;">
+    <style>
+      @font-face { font-family: "JetBrains Mono"; src: local("JetBrainsMono Nerd Font"); }
+      @font-face { font-family: "SFMono-Regular"; src: local("SFMono-Regular"); }
+      #flow .fill {
+        position: absolute; inset: 0; background: #0a0a0f;
+      }
+      #flow .row {
+        position: absolute; inset: 0;
+        display: flex; align-items: center; justify-content: center; gap: 28px;
+      }
+      #flow .chip {
+        display: flex; align-items: center; gap: 14px;
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 34px; letter-spacing: 0.02em;
+        border: 1px solid #2a2a33; border-radius: 12px;
+        background: #101016; color: #f8f8f9;
+        padding: 22px 34px;
+        opacity: 0;
+      }
+      #flow .n {
+        display: inline-flex; width: 40px; height: 40px; border-radius: 20px;
+        align-items: center; justify-content: center;
+        font-size: 22px; background: #1c1c26; color: #a1a1aa;
+      }
+      #flow .arrow { color: #3a3a46; font-size: 34px; opacity: 0; }
+      #flow .cursor {
+        position: absolute; width: 26px; height: 26px; border-radius: 13px;
+        background: #f8f8f9; opacity: 0;
+        left: 340px; top: 700px;
+      }
+    </style>
+    <div data-hf-id="hf-k1m2" class="fill" data-layout-ignore=""></div>
+    <div data-hf-id="hf-p6qn" id="flow-fade" style="position:absolute; inset:0;">
+      <div data-hf-id="hf-thy4" class="row">
+        <div data-hf-id="hf-c8ss" class="chip" id="flow-c1"><span data-hf-id="hf-e3y0" class="n">1</span>Install the app</div>
+        <div data-hf-id="hf-56f2" class="arrow" id="flow-a1">→</div>
+        <div data-hf-id="hf-kwk6" class="chip" id="flow-c2"><span data-hf-id="hf-cx0x" class="n">2</span>Push the workflow</div>
+        <div data-hf-id="hf-fcn7" class="arrow" id="flow-a2">→</div>
+        <div data-hf-id="hf-mtx7" class="chip" id="flow-c3"><span data-hf-id="hf-9z7d" class="n" style="background:#3a2b12;color:#f59e0b">•</span><span data-hf-id="hf-ri9o" style="color:#f59e0b">Drift detected</span></div>
+      </div>
+      <div data-hf-id="hf-n263" class="cursor" id="flow-cursor"></div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      (function () {
+        var tl = gsap.timeline({ paused: true });
+        tl.fromTo("#flow-fade", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power1.out" }, 0);
+        // Cursor drifts onto chip 1, clicks (chip presses), leaves.
+        tl.to("#flow-cursor", { opacity: 1, duration: 0.25 }, 0.2);
+        tl.to("#flow-cursor", { x: 210, y: -110, duration: 0.7, ease: "power2.inOut" }, 0.35);
+        tl.fromTo("#flow-c1", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.4, ease: "power2.out" }, 0.4);
+        tl.to("#flow-c1", { scale: 0.96, duration: 0.09, ease: "power1.in" }, 1.05);
+        tl.to("#flow-c1", { scale: 1, duration: 0.14, ease: "power1.out" }, 1.16);
+        tl.to("#flow-cursor", { opacity: 0, duration: 0.3 }, 1.3);
+        tl.fromTo("#flow-a1", { opacity: 0 }, { opacity: 1, duration: 0.3 }, 1.7);
+        tl.fromTo("#flow-c2", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.4, ease: "power2.out" }, 1.8);
+        tl.fromTo("#flow-a2", { opacity: 0 }, { opacity: 1, duration: 0.3 }, 3.1);
+        tl.fromTo("#flow-c3", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.45, ease: "power2.out" }, 3.2);
+        window.__timelines = window.__timelines || {};
+        window.__timelines["flow"] = tl;
+      })();
+    </script>
+  </div>
+</template>

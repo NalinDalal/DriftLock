@@ -1,0 +1,44 @@
+<!-- Stakes (local 0–8.0, comp 3–11). Two calm truths + the true story. -->
+<template>
+  <div data-hf-id="hf-oolg" id="stakes" data-composition-id="stakes" data-width="1920" data-height="1080" data-start="0" data-duration="8.0" style="width: 100%; height: 100%; position: relative;">
+    <style>
+      @font-face { font-family: "JetBrains Mono"; src: local("JetBrainsMono Nerd Font"); }
+      @font-face { font-family: "SFMono-Regular"; src: local("SFMono-Regular"); }
+      #stakes .fill {
+        position: absolute; inset: 0; background: #0a0a0f;
+      }
+      #stakes .center {
+        position: absolute; inset: 0;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 30px;
+      }
+      #stakes .line {
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 44px; letter-spacing: 0.01em; color: #a1a1aa;
+        opacity: 0;
+      }
+      #stakes .line.mine { color: #f8f8f9; }
+      #stakes .line.mine em { font-style: normal; color: #ff4444; }
+    </style>
+    <div data-hf-id="hf-k1m2" class="fill" data-layout-ignore=""></div>
+    <div data-hf-id="hf-pecg" id="stakes-fade" style="position:absolute; inset:0;">
+      <div data-hf-id="hf-0oij" class="center">
+        <div data-hf-id="hf-9gbw" class="line" id="stakes-l1">Changelogs don't get read.</div>
+        <div data-hf-id="hf-lyyx" class="line" id="stakes-l2">Migration guides get skipped.</div>
+        <div data-hf-id="hf-2xg5" class="line mine" id="stakes-l3"><em data-hf-id="hf-x2ea">Prisma 7</em> broke my app before interviews.</div>
+      </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      (function () {
+        var tl = gsap.timeline({ paused: true });
+        tl.fromTo("#stakes-fade", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power1.out" }, 0);
+        tl.fromTo("#stakes-l1", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.55, ease: "power2.out" }, 0.4);
+        tl.fromTo("#stakes-l2", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.55, ease: "power2.out" }, 2.4);
+        tl.fromTo("#stakes-l3", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.55, ease: "power2.out" }, 5.0);
+        window.__timelines = window.__timelines || {};
+        window.__timelines["stakes"] = tl;
+      })();
+    </script>
+  </div>
+</template>
