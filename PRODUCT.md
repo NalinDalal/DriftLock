@@ -8,7 +8,7 @@ web
 
 ## Users
 
-Primary: engineering teams (backend/fullstack) maintaining Stripe (first vendor, Twilio/Shopify next) integrations in TypeScript/JavaScript codebases. Situation: dependency upgrades and webhook payload changes ship without warning, migration guides are missed, and 30 percent of downtime traces to unnoticed external API changes. Job: decide if vendor drift affects their code and apply the fix without hunting call sites by hand.
+Primary: engineering teams (backend/fullstack) maintaining Stripe (first vendor, Twilio/Shopify next) integrations in TypeScript/JavaScript codebases. Situation: dependency upgrades and webhook payload changes ship without warning, migration guides are missed — the same pattern YC's "Self-Maintaining APIs" RFS reports at larger scale (30% of downtime from unnoticed external API changes). Job: decide if vendor drift affects their code and apply the fix without hunting call sites by hand.
 
 Secondary audiences: startup founders deciding to install versus postponing upgrades, junior devs evaluating what changes in their code.
 
@@ -18,7 +18,7 @@ DriftLock is Dependabot but for APIs. It scans codebase for API call sites, capt
 
 ## Positioning
 
-The application layer connecting API providers to customer codebases. Not a version bumper. Renovate and Dependabot update package.json, DriftLock updates call site code. The mechanism is AST scan plus sandbox traffic capture plus semantic shape diff plus deterministic fix plus PR via Git Database API. A neighbor cannot copy this truthfully without solving codebase access that agentic tools proved valuable and without building the drift detection loop.
+The application layer connecting API providers to customer codebases. Not a version bumper. Renovate and Dependabot update package.json, DriftLock updates call site code. The mechanism is AST scan plus sandbox traffic capture plus semantic shape diff plus contract-gated agent fix (behind the customer's own model key) plus PR via Git Database API. BYOK by design: model calls run on the key the customer already has (repo secrets or env); DriftLock never sees the model bill. A neighbor cannot copy this truthfully without solving codebase access that agentic tools proved valuable and without building the drift detection loop.
 
 ## Operating Context
 
@@ -26,7 +26,7 @@ Workflows: driftlock analyze ./src, driftlock fix --dry-run, driftlock fix --rep
 
 ## Capabilities and Constraints
 
-Confirmed capabilities: static scan for stripe.*.* call sites with endpoint and HTTP method inference, multi-vendor pattern, sandbox runner with proxy flag handling, shape infer and diff with confidence high/medium/low, fix work kinds field_rename and null_check, PR generation with branch driftlock fix and body. Constraints: Stripe first vendor, AI fix optional via openai/anthropic/gemini/cloudflare, confidence threshold, read and suggest only permissions, no merge without review. Pricing intent, no billing code until trigger: Beta $0 everything, Team $99/mo up to 5 private repos, Scale $299/mo up to 20 repos, Enterprise custom. Billing trigger: 10 active beta teams OR infra over $500/mo, 30 days notice, first 10 partners free 6 months. Undecided: multi-tenant isolation beyond row, self-host versus managed webhook capture.
+Confirmed capabilities: static scan for stripe.*.* call sites with endpoint and HTTP method inference, multi-vendor pattern, sandbox runner with proxy flag handling, shape infer and diff with confidence high/medium/low, fix work kinds field_rename and null_check, PR generation with branch driftlock fix and body. Constraints: Stripe first vendor, PRs require a configured model key (BYOK; keyless runs detect + suggest), AI fix via openai/gemini/cloudflare for agent PRs plus anthropic for fixes only, confidence threshold, read and suggest only permissions, no merge without review. Pricing intent, no billing code until trigger: Beta $0 everything, Team $99/mo up to 5 private repos, Scale $299/mo up to 20 repos, Enterprise custom. Billing trigger: 10 active beta teams OR infra over $500/mo, 30 days notice, first 10 partners free 6 months. Undecided: multi-tenant isolation beyond row, self-host versus managed webhook capture.
 
 ## Brand Commitments
 

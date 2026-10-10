@@ -1,4 +1,5 @@
 import { getStore } from "../store";
+import { encryptSecret } from "../secrets";
 import { apiKeyDto, type ApiKeyDto } from "../dto";
 import { badRequest, json } from "../utils";
 
@@ -101,6 +102,15 @@ export async function handleUpdateSettings(req: Request): Promise<Response> {
         // drop those keys so the stored secret survives a no-change save.
         for (const field of SECRET_FIELDS) {
             if (incoming[field] === SECRET_SENTINEL) delete incoming[field];
+        }
+        // Fresh secrets arrive as plaintext (stored rows are never echoed
+        // back — GET masks them). Encrypt at rest with SESSION_ENC_KEY;
+        // dev without a key stays plaintext, same as OAuth tokens.
+        for (const field of SECRET_FIELDS) {
+            const value = incoming[field];
+            if (typeof value === "string" && value !== "") {
+                incoming[field] = encryptSecret(value);
+            }
         }
         const updated = { ...existing, ...incoming };
         if (updated.aiProvider !== existing.aiProvider) {

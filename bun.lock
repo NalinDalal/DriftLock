@@ -87,6 +87,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@driftlock/agent": "workspace:*",
+        "@driftlock/be": "workspace:*",
         "@driftlock/core": "workspace:*",
         "@driftlock/db": "workspace:*",
         "@driftlock/git": "workspace:*",

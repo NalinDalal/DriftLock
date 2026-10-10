@@ -21,7 +21,7 @@ type Provider = "none" | "openai" | "anthropic" | "gemini";
 const PROVIDERS: Array<{ id: Provider; label: string; sub: string }> = [
     { id: "none", label: "Deterministic", sub: "Renames, null checks, coercions. No key needed." },
     { id: "openai", label: "OpenAI", sub: "Model fixes when confidence ≥ 60%." },
-    { id: "anthropic", label: "Anthropic", sub: "Model fixes when confidence ≥ 60%." },
+    { id: "anthropic", label: "Anthropic", sub: "Model fixes when confidence ≥ 60%. Fixes only — agent PRs need OpenAI or Gemini." },
     { id: "gemini", label: "Gemini", sub: "Model fixes when confidence ≥ 60%." },
 ];
 
@@ -43,9 +43,9 @@ const MODELS: Record<Exclude<Provider, "none">, Array<{ id: string; label: strin
         { id: "claude-3-5-haiku-20241022", label: "Haiku 3.5 · cheap" },
     ],
     gemini: [
-        { id: "gemini-2.5-flash", label: "2.5 Flash · default pick" },
-        { id: "gemini-2.0-flash", label: "2.0 Flash" },
-        { id: "gemini-1.5-pro", label: "1.5 Pro · stronger" },
+        { id: "gemini-3.8-flash", label: "3.8 Flash · default pick" },
+        { id: "gemini-3.7-flash", label: "3.7 Flash · proven" },
+        { id: "gemini-3.5-flash", label: "3.5 Flash · fallback" },
     ],
 };
 
@@ -82,7 +82,7 @@ export default function ActionsPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [repo, setRepo] = useState<Repo | null>(null);
-    const [provider, setProvider] = useState<Provider>("none");
+    const [provider, setProvider] = useState<Provider>("gemini");
     // "" = provider default (model line omitted from the yml).
     const [model, setModel] = useState<string>("");
     const [customModel, setCustomModel] = useState<string>("");

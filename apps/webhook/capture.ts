@@ -1,6 +1,7 @@
 import { InMemorySchemaStore, DbSchemaStore, DriftDetector, buildAgentClient, createAgentFixPR, resolveAgentFixDeps, severityForSchemaDiff, parseCaptureSecrets, verifyCaptureSignature } from "@driftlock/webhookCapture";
 import type { DriftAlert, RollbackAlert, SchemaStore, SchemaSnapshot, FlatSchema } from "@driftlock/webhookCapture";
 import { getDb } from "@driftlock/db";
+import { decryptSecret } from "@driftlock/be/src/secrets";
 import { settings } from "@driftlock/db/schema";
 import { eq } from "drizzle-orm";
 
@@ -64,6 +65,26 @@ function logConfigSource(config: WebhookConfig, rowSource: "db" | "env"): void {
     console.log(`[CONFIG] Loaded [row=${rowSource}]: ${parts.join(", ")}`);
 }
 
+/**
+ * Dashboard-saved secrets (githubToken, aiApiKey) are encrypted at rest
+ * with SESSION_ENC_KEY; legacy plaintext rows pass through untouched.
+ * Undecryptable values stay as-is so downstream auth fails closed, loudly.
+ */
+function decryptWebhookSecrets(config: WebhookConfig): WebhookConfig {
+    const out = { ...config };
+    for (const key of ["githubToken", "aiApiKey"] as const) {
+        const value = out[key];
+        if (typeof value === "string" && value !== "") {
+            try {
+                out[key] = decryptSecret(value);
+            } catch {
+                console.warn(`[CONFIG] could not decrypt ${key}; using stored value as-is`);
+            }
+        }
+    }
+    return out;
+}
+
 async function loadConfig(): Promise<WebhookConfig> {
     const now = Date.now();
     if (cachedConfig && now - configLastLoaded < CONFIG_TTL_MS) {
@@ -83,7 +104,7 @@ async function loadConfig(): Promise<WebhookConfig> {
 
         const webhookRow = rows[0];
         if (webhookRow) {
-            cachedConfig = webhookRow.value as WebhookConfig;
+            cachedConfig = decryptWebhookSecrets(webhookRow.value as WebhookConfig);
             logConfigSource(cachedConfig, "db");
         } else {
             cachedConfig = {};
@@ -373,9 +394,15 @@ function setupDetectorCallbacks(det: DriftDetector) {
             const deps = resolveAgentFixDeps(ai, alert.endpointId);
             const clientOnly = deps ? null : ai ? buildAgentClient(ai) : null;
             if (!deps && !clientOnly) {
-                console.log(
-                    `  [SKIP] ${severity} drift but no model client configured; no deterministic PR in agent-only mode`,
-                );
+                const lines = [
+                    `  [DRIFT] ${alert.eventType}: ${severity} drift found, 0 fixed`,
+                    ...alert.diff.removed.map((f) => `    removed: ${f}`),
+                    ...alert.diff.added.map((f) => `    added: ${f}`),
+                    ...alert.diff.typeChanged.map((c) => `    type changed: ${c.field} (${c.from} → ${c.to})`),
+                    `  Your repo still reads the old fields. Set a model key and drifts become PRs:`,
+                    `    AI_PROVIDER=openai AI_API_KEY=sk-... (Settings → Secrets → Actions)`,
+                ];
+                console.log(lines.join("\n"));
                 return;
             }
             if (!deps && clientOnly) {
@@ -452,7 +479,8 @@ function setupDetectorCallbacks(det: DriftDetector) {
             const deps = resolveAgentFixDeps(ai, alert.endpointId);
             const clientOnly = deps ? null : ai ? buildAgentClient(ai) : null;
             if (!deps && !clientOnly) {
-                console.log(`  [SKIP] rollback but no model client configured; no deterministic PR in agent-only mode`);
+                console.log(`  [ROLLBACK] ${alert.eventType} recorded, 0 as PRs. Set a model key so any needed restore arrives as a PR:`);
+                console.log(`    AI_PROVIDER=openai AI_API_KEY=sk-... (Settings → Secrets → Actions)`);
                 return;
             }
             const result = await createAgentFixPR({

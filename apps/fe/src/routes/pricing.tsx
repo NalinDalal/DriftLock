@@ -25,13 +25,13 @@ export default function PricingPage() {
                 <div className="border border-[var(--color-line-strong)] bg-[var(--color-ink)] p-5 text-[var(--color-paper)]">
                     <p className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-paper)]/60">BETA · LIVE NOW</p>
                     <p className="mt-2 font-mono text-2xl font-semibold">$0</p>
-                    <ul className="mt-3 space-y-1.5 font-mono text-xs leading-4 text-[var(--color-paper)]/80"><li>• Free while in beta</li><li>• Unlimited public repos + 1 private repo</li><li>• Deterministic + AI fixes included</li></ul>
+                    <ul className="mt-3 space-y-1.5 font-mono text-xs leading-4 text-[var(--color-paper)]/80"><li>• Free while in beta</li><li>• Unlimited public repos + 1 private repo</li><li>• Detect + suggest free forever; PRs on your own AI key</li></ul>
                     <Link to="/install" className="mt-4 inline-flex bg-[var(--color-paper)] px-4 py-2 font-mono text-xs tracking-wide text-[var(--color-ink)] hover:opacity-90 active:scale-[0.98] transition-[transform,opacity]">INSTALL GITHUB APP</Link>
                 </div>
                 <div className="border border-[var(--color-line-strong)] bg-[var(--color-surface)] p-5">
                     <p className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-muted)]">TEAM · COMING SOON</p>
                     <p className="mt-2 font-mono text-2xl font-semibold text-[var(--color-ink)]">$99<span className="text-sm font-normal text-[var(--color-muted)]">/mo</span></p>
-                    <ul className="mt-3 space-y-1.5 font-mono text-xs leading-4 text-[var(--color-ink)]/80"><li>• Up to 5 private repos</li><li>• Unlimited seats</li><li>• AI fixes included, fix history dashboard</li></ul>
+                    <ul className="mt-3 space-y-1.5 font-mono text-xs leading-4 text-[var(--color-ink)]/80"><li>• Up to 5 private repos</li><li>• Unlimited seats</li><li>• AI fixes on your own key, fix history dashboard</li></ul>
                     <a href="mailto:nalin@nerdev.in?subject=DriftLock%20Team%20plan%20waitlist" className="mt-4 inline-flex border border-[var(--color-line-strong)] bg-[var(--color-paper)] px-4 py-2 font-mono text-xs tracking-wide text-[var(--color-ink)] hover:bg-[var(--color-surface)] active:scale-[0.98] transition-[transform,background]">NOTIFY ME</a>
                 </div>
                 <div className="border border-[var(--color-line-strong)] bg-[var(--color-surface)] p-5">
@@ -47,6 +47,7 @@ export default function PricingPage() {
                     <a href="mailto:nalin@nerdev.in?subject=DriftLock%20Enterprise%20plan" className="mt-4 inline-flex border border-[var(--color-line-strong)] bg-[var(--color-paper)] px-4 py-2 font-mono text-xs tracking-wide text-[var(--color-ink)] hover:bg-[var(--color-surface)] active:scale-[0.98] transition-[transform,background]">TALK TO US</a>
                 </div>
             </div>
+            <p className="mt-6 font-mono text-xs leading-4 text-[var(--color-muted)]">BYOK: model calls run on the key you already have. Your AI key stays in your repo secrets or env — we never see your model bill.</p>
             <p className="mt-6 font-mono text-xs leading-4 text-[var(--color-muted)]">Billing starts at 10 active beta teams or infra over $500/mo, whichever first, with 30 days notice. First 10 design partners stay free 6 months.</p>
 
             <div className="mt-10 flex flex-wrap gap-2 border-t border-[var(--color-line)] pt-6">
