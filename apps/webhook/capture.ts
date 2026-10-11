@@ -378,8 +378,11 @@ function setupDetectorCallbacks(det: DriftDetector) {
             // Agent-only PRs: breaking and warning drift go to the migration
             // agent (search -> read -> edit -> verify -> contract gate -> PR).
             // Info-only drift (pure additions) breaks no reader: no PR.
-            // A deterministic regex fix cannot know per-repo semantics, so
-            // it must never open a PR. Drift is still recorded above.
+            // A deterministic regex fix cannot know per-repo semantics, so it
+            // never opens a mergeable PR. If the agent abstains on a single
+            // statically-certain inbound rename, the migration layer may open
+            // an UNVERIFIED DRAFT (unmergeable until marked ready) instead of
+            // staying silent. Drift is still recorded above.
             const severity = severityForSchemaDiff(alert.diff);
             if (severity === "info") {
                 console.log(
