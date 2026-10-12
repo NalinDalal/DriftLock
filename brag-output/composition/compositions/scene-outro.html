@@ -28,6 +28,11 @@
         font-size: 30px; letter-spacing: 0.06em; color: #a1a1aa;
         opacity: 0; margin-top: 14px;
       }
+      #outro .cta {
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 30px; letter-spacing: 0.18em; color: #10b981;
+        opacity: 0; margin-top: 26px;
+      }
     </style>
     <div data-hf-id="hf-k1m2" class="fill" data-layout-ignore=""></div>
     <div data-hf-id="hf-qz16" id="outro-fade" style="position:absolute; inset:0;">
@@ -40,6 +45,7 @@
         <div data-hf-id="hf-zuvg" class="name" id="outro-name">DriftLock</div>
         <div data-hf-id="hf-bxqb" class="tag" id="outro-tag">APIs should maintain themselves.</div>
         <div data-hf-id="hf-xozj" class="url" id="outro-url">driftlock.dev</div>
+        <div class="cta" id="outro-cta">TRY THE BETA →</div>
       </div>
     </div>
     </div>
@@ -55,6 +61,7 @@
         tl.fromTo("#outro-name", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 0.9);
         tl.fromTo("#outro-tag", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" }, 1.5);
         tl.fromTo("#outro-url", { opacity: 0 }, { opacity: 1, duration: 0.5 }, 2.3);
+        tl.fromTo("#outro-cta", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 2.9);
         window.__timelines = window.__timelines || {};
         window.__timelines["outro"] = tl;
       })();

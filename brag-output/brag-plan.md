@@ -26,7 +26,7 @@ Install GitHub App → drift detected on push → fix PR arrives → review and 
 - Interpretation: slow reveals, long holds, mono type with wide tracking, restraint over energy; confidence through stillness, not speed.
 
 ## Format: landscape — 1920x1080
-## Duration: 20 seconds
+## Duration: 17.5 seconds
 
 ## Visual identity (from the project)
 - Background: #0a0a0f (ink)
@@ -56,32 +56,24 @@ Introducing DriftLock: Dependabot, but for APIs. When Stripe renames a field, it
 
 ## Storyboard
 
-### Scene 1 — Hook — 3s (0.0–3.0)
-Black frame. `paymentIntent.source` in red mono, glowing, centered. Above it, small: "Stripe renamed a field." (settles by ~0.8s, holds). Red glow breathes subtly (audio-reactive).
-Sequential/interaction: none — one static wound.
-Audio intent: bed establishes, no SFX. Let the silence after the bed entrance create tension.
-Audio-coupled idea: none.
+### Scene 1 — Opener: pain first, then the wound — 5.5s (0.0–5.5)
+"Changelogs don't get read." (0.3s) / "Migration guides get skipped." (1.3s) / red `paymentIntent.source` slams in (2.6s) with "Stripe renamed a field." (3.1s). The relatable headache gives the Stripe example its context. Holds to 5.5.
+Sequential/interaction: yes — two pain lines, then the code punch.
+Audio intent: bed establishes; soft drop under line 2.
+Audio-coupled idea: none for the code slam — let the glow carry it.
 Music: vol-12 bed in at 0.3.
-Transition mood: soft crossfade (0.5s) → Scene 2
+Transition mood: soft fade-in from black → Scene 2 (incoming scene fades up over black)
 
-### Scene 2 — Problem — 5s (3.0–8.0)
-Two lines, centered, arriving 1.5s apart: "Changelogs don't get read." then "Migration guides get skipped." Zinc-grey, mono, calm. Nothing else moves except a faint vignette.
-Sequential/interaction: yes — line 2 arrives at ~4.8s with a soft drop tick.
-Audio intent: bed continues; the sparseness is the point.
-Audio-coupled idea: drop_001 under line 2 only.
-Music: steady.
-Transition mood: soft crossfade (0.6s), timed near strong cue 8.74 → Scene 3
-
-### Scene 3 — The fix — 8s (8.0–16.0)
-Recreated working product on ink background. Top: three drift-report rows arrive one by one ~1.1s apart (beat grid, every other beat): "drift detected" (amber) → "fix suggested" (zinc) → "PR opened" (emerald). SFX on first and last rows only. Then the code line: red `source` deleted letter by letter with key ticks, `payment_method` typed in white, line flashes emerald. Hold green to 16s.
+### Scene 2 — The fix — 8s (5.5–13.5)
+Recreated working product on ink background. Top: three drift-report rows arrive ~1.1s apart (beat grid, every other beat): "drift detected" (amber) → "fix suggested" (zinc) → "PR opened" (emerald). Beneath the rows, small badge: "RUNS IN CI · GITHUB ACTION / CLI" (5.6s local) — the friction answer, placed where an engineer looks for it. Then the code line: red `source` deleted letter by letter with key ticks, `payment_method` typed in white, line flashes emerald. Hold green.
 Sequential/interaction: yes — rows arrive in order; typing is simulated character by character.
 Audio intent: quiet industry (ticks + two drops), then payoff.
-Audio-coupled idea: keyboard ticks for every typed/deleted character; impactBell_heavy_000 exactly when "PR opened" lands (~13.11 strong cue).
+Audio-coupled idea: keyboard ticks for typed/deleted characters; impactBell_heavy_000 exactly when "PR opened" lands.
 Music: steady; no change.
-Transition mood: soft crossfade (0.6s) → Scene 4
+Transition mood: soft fade-in from black → Scene 3
 
-### Scene 4 — Outro — 4s (16.0–20.0)
-Lock mark draws in (stroke draw), "DriftLock" beneath, then held line: "APIs should maintain themselves." URL `driftlock.dev` small beneath. Logo landing near 17.47 strong cue with bong_001. Everything holds still to 20.0 — mute-safe final frame.
+### Scene 3 — Outro — 4s (13.5–17.5)
+Lock mark draws in, "DriftLock" beneath, then held line: "APIs should maintain themselves." URL `driftlock.dev`, then explicit CTA "TRY THE BETA →" in emerald (2.9s local) — the curiosity-to-visit step. Everything holds still to 17.5 — mute-safe final frame.
 Sequential/interaction: none after the draw.
 Audio intent: resolution; bed fades 17→20s, bong rings over the fade.
 Audio-coupled idea: bong_001 at logo lock (~17.5s).
