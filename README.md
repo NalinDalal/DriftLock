@@ -481,4 +481,4 @@ We welcome contributions! See [CONTRIBUTING.md](./CONTRIBUTING.md) for guideline
 
 ## License
 
-MIT © [DriftLock](https://github.com/nerdev-co/DriftLock)
+MIT © [DriftLock](https://github.com/nerdev-co/DriftLock). Code is MIT; the DriftLock name and lock mark are not up for grabs — ask before reusing them outside a fork.
