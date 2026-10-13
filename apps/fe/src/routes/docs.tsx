@@ -50,7 +50,7 @@ export default function DocsPage() {
                 driftlock fix ./repo --repo owner/repo --command &quot;bun test&quot; --commit-baselines --json
             </div>
             <p className="mt-3 max-w-[65ch] text-sm leading-5 text-[var(--color-ink)]/80">
-                Save templates/driftlock.yml as .github/workflows/driftlock.yml and push. Baselines commit back so the next run can compare. Prefer the <Link to="/actions" search={{ repo: undefined }} className="underline underline-offset-2 hover:text-[var(--color-ink)]">/actions</Link> wizard: pick repo, provider, and model, and it writes the file for you.
+                Save templates/driftlock.yml as .github/workflows/driftlock.yml and push. Baselines commit back so the next run can compare. Prefer the <Link to="/actions" search={{ repo: undefined }} className="underline underline-offset-2 hover:text-[var(--color-ink)]">/actions</Link> wizard: pick a repo and it writes the file for you. No provider or model to pick, models are managed and included in your credits.
             </p>
 
             <h2 className="mt-12 border-t border-[var(--color-line-strong)] pt-6 heading-section text-[var(--color-ink)]">5. Triggers</h2>
@@ -59,23 +59,23 @@ export default function DocsPage() {
                 <li>Pull requests: detection-only (--dry-run). Untrusted events never open PRs or push baselines.</li>
             </ul>
 
-            <h2 className="mt-12 border-t border-[var(--color-line-strong)] pt-6 heading-section text-[var(--color-ink)]">Model keys (BYOK)</h2>
+            <h2 className="mt-12 border-t border-[var(--color-line-strong)] pt-6 heading-section text-[var(--color-ink)]">Credits included, no keys</h2>
             <p className="mt-3 max-w-[65ch] text-sm leading-5 text-[var(--color-ink)]/80">
-                Model calls run on the key you already have. Your key stays in your repo secrets or env — we never see your model bill. PRs require a configured key; without one, runs detect and suggest only.
+                Models are managed and included. No API keys to set up, nothing stays in your repo secrets. Every install gets 300 credits free (3 AI PRs, no card, 14-day expiry).
             </p>
             <ul className="mt-4 list-disc space-y-2 pl-5 font-mono text-xs leading-5 text-[var(--color-ink)]/80">
-                <li>OpenAI: AI_PROVIDER=openai + AI_API_KEY (AI_MODEL optional, default gpt-4o). AI_BASE_URL override supported.</li>
-                <li>Gemini: AI_PROVIDER=gemini + GEMINI_API_KEY (GEMINI_MODEL optional, e.g. gemini-3.8-flash).</li>
-                <li>Anthropic: AI_PROVIDER=anthropic + AI_API_KEY. Model fixes only — agent PRs need OpenAI or Gemini.</li>
-                <li>Cloudflare: AI_PROVIDER=cloudflare + CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID (CLOUDFLARE_AI_MODEL optional).</li>
+                <li>Scan: 10 credits. Drift detect: 20 credits. AI fix PR: 100 credits.</li>
+                <li>Starter $29/mo: 1,500 credits. Team $99/mo: 7,000 credits. Scale $299/mo: 25,000 credits.</li>
+                <li>Overage: $15 per 1,000 credits. Credits reset monthly, no rollover.</li>
                 <li>CONFIDENCE_THRESHOLD: optional, 0 to 100, default 0. Model fixes apply at confidence 60+.</li>
             </ul>
 
             <h2 className="mt-12 border-t border-[var(--color-line-strong)] pt-6 heading-section text-[var(--color-ink)]">Reading the report</h2>
             <ul className="mt-4 list-disc space-y-2 pl-5 font-mono text-xs leading-5 text-[var(--color-ink)]/80">
-                <li>Keyless runs list each drift (file, line, removed vs added fields) and end open: N found, 0 fixed, with the exact keys to set.</li>
-                <li>Keyed runs open mergeable PRs when verification passes, drafts when it cannot (labeled UNVERIFIED, unmergeable until marked ready).</li>
-                <li>With --json, the last stdout line is always a machine-readable summary for CI.</li>
+                <li>Runs 1 to 3 open fix PRs while trial credits last (file, line, removed vs added fields).</li>
+                <li>Out of credits: runs stop with out_of_credits and a link to upgrade at /pricing. No silent skips.</li>
+                <li>Paid runs open mergeable PRs when verification passes, drafts when it cannot (labeled UNVERIFIED, unmergeable until marked ready).</li>
+                <li>With --json, the last stdout line is always a machine-readable summary for CI, including creditsRemaining once metering lands.</li>
             </ul>
 
             <div className="mt-10 flex flex-wrap gap-2 border-t border-[var(--color-line)] pt-6">
