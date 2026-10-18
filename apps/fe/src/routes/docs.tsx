@@ -50,18 +50,33 @@ export default function DocsPage() {
                 driftlock fix ./repo --repo owner/repo --command &quot;bun test&quot; --commit-baselines --json
             </div>
             <p className="mt-3 max-w-[65ch] text-sm leading-5 text-[var(--color-ink)]/80">
-                Save templates/driftlock.yml as .github/workflows/driftlock.yml and push. Baselines commit back so the next run can compare. Each fix becomes a PR.
+                Save templates/driftlock.yml as .github/workflows/driftlock.yml and push. Baselines commit back so the next run can compare. Prefer the <Link to="/actions" search={{ repo: undefined }} className="underline underline-offset-2 hover:text-[var(--color-ink)]">/actions</Link> wizard: pick a repo and it writes the file for you. No provider or model to pick, models are managed and included in your credits.
             </p>
 
-            <h2 className="mt-12 border-t border-[var(--color-line-strong)] pt-6 heading-section text-[var(--color-ink)]">Env keys</h2>
+            <h2 className="mt-12 border-t border-[var(--color-line-strong)] pt-6 heading-section text-[var(--color-ink)]">5. Triggers</h2>
             <ul className="mt-4 list-disc space-y-2 pl-5 font-mono text-xs leading-5 text-[var(--color-ink)]/80">
-                <li>GITHUB_TOKEN: required for PR creation</li>
-                <li>AI_PROVIDER + AI_API_KEY: optional, openai / anthropic / gemini / cloudflare</li>
-                <li>CONFIDENCE_THRESHOLD: optional, 0 to 100, default 0</li>
+                <li>Schedule (every 6h), push, and manual dispatch: full runs, baselines commit back, PRs open.</li>
+                <li>Pull requests: detection-only (--dry-run). Untrusted events never open PRs or push baselines.</li>
             </ul>
+
+            <h2 className="mt-12 border-t border-[var(--color-line-strong)] pt-6 heading-section text-[var(--color-ink)]">Credits included, no keys</h2>
             <p className="mt-3 max-w-[65ch] text-sm leading-5 text-[var(--color-ink)]/80">
-                Without AI keys fixes are deterministic: renames, null checks, type coercions.
+                Models are managed and included. No API keys to set up, nothing stays in your repo secrets. Every install gets 300 credits free (3 AI PRs, no card, 14-day expiry).
             </p>
+            <ul className="mt-4 list-disc space-y-2 pl-5 font-mono text-xs leading-5 text-[var(--color-ink)]/80">
+                <li>Scan: 10 credits. Drift detect: 20 credits. AI fix PR: 100 credits.</li>
+                <li>Starter $29/mo: 1,500 credits. Team $99/mo: 7,000 credits. Scale $299/mo: 25,000 credits.</li>
+                <li>Overage: $15 per 1,000 credits. Credits reset monthly, no rollover.</li>
+                <li>CONFIDENCE_THRESHOLD: optional, 0 to 100, default 0. Model fixes apply at confidence 60+.</li>
+            </ul>
+
+            <h2 className="mt-12 border-t border-[var(--color-line-strong)] pt-6 heading-section text-[var(--color-ink)]">Reading the report</h2>
+            <ul className="mt-4 list-disc space-y-2 pl-5 font-mono text-xs leading-5 text-[var(--color-ink)]/80">
+                <li>Runs 1 to 3 open fix PRs while trial credits last (file, line, removed vs added fields).</li>
+                <li>Out of credits: runs stop with out_of_credits and a link to upgrade at /pricing. No silent skips.</li>
+                <li>Paid runs open mergeable PRs when verification passes, drafts when it cannot (labeled UNVERIFIED, unmergeable until marked ready).</li>
+                <li>With --json, the last stdout line is always a machine-readable summary for CI, including creditsRemaining once metering lands.</li>
+            </ul>
 
             <div className="mt-10 flex flex-wrap gap-2 border-t border-[var(--color-line)] pt-6">
                 <Link to="/features" className="border border-[var(--color-line-strong)] bg-[var(--color-ink)] px-4 py-2 font-mono text-xs tracking-wide text-[var(--color-paper)] hover:bg-[var(--color-ink)]/90">Features</Link>

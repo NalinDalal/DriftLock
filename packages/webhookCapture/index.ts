@@ -62,6 +62,7 @@ export {
     buildAgentClient,
     resolveAgentFixDeps,
     routeBySeverity,
+    vendorForEndpoint,
     type AgentAIConfig,
     type AgentClient,
     type FixRoute,

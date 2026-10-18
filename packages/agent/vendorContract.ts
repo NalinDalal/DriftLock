@@ -38,6 +38,15 @@ export interface VendorContract {
     members: string[];
     /** Members the vendor no longer exposes, from a diff against a baseline. */
     removed: string[];
+    /**
+     * Explicit inbound marker: the observation came from a webhook payload
+     * (vendor to you), never from an outbound request shape. Set at
+     * construction from the observation origin and retained through hybrid
+     * resolution, so `isWebhookContract` survives a successful spec fetch
+     * that flips `source` to `"spec"`. Absent on older rows: treat as
+     * unknown, not as outbound.
+     */
+    inbound?: boolean;
 }
 
 const UPPER_SNAKE = /^[A-Z][A-Z0-9]+(?:_[A-Z0-9]+)*$/;
@@ -490,6 +499,10 @@ export function contractFromObservedMembers(input: {
         ),
         members: uniqueSorted(withLeaves(input.currentMembers)),
         removed: uniqueSorted(withLeaves(input.removed)),
+        // Webhook observations carry a `webhook <event> observed payload`
+        // origin; outbound ones do not. Recorded once here so the hybrid
+        // path keeps it when it flips source/origin to the spec.
+        inbound: input.origin.startsWith("webhook "),
     };
 }
 
@@ -714,6 +727,13 @@ export interface ObservedDrift {
     added: string[];
     typeChanged: { field: string; from: string; to: string }[];
     docs?: string[];
+    /**
+     * Which side of the wire the observation came from. Inbound drift
+     * (webhook payloads) must never authorize edits to outbound request
+     * arguments; outbound drift (captured request/response shapes) may.
+     * Absent means inbound, preserving the pre-direction packet text.
+     */
+    direction?: "inbound" | "outbound";
 }
 
 /**
@@ -774,9 +794,15 @@ export function changePacketFromDrift(drift: ObservedDrift): {
             `No type change was observed. Do not coerce field types (no String(), Number(), parseInt(), or parseFloat() on observed fields).`,
         );
     }
-    lines.push(
-        `This is inbound webhook drift (vendor to you). Only edit code that reads these fields from webhook payloads or returned vendor objects. Do not edit outbound request arguments such as stripe.paymentIntents.create(); the request surface is a separate contract and is unchanged by this drift.`,
-    );
+    if (drift.direction === "outbound") {
+        lines.push(
+            `This is outbound drift (you to the vendor): the captured request/response shapes changed. You may edit outbound request arguments such as stripe.paymentIntents.create() as well as code that reads the returned vendor objects. Stay within the observed fields; do not touch unrelated integrations.`,
+        );
+    } else {
+        lines.push(
+            `This is inbound webhook drift (vendor to you). Only edit code that reads these fields from webhook payloads or returned vendor objects. Do not edit outbound request arguments such as stripe.paymentIntents.create(); the request surface is a separate contract and is unchanged by this drift.`,
+        );
+    }
     if (searchTerms.length > 0) {
         lines.push(
             `Start with these searches, one call each: ${searchTerms.map((term) => `searchCode "${term}"`).join(", ")}. Do not guess file paths before searching.`,
@@ -1012,18 +1038,24 @@ export function verifyVendorSymbols(
 }
 
 /**
- * True for contracts built from a webhook drift observation
- * (`contractFromWebhookAlert` sets origin to `webhook <event> observed
- * payload`). Only these runs may assume inbound-only scope: a webhook
- * payload describes what the vendor sends you, never the shape of an
- * outbound request you send the vendor.
+ * True for contracts built from a webhook drift observation.
+ * Prefers the explicit `inbound` marker, which survives hybrid resolution
+ * (a successful spec fetch flips `source` to `"spec"` and rewrites
+ * `origin`, dropping the old heuristic). Falls back to the origin check
+ * for rows built before the marker existed.
+ *
+ * Only these runs may assume inbound-only scope: a webhook payload
+ * describes what the vendor sends you, never the shape of an outbound
+ * request you send the vendor.
  */
 export function isWebhookContract(contract: VendorContract): boolean {
+    if (contract.inbound === true) return true;
+    if (contract.inbound === false) return false;
     return contract.source === "recorded" && contract.origin.startsWith("webhook ");
 }
 
 const OUTBOUND_AMOUNT_COERCION =
-    /amount\s*:\s*(?:String\s*\(|parseInt\s*\(|parseFloat\s*\(|Number\s*\()/;
+    /(?:^|[{,\s])amount\s*:\s*(?:String\s*\(|parseInt\s*\(|parseFloat\s*\(|Number\s*\()/;
 // Inbound twin of the same bug (PR #14 also did `cents: parseInt(obj.amount)`
 // with no observed type change). Stripe amounts are integers on the wire;
 // wrapping an unchanged numeric amount is either wrong or needless. Scoped to

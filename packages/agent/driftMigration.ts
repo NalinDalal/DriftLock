@@ -1,4 +1,6 @@
 import type OpenAI from "openai";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import type { VendorConfig } from "@driftlock/core";
 import { createSandboxCommandRunner, type CommandRunner } from "./commandRunner";
 import {
@@ -45,8 +47,137 @@ export interface DriftMigrationResult {
     branch?: string;
     filesChanged: string[];
     outcome: RunResult["outcome"];
+    /** True when the opened PR is a draft (unmergeable until marked ready). */
+    draft?: boolean;
 }
 
+/**
+ * Graduated abstention: when the agent investigated and changed nothing,
+ * a single statically-certain inbound rename still earns a DRAFT — never a
+ * mergeable PR. Drafts cannot merge until a human marks them ready, so
+ * "nothing merges without you" holds while silence stops being the default.
+ *
+ * Certainty bar (deliberately narrow — anything else stays no_action):
+ * - inbound drift only (outbound request surface is never regex-touched),
+ * - exactly one removed + one added field sharing a dotted parent,
+ * - renames apply to dotted member reads (`obj.from`) only: bare tokens,
+ *   object-literal keys (`from:`), and request arguments are left alone.
+ */
+function certainRename(drift: ObservedDrift): { from: string; to: string } | null {
+    if (drift.direction === "outbound") return null;
+    if (drift.removed.length !== 1 || drift.added.length !== 1) return null;
+    const [fromPath] = drift.removed;
+    const [toPath] = drift.added;
+    if (!fromPath || !toPath) return null;
+    const parent = (p: string): string => p.split(".").slice(0, -1).join(".");
+    if (parent(fromPath) !== parent(toPath)) return null;
+    const from = fromPath.split(".").pop() ?? "";
+    const to = toPath.split(".").pop() ?? "";
+    if (!from || !to || from === to) return null;
+    return { from, to };
+}
+
+function unverifiedBranch(drift: ObservedDrift): string {
+    const sig = [...drift.removed, ...drift.added].sort().join("|");
+    let hash = 0;
+    for (let i = 0; i < sig.length; i++) {
+        hash = (hash * 31 + sig.charCodeAt(i)) >>> 0;
+    }
+    const provider = drift.provider.replace(/[^A-Za-z0-9]+/g, "-").slice(0, 24);
+    return `driftlock/unverified-${provider}-${hash.toString(16).padStart(8, "0")}`;
+}
+
+async function tryUnverifiedDraft(
+    input: DriftMigrationInput,
+    drift: ObservedDrift,
+): Promise<DriftMigrationResult | null> {
+    const rename = certainRename(drift);
+    if (!rename) return null;
+
+    const esc = rename.from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const changed: Array<{ path: string; content: string }> = [];
+    let entries: string[];
+    try {
+        entries = readdirSync(input.repoPath, { recursive: true }).filter(
+            (file): file is string =>
+                typeof file === "string" &&
+                /\.(ts|tsx|js|jsx|mjs|cjs)$/.test(file) &&
+                !file.includes("node_modules"),
+        );
+    } catch {
+        return null;
+    }
+    for (const file of entries) {
+        const fullPath = join(input.repoPath, file);
+        let content: string;
+        try {
+            content = readFileSync(fullPath, "utf8");
+        } catch {
+            continue;
+        }
+        // Fresh regex per file: /g test() is stateful.
+        if (!new RegExp(`\\.${esc}(?![\\w])`).test(content)) continue;
+        const fixed = content.replace(
+            new RegExp(`\\.${esc}(?![\\w])`, "g"),
+            `.${rename.to}`,
+        );
+        if (fixed === content) continue;
+        try {
+            writeFileSync(fullPath, fixed);
+        } catch {
+            continue;
+        }
+        changed.push({ path: file, content: fixed });
+    }
+    if (changed.length === 0) return null;
+
+    const paths = changed.map((f) => f.path);
+    const branch = unverifiedBranch(drift);
+    const body = [
+        "## UNVERIFIED DRAFT — review every line before marking ready",
+        "",
+        "DriftLock's agent investigated this drift but could not verify a fix (no runnable checks passed in this run), so it abstained rather than guessing. This draft applies the single statically-certain change below and nothing else. It cannot merge until you mark it ready.",
+        "",
+        "### Certain change",
+        `- Rename \`.${rename.from}\` → \`.${rename.to}\` in dotted member reads (e.g. \`paymentIntent.${rename.from}\`).`,
+        "- Only dotted reads were touched. Bare tokens, object-literal keys, and request arguments were deliberately left alone. Matches inside comments or string literals are possible — check the diff.",
+        "",
+        "### Drift",
+        `- Removed: ${drift.removed.join(", ")}`,
+        `- Added: ${drift.added.join(", ")}`,
+        "",
+        "### Not covered",
+        "- Anything beyond the rename above. If the diff shows more, reject this PR.",
+    ].join("\n");
+
+    const res = await input.publisher.publish({
+        target: input.target,
+        title: `driftlock: Rename ${rename.from} to ${rename.to} (unverified draft)`,
+        body,
+        branch,
+        files: changed,
+        commitMessage: `driftlock: rename ${rename.from} to ${rename.to} (unverified draft)`,
+        draft: true,
+    });
+    if (res.status === "already_open") {
+        return {
+            status: "already_open",
+            branch: res.branch,
+            filesChanged: paths,
+            outcome: "draft_pr",
+            draft: true,
+        };
+    }
+    return {
+        status: "opened",
+        url: res.url,
+        number: res.number,
+        branch: res.branch,
+        filesChanged: paths,
+        outcome: "draft_pr",
+        draft: true,
+    };
+}
 /**
  * The single agent-layer entrypoint every drift trigger uses.
  *
@@ -85,8 +216,26 @@ export async function runDriftMigration(
             outcome: result.outcome,
         };
     }
+    if (result.filesChanged.length > 0) {
+        return {
+            status: "needs_review",
+            branch: undefined,
+            filesChanged: result.filesChanged,
+            outcome: result.outcome,
+        };
+    }
+    // Graduated abstention: the agent investigated and changed nothing.
+    // When the drift is a single same-parent rename, a dotted-readers-only
+    // draft is strictly more useful than silence — and a draft cannot merge
+    // until a human marks it ready, so "nothing merges without you" holds.
+    // Anything uncertain (multi-field drift, outbound surface, no readers)
+    // stays no_action below.
+    if (result.outcome === "no_action") {
+        const fallback = await tryUnverifiedDraft(input, input.drift);
+        if (fallback) return fallback;
+    }
     return {
-        status: result.filesChanged.length > 0 ? "needs_review" : "no_action",
+        status: "no_action",
         branch: undefined,
         filesChanged: result.filesChanged,
         outcome: result.outcome,

@@ -12,7 +12,7 @@
 #   3. Diffs captured shapes against the committed baseline to detect drift.
 #     First run only records the baseline and commits it back, so the next
 #     scheduled run has something to compare against.
-#   4. Opens a GitHub PR with the fix. Nothing merges without your review.
+#   4. Prints suggested fixes in the job log. Nothing merges without your review.
 #
 # PLACEHOLDERS (fill by hand):
 #   __OWNER__   GitHub org or user, e.g. acme
@@ -42,7 +42,15 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
-      - name: Detect drift and open fix PR
+      - name: Install DriftLock CLI from source
+        # @driftlock/cli is not on the npm registry yet, so bunx cannot
+        # resolve it. Clone and install until the first publish, then switch
+        # back to `bunx @driftlock/cli fix`.
+        run: |
+          git clone --depth 1 https://github.com/nerdev-co/DriftLock.git /tmp/driftlock
+          cd /tmp/driftlock && bun install --frozen-lockfile
+
+      - name: Detect drift and suggest fixes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Optional: model fixes. Without these, fixes are deterministic
@@ -52,8 +60,11 @@ jobs:
           # AI_MODEL: gpt-4o-mini            # optional: fix model (GEMINI_MODEL for gemini)
         run: |
           set -o pipefail
+          # Pull-request runs are detection-only: untrusted events must not
+          # open PRs or push baselines. Scheduled/push runs may do both.
           FLAGS="--commit-baselines"
-          if [ "${{ github.event_name }}" = "pull_request" ]; then FLAGS=""; fi
-          bunx @driftlock/cli fix . --repo __OWNER__/__REPO__ --command "bun test" $FLAGS --json 2>/dev/null \
+          REPO="--repo __OWNER__/__REPO__"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then FLAGS="--dry-run"; REPO=""; fi
+          bun /tmp/driftlock/apps/cli/index.ts fix . $REPO --base __BRANCH__ --command "bun test" $FLAGS --json 2>/dev/null \
             | tail -n 1 > driftlock-summary.json
           cat driftlock-summary.json

@@ -170,6 +170,8 @@ describe("severity law", () => {
         expect(deriveSpecLevel("narrows", "request", ["sanctioned"])).toBe("info");
         expect(deriveSpecLevel("narrows", "request", ["non-success"])).toBe("info");
         expect(deriveSpecLevel("widens", "response", ["negotiated"])).toBe("info");
+        // read-only speaks about requests: the response direction is unaffected.
+        expect(deriveSpecLevel("widens", "response", ["read-only"])).toBe("error");
     });
 
     test("response field addition is safe, required request addition breaks", () => {

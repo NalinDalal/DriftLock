@@ -80,6 +80,7 @@ export async function createOutboundAgentFixPR(
             removed: input.drift.removed,
             added: input.drift.added,
             typeChanged: input.drift.typeChanged,
+            direction: "outbound",
         },
         contract,
         ...(input.vendor ? { vendor: input.vendor } : {}),

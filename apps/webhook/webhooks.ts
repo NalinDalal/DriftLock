@@ -426,9 +426,14 @@ async function analyzePushInBackground(input: {
       const vendor = vendorForPackage(drift.callSite.packageName);
       const built = pushAi ? buildAgentClient(pushAi) : null;
       if (!built) {
-        console.log(
-          `  [DRIFT] ${drift.callSite.method} recorded; no model client configured so no agent PR (set AI_PROVIDER + key)`,
-        );
+        const lines = [
+          `  [DRIFT] ${drift.callSite.method} recorded, 0 fixed`,
+          ...removed.map((f) => `    removed: ${f}`),
+          ...typeChanged.map((c) => `    type changed: ${c.field} (${c.from} → ${c.to})`),
+          `  Your fix is ready — set a model key to get it as a PR:`,
+          `    AI_PROVIDER=openai AI_API_KEY=sk-... (Settings → Secrets → Actions)`,
+        ];
+        console.log(lines.join("\n"));
         continue;
       }
       if (!vendor) {
@@ -475,6 +480,20 @@ async function analyzePushInBackground(input: {
         // One drift's agent failure must not kill the rest of the loop;
         // the drift stays recorded and the next push retries.
         console.error(`  [AGENT] ${drift.callSite.method} failed:`, error);
+      } finally {
+        // The checkout is shared across drifts and the agent edits it in
+        // place: restore it before the next drift sees a dirty tree or a
+        // stray fix branch. Untracked files the run generated (logs,
+        // snapshots) go too. Best-effort: a reset failure must not kill the
+        // loop, the next drift just retries on whatever is there.
+        try {
+          const git = simpleGit(clone.path);
+          await git.reset(["--hard", "HEAD"]);
+          await git.clean("f", ["-d"]);
+          await git.checkout(input.branch);
+        } catch (error) {
+          console.error(`  [AGENT] ${drift.callSite.method} checkout reset failed:`, error);
+        }
       }
     }
 

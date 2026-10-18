@@ -187,7 +187,8 @@ describe("CLI fix command", () => {
         expect(result.stdout).toContain("--dry-run");
         expect(result.stdout).toContain("--repo");
         expect(result.stdout).toContain("--base");
-        expect(result.stdout).toContain("GITHUB_TOKEN");
+        expect(result.stdout).toContain("suggestions");
+        expect(result.stdout).not.toContain("GITHUB_TOKEN");
     });
 
     test("fix --help shows the full loop explanation", async () => {
@@ -196,7 +197,7 @@ describe("CLI fix command", () => {
         expect(result.stdout).toContain("Scans for API call sites");
         expect(result.stdout).toContain("establishes a baseline snapshot");
         expect(result.stdout).toContain("Generates deterministic fixes");
-        expect(result.stdout).toContain("creates a PR");
+        expect(result.stdout).toContain("Never opens PRs");
     });
 });
 

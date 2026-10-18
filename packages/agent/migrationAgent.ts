@@ -333,10 +333,13 @@ function toWireMessages(
             messages.push({
                 role: "assistant",
                 content: entry.content || "",
+                // Round-trip opaque provider payloads (Gemini thought
+                // signatures): without them follow-up turns 400.
                 tool_calls: entry.toolCalls.map((call) => ({
                     id: call.id,
                     type: "function" as const,
                     function: { name: call.name, arguments: JSON.stringify(call.args) },
+                    ...(call.extra ?? {}),
                 })),
             });
             continue;
@@ -353,6 +356,7 @@ function parseToolCalls(raw: unknown): ToolCall[] {
         const call = item as {
             id?: unknown;
             function?: { name?: unknown; arguments?: unknown };
+            extra_content?: unknown;
         };
         if (typeof call.id !== "string") continue;
         if (typeof call.function?.name !== "string") continue;
@@ -368,7 +372,14 @@ function parseToolCalls(raw: unknown): ToolCall[] {
                 args = {};
             }
         }
-        calls.push({ id: call.id, name: call.function.name, args });
+        calls.push({
+            id: call.id,
+            name: call.function.name,
+            args,
+            ...(call.extra_content !== undefined
+                ? { extra: { extra_content: call.extra_content } }
+                : {}),
+        });
     }
     return calls;
 }

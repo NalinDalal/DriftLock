@@ -527,6 +527,22 @@ describe("changePacketFromDrift", () => {
         expect(packet.summary).toContain("Do not edit outbound");
         expect(packet.summary).toContain("Do not coerce");
     });
+
+    test("outbound drift permits request-argument edits", () => {
+        const packet = changePacketFromDrift({
+            provider: "stripe",
+            fromVersion: "captured baseline",
+            toVersion: "observed",
+            removed: ["email"],
+            added: [],
+            typeChanged: [],
+            direction: "outbound",
+        });
+
+        expect(packet.summary).toContain("outbound drift");
+        expect(packet.summary).toContain("may edit outbound request arguments");
+        expect(packet.summary).not.toContain("Do not edit outbound");
+    });
 });
 
 describe("webhook outbound coercion guard (PR #14)", () => {
@@ -570,6 +586,18 @@ describe("webhook outbound coercion guard (PR #14)", () => {
             [
                 "src/payment.js",
                 "export function handlePayment(obj) { return { chargeFrom: obj.payment_method, cents: obj.amount }; }",
+            ],
+        ]);
+
+        expect(findWebhookOutboundCoercions(webhookContract, sources)).toEqual([]);
+    });
+
+    test("does not flag amount-substring keys like total_amount", async () => {
+        const { findWebhookOutboundCoercions } = await import("@driftlock/agent");
+        const sources = new Map([
+            [
+                "payment.js",
+                "await stripe.paymentIntents.create({ total_amount: String(total), refund_amount: parseInt(x, 10) });",
             ],
         ]);
 

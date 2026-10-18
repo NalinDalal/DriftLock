@@ -8,7 +8,7 @@
 
 API providers announce changes. DriftLock applies them to your codebase.
 
-DriftLock scans your codebase for API call sites, captures vendor traffic to build shape snapshots, detects breaking changes between snapshots, and opens a PR with a suggested fix. PRs are opened via the verified migration agent (configurable via `AI_PROVIDER`: openai/gemini/cloudflare). Deterministic suggestions may still be surfaced in non-PR paths, but live PR creation is agent-only.
+DriftLock scans your codebase for API call sites, captures vendor traffic to build shape snapshots, detects breaking changes between snapshots, and opens a PR with a suggested fix. PRs are opened via the verified migration agent (outbound agent PRs via `AI_PROVIDER`: openai/gemini/cloudflare; capture and model-fix configuration additionally supports anthropic). Deterministic suggestions may still be surfaced in non-PR paths, but live PR creation is agent-only.
 
 [Website](https://driftlock.dev) · [Discord](https://discord.gg/driftlock) · [Issues](https://github.com/nerdev-co/DriftLock/issues)
 
@@ -42,7 +42,7 @@ flowchart LR
 
 ## [The problem statement](https://www.ycombinator.com/rfs)
 
-The original pitch that started DriftLock, verbatim:
+The YC Request for Startups that started DriftLock — "Self-Maintaining APIs" by Harsha Gaddipati (Slashy), quoted verbatim (the "I" below is him, not us):
 
 > Over the past year, I've worked with over 50 API vendors, mostly early-stage
 > startups. One pattern is consistent: API communication is broken.
@@ -481,4 +481,4 @@ We welcome contributions! See [CONTRIBUTING.md](./CONTRIBUTING.md) for guideline
 
 ## License
 
-MIT © [DriftLock](https://github.com/nerdev-co/DriftLock)
+MIT © [DriftLock](https://github.com/nerdev-co/DriftLock). Code is MIT; the DriftLock name and lock mark are not up for grabs — ask before reusing them outside a fork.
