@@ -4,7 +4,7 @@
 
 ## How vendors handle specs today
 
-| Vendor tier | Spec availability | Driftlock approach |
+| Vendor tier | Spec availability | DriftLock approach |
 |-------------|-------------------|--------------------|
 | Mature (Stripe, Twilio) | Official OpenAPI spec published | Can diff against published spec as secondary signal |
 | Mid-stage (most SaaS) | No spec, but versioned API | Rely entirely on inferred spec from customer usage |

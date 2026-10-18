@@ -1,4 +1,4 @@
-# Driftlock — References & Sources
+# DriftLock — References & Sources
 
 Problem statement, market signals, and inspiration sources collected during ideation.
 

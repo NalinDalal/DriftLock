@@ -8,7 +8,7 @@ Most early-stage API vendors don't publish structured changelogs. Changes show u
 
 ## Why it's separate from spec diffing
 
-Spec diffing (Driftlock's v1 approach) only detects changes to endpoints the customer already calls. It structurally cannot surface new features or endpoints the customer isn't using yet. That requires a different sensor: crawling docs, changelogs, release notes, and social media.
+Spec diffing (DriftLock's v1 approach) only detects changes to endpoints the customer already calls. It structurally cannot surface new features or endpoints the customer isn't using yet. That requires a different sensor: crawling docs, changelogs, release notes, and social media.
 
 ## If we build it later
 
