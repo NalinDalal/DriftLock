@@ -61,8 +61,25 @@ export interface DriftMigrationResult {
  * - inbound drift only (outbound request surface is never regex-touched),
  * - exactly one removed + one added field sharing a dotted parent,
  * - renames apply to dotted member reads (`obj.from`) only: bare tokens,
- *   object-literal keys (`from:`), and request arguments are left alone.
+ *   object-literal keys (`from:`), and request arguments are left alone,
+ * - the leaf name must not be a generic one (`id`, `name`, …) that a
+ *   blind repo-wide rename is far more likely to touch wrongly than right.
  */
+
+/** Leaf names too generic to rename blindly across a whole checkout. */
+const GENERIC_LEAF_NAMES: ReadonlySet<string> = new Set([
+    "id", "type", "name", "value", "data", "key", "status", "url",
+    "method", "label", "title", "object", "item", "code", "state",
+]);
+
+/** Generated trees the fallback walk never rewrites. */
+const SKIP_DIR_RE =
+    /(^|[\\/])(node_modules|\.git|dist|build|out|coverage|\.next|\.turbo|\.cache|vendor)([\\/]|$)/;
+
+/** Above this many changed files the blind rename is no longer small and
+ *  certain — abstain and leave the decision to a full agent run. */
+const MAX_DRAFT_FILES = 5;
+
 function certainRename(drift: ObservedDrift): { from: string; to: string } | null {
     if (drift.direction === "outbound") return null;
     if (drift.removed.length !== 1 || drift.added.length !== 1) return null;
@@ -74,6 +91,7 @@ function certainRename(drift: ObservedDrift): { from: string; to: string } | nul
     const from = fromPath.split(".").pop() ?? "";
     const to = toPath.split(".").pop() ?? "";
     if (!from || !to || from === to) return null;
+    if (GENERIC_LEAF_NAMES.has(from.toLowerCase())) return null;
     return { from, to };
 }
 
@@ -102,11 +120,14 @@ async function tryUnverifiedDraft(
             (file): file is string =>
                 typeof file === "string" &&
                 /\.(ts|tsx|js|jsx|mjs|cjs)$/.test(file) &&
-                !file.includes("node_modules"),
+                !SKIP_DIR_RE.test(file),
         );
     } catch {
         return null;
     }
+    // Collect the full edit set in memory first: nothing is written until
+    // the whole set passes validation below, so a rejected set never
+    // leaves the checkout partially modified.
     for (const file of entries) {
         const fullPath = join(input.repoPath, file);
         let content: string;
@@ -122,14 +143,23 @@ async function tryUnverifiedDraft(
             `.${rename.to}`,
         );
         if (fixed === content) continue;
-        try {
-            writeFileSync(fullPath, fixed);
-        } catch {
-            continue;
-        }
         changed.push({ path: file, content: fixed });
     }
     if (changed.length === 0) return null;
+    if (changed.length > MAX_DRAFT_FILES) {
+        console.warn(
+            `[DRAFT] rename ${rename.from}→${rename.to} would touch ${changed.length} files (cap ${MAX_DRAFT_FILES}); abstaining`,
+        );
+        return null;
+    }
+    for (const edit of changed) {
+        try {
+            writeFileSync(join(input.repoPath, edit.path), edit.content);
+        } catch {
+            // The publisher commits from the in-memory content, so a failed
+            // local write must not abort the draft.
+        }
+    }
 
     const paths = changed.map((f) => f.path);
     const branch = unverifiedBranch(drift);
