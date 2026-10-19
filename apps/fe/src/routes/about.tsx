@@ -33,7 +33,7 @@ export default function AboutPage() {
         "@type": "Organization",
         name: "DriftLock",
         url: "https://driftlock.dev",
-        logo: "https://driftlock.dev/logo.png",
+        logo: "https://driftlock.dev/logo.svg",
         description: "DriftLock is an API maintenance tool that scans codebases, detects vendor breaking changes, and opens GitHub fix PRs for engineering teams that maintain Stripe integrations.",
         foundingDate: "2024",
         founder: {

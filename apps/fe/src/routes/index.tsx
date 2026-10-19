@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { track } from "../lib/analytics";
 import { getMe } from "../api/client";
+import { LogoMark } from "../components/LogoMark";
 
 const SAMPLE_CODE = `import Stripe from "stripe";
 const stripe = new Stripe("sk_test_123");
@@ -383,10 +384,7 @@ export default function LandingPage() {
                                     Checks passed · Review required
                                 </span>
                                 <span className="ml-2 flex h-6 w-6 items-center justify-center border border-[var(--color-line-strong)] bg-[var(--color-surface)]">
-                                    <svg width="12" height="12" viewBox="0 0 14 14" fill="none" aria-hidden>
-                                        <rect x="3" y="6" width="8" height="6" rx="1" stroke="var(--color-ink)" strokeWidth="1.2" />
-                                        <path d="M4.5 6V4.2a2.5 2.5 0 0 1 5 0V6" stroke="var(--color-ink)" strokeWidth="1.2" />
-                                    </svg>
+                                    <LogoMark className="h-[15px] w-auto" fill="var(--color-ink)" />
                                 </span>
                             </span>
                         </div>

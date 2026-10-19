@@ -2,37 +2,8 @@ import { useEffect, useState } from "react";
 import { Link, Outlet, useLocation } from "@tanstack/react-router";
 import { getMe } from "../api/client";
 import { onToast } from "../lib/toast";
-
-function LockMark() {
-    return (
-        <span className="relative flex h-[28px] w-[28px] items-center justify-center rounded-[6px] bg-[var(--color-ink)] text-[var(--color-paper)]">
-            <svg
-                width="14"
-                height="14"
-                viewBox="0 0 14 14"
-                fill="none"
-                aria-hidden
-            >
-                <rect
-                    x="3"
-                    y="6"
-                    width="8"
-                    height="6"
-                    rx="1"
-                    stroke="white"
-                    strokeWidth="1.2"
-                />
-                <path
-                    d="M4.5 6V4.2a2.5 2.5 0 0 1 5 0V6"
-                    stroke="white"
-                    strokeWidth="1.2"
-                />
-                <circle cx="7" cy="9" r="1" fill="white" />
-            </svg>
-            <span className="absolute -top-[3px] -right-[3px] h-[7px] w-[7px] rounded-full bg-[var(--color-signal-red)] ring-2 ring-[var(--color-paper)]" />
-        </span>
-    );
-}
+import { LogoMark } from "../components/LogoMark";
+import { LogoToggle } from "../components/LogoToggle";
 
 export function NotFoundPage() {
     return (
@@ -127,7 +98,7 @@ export default function AppShell() {
                 <div className="mx-auto flex h-[60px] w-full max-w-[1080px] items-center justify-between gap-4 px-6">
                     <div className="flex items-center gap-6">
                         <Link to="/" className="flex items-center gap-2.5">
-                            <LockMark />
+                            <LogoMark className="h-7 w-auto" />
                             <span className="text-[16px] font-semibold tracking-[-0.025em] text-[var(--color-ink)]">
                                 DriftLock
                             </span>
@@ -167,14 +138,7 @@ export default function AppShell() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <button
-                            onClick={() => setDark(!dark)}
-                            aria-label="Toggle theme"
-                            className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--color-ink)] transition-colors hover:bg-[var(--color-line)]"
-                            title={dark ? "Switch to light" : "Switch to dark"}
-                        >
-                            <span className="text-[11px]">{dark ? "☀" : "☾"}</span>
-                        </button>
+                        <LogoToggle dark={dark} onToggle={() => setDark(!dark)} />
                         <nav aria-label="Primary, compact" className="flex items-center gap-0 sm:hidden">
                             <Link
                                 to="/accounts"
