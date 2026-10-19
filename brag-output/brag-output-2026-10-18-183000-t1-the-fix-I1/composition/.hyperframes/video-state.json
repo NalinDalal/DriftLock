@@ -1,0 +1,197 @@
+{
+  "version": 1,
+  "historyId": "8700be82-e6a0-4503-b83a-13ba53edae5b",
+  "currentRevision": null,
+  "pendingChanges": false,
+  "files": {
+    "AGENTS.md": {
+      "hash": "b8959699dc65f0c8650798478ff0fc01f5aa01add04b46e9bc04eca89f0fd7b8",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/b8/b8959699dc65f0c8650798478ff0fc01f5aa01add04b46e9bc04eca89f0fd7b8"
+    },
+    "CLAUDE.md": {
+      "hash": "b8959699dc65f0c8650798478ff0fc01f5aa01add04b46e9bc04eca89f0fd7b8",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/b8/b8959699dc65f0c8650798478ff0fc01f5aa01add04b46e9bc04eca89f0fd7b8"
+    },
+    "assets/sfx/impact/impactBell_heavy_000.ogg": {
+      "hash": "94b8bb5f2d43ab65e4bcc32b28562416e9bc2c51d9fd4be1e333660ee52f977f",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/94/94b8bb5f2d43ab65e4bcc32b28562416e9bc2c51d9fd4be1e333660ee52f977f"
+    },
+    "assets/sfx/interface/bong_001.ogg": {
+      "hash": "d21d0f0b782445db579d11e2506b24cd1ac9d664ee33aeaf807761aa7b6fd710",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/d2/d21d0f0b782445db579d11e2506b24cd1ac9d664ee33aeaf807761aa7b6fd710"
+    },
+    "assets/sfx/interface/drop_001.ogg": {
+      "hash": "692ee3a6f1821402ca649ff735bee9591dc4846c8098fc7d6a90fd15fa57c1af",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/69/692ee3a6f1821402ca649ff735bee9591dc4846c8098fc7d6a90fd15fa57c1af"
+    },
+    "assets/sfx/keyboard/keypress-001.wav": {
+      "hash": "7b873548c399b9aa0efbe63052fe1344c5317a9b23455b8be3523f47d434daf1",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/7b/7b873548c399b9aa0efbe63052fe1344c5317a9b23455b8be3523f47d434daf1"
+    },
+    "assets/sfx/keyboard/keypress-002.wav": {
+      "hash": "f58f93430c1ad434feb341a89b89740ccad75e7a775d778d91b7f206e0acbe8e",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/f5/f58f93430c1ad434feb341a89b89740ccad75e7a775d778d91b7f206e0acbe8e"
+    },
+    "assets/sfx/keyboard/keypress-003.wav": {
+      "hash": "d67cf9547d99fc65c815c4c68fa9181e0af71419761cbb1d1f0a10eb8491a8d2",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/d6/d67cf9547d99fc65c815c4c68fa9181e0af71419761cbb1d1f0a10eb8491a8d2"
+    },
+    "assets/sfx/keyboard/keypress-004.wav": {
+      "hash": "29e1aea1fb841a0663ce75e9d83e675ddc7ae5cef00c623bdda65a72604fde7e",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/29/29e1aea1fb841a0663ce75e9d83e675ddc7ae5cef00c623bdda65a72604fde7e"
+    },
+    "assets/sfx/keyboard/keypress-005.wav": {
+      "hash": "619eb7e26571657b76fc9e1e3d99e85c3fc2259fa91c4c45f57384a85774ac24",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/61/619eb7e26571657b76fc9e1e3d99e85c3fc2259fa91c4c45f57384a85774ac24"
+    },
+    "assets/sfx/keyboard/keypress-006.wav": {
+      "hash": "419bde001e7ed1cae63b84f60c803fb024a0254e1afe65e59d8c6d8ad4196eb7",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/41/419bde001e7ed1cae63b84f60c803fb024a0254e1afe65e59d8c6d8ad4196eb7"
+    },
+    "assets/sfx/keyboard/keypress-007.wav": {
+      "hash": "522834f471e6c2935fd1e6a28042c0864925556efbec32c36d7c7a98026d4bfc",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/52/522834f471e6c2935fd1e6a28042c0864925556efbec32c36d7c7a98026d4bfc"
+    },
+    "assets/sfx/keyboard/keypress-008.wav": {
+      "hash": "c2ab8722a81a2f1cab66cd863a09a9ec00392e2ede61362b3707a7bcc0eee506",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/c2/c2ab8722a81a2f1cab66cd863a09a9ec00392e2ede61362b3707a7bcc0eee506"
+    },
+    "assets/sfx/keyboard/keypress-009.wav": {
+      "hash": "25595c1d1e0e18aada04dce3a651dc2c499f1fbc2647c1ab0b3c4e718275b16b",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/25/25595c1d1e0e18aada04dce3a651dc2c499f1fbc2647c1ab0b3c4e718275b16b"
+    },
+    "assets/sfx/keyboard/keypress-010.wav": {
+      "hash": "3a65bf93ec554b068b0a64d11d2bb521cd54e7a9e7ef3362a670efb1e410f0dc",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/3a/3a65bf93ec554b068b0a64d11d2bb521cd54e7a9e7ef3362a670efb1e410f0dc"
+    },
+    "assets/sfx/keyboard/keypress-011.wav": {
+      "hash": "72e79b249040bff166be863dd75f5c50d6e22bf904bd7e0adab1b30941e19968",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/72/72e79b249040bff166be863dd75f5c50d6e22bf904bd7e0adab1b30941e19968"
+    },
+    "assets/sfx/keyboard/keypress-014.wav": {
+      "hash": "b2069e29be488a7e55b151ef458e3314ec8f138f6d5a34fe19189f4810cba098",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/b2/b2069e29be488a7e55b151ef458e3314ec8f138f6d5a34fe19189f4810cba098"
+    },
+    "assets/sfx/keyboard/keypress-019.wav": {
+      "hash": "9cdb32c0074eaa114f8740e80bdfc28b1b44b4c6789371e1ec872e185e92d49e",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/9c/9cdb32c0074eaa114f8740e80bdfc28b1b44b4c6789371e1ec872e185e92d49e"
+    },
+    "assets/sfx/keyboard/keypress-023.wav": {
+      "hash": "b7395018288bc4842af0983a97d790e9db84ab65dc8ae57629dc6a9ba31ff62c",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/b7/b7395018288bc4842af0983a97d790e9db84ab65dc8ae57629dc6a9ba31ff62c"
+    },
+    "assets/sfx/keyboard/keypress-027.wav": {
+      "hash": "c0376d2249a2c6d4e79d166445bb83ca6efbdcc09518b8323499644e393dd5ab",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/c0/c0376d2249a2c6d4e79d166445bb83ca6efbdcc09518b8323499644e393dd5ab"
+    },
+    "assets/sfx/keyboard/keypress-031.wav": {
+      "hash": "df5718d60529e81769597226c5bce593b3a6fd6ae7aeb9b7249754059d0c464a",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/df/df5718d60529e81769597226c5bce593b3a6fd6ae7aeb9b7249754059d0c464a"
+    },
+    "compositions/scene-fix.html": {
+      "hash": "63b2f1fa59d52fe048d499ef967493bcb31024b76c056b36026de2c8a432856f",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/63/63b2f1fa59d52fe048d499ef967493bcb31024b76c056b36026de2c8a432856f"
+    },
+    "compositions/scene-hook.html": {
+      "hash": "5ec1b134ab6bc724a820c4f09d63b5bb82058c5312bba2fe0f1c699d9eb24148",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/5e/5ec1b134ab6bc724a820c4f09d63b5bb82058c5312bba2fe0f1c699d9eb24148"
+    },
+    "compositions/scene-opener.html": {
+      "hash": "0151934a0c3afe582c707ddd7773bf820169e2ac6d5f08d9ae1b802393a84365",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/01/0151934a0c3afe582c707ddd7773bf820169e2ac6d5f08d9ae1b802393a84365"
+    },
+    "compositions/scene-outro.html": {
+      "hash": "2a160b9f4016e14cb8d1974e5818a57dddd147835e57a96104180514a52fe718",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/2a/2a160b9f4016e14cb8d1974e5818a57dddd147835e57a96104180514a52fe718"
+    },
+    "compositions/scene-problem.html": {
+      "hash": "a6c656ee11114e212de20ca46f397cc40a22fa1fe630623b3a4f32feb27d6cc4",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/a6/a6c656ee11114e212de20ca46f397cc40a22fa1fe630623b3a4f32feb27d6cc4"
+    },
+    "hyperframes.json": {
+      "hash": "6bbfdc16d6ff423f0b6338031f3501f57a6882d8371e32be02904dc6b6f9b6ae",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/6b/6bbfdc16d6ff423f0b6338031f3501f57a6882d8371e32be02904dc6b6f9b6ae"
+    },
+    "hyperframes.lock.json": {
+      "hash": "7c234fed76047f6eaf706996f2dc637b6694b6bf9eb3b8fe46f78bc55f2936b1",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/7c/7c234fed76047f6eaf706996f2dc637b6694b6bf9eb3b8fe46f78bc55f2936b1"
+    },
+    "index.html": {
+      "hash": "fa7457614dca6abdb8fa1d2c12c82ec40231720a9b1de3b8063c795329b35fb2",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/fa/fa7457614dca6abdb8fa1d2c12c82ec40231720a9b1de3b8063c795329b35fb2"
+    },
+    "meta.json": {
+      "hash": "564dd3e3bde8553488080f4110c33dea5d51570c0441e6c26e516a888f7a724a",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/56/564dd3e3bde8553488080f4110c33dea5d51570c0441e6c26e516a888f7a724a"
+    },
+    "package.json": {
+      "hash": "8736ad359e6835661a9d5cb2bac1ac7220dd5c020e45307a1724305f40aa699c",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/87/8736ad359e6835661a9d5cb2bac1ac7220dd5c020e45307a1724305f40aa699c"
+    },
+    "snapshots/contact-sheet.jpg": {
+      "hash": "735335c7662fe9f53cfdf2164b14bbe465c4555be5ebeadde1da78ee70bf6c8c",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/73/735335c7662fe9f53cfdf2164b14bbe465c4555be5ebeadde1da78ee70bf6c8c"
+    },
+    "snapshots/frame-00-at-17s.png": {
+      "hash": "31130fc39a704ad6c35bdeb4634c27487f3fa2d3b4179fd4dc3613ba0e555219",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/31/31130fc39a704ad6c35bdeb4634c27487f3fa2d3b4179fd4dc3613ba0e555219"
+    },
+    "assets/music/happy-beats-business-moves-vol-12-by-ende-dot-app.mp3": {
+      "hash": "5888d4bd2ba0119b87a94e502ae2cc401c08192945cc5e5c2f8e8a33aa47a0a1",
+      "content": "/Users/nalindalal/.cache/hyperframes/history/8700be82-e6a0-4503-b83a-13ba53edae5b/blobs/58/5888d4bd2ba0119b87a94e502ae2cc401c08192945cc5e5c2f8e8a33aa47a0a1"
+    }
+  },
+  "revisions": {},
+  "checks": {
+    "latest": {
+      "revision": null,
+      "id": "55821656-01f1-43d2-93ea-97d96db20e11"
+    },
+    "revisions": {},
+    "unversioned": [
+      {
+        "id": "55821656-01f1-43d2-93ea-97d96db20e11",
+        "scope": "project",
+        "report": "/Users/nalindalal/DriftLock/brag-output/brag-output-2026-10-18-183000-t1-the-fix-I1/composition/.hyperframes/artifacts/checks/55821656-01f1-43d2-93ea-97d96db20e11.json",
+        "metadata": {
+          "ok": true,
+          "browserSkipped": false,
+          "options": {
+            "samples": 9,
+            "atTransitions": false,
+            "maxIssues": 80,
+            "collapseStatic": true,
+            "tolerance": 2,
+            "timeout": 3000,
+            "contrast": true,
+            "strict": false,
+            "snapshots": false,
+            "browserGpuMode": "auto"
+          }
+        },
+        "createdAt": 1792330018802,
+        "contentHash": "bfcc607c0eae4540158f9532b5b46d1238f14c9f21388650517f1fe380b842df",
+        "revision": null,
+        "inputFingerprint": "713c78bbc6398903c22c99801d57baa1172523e02edb67b2bc96f1958afffbc7",
+        "inputScope": "local-project-files",
+        "attribution": "unversioned"
+      }
+    ]
+  },
+  "snapshots": {
+    "latest": null,
+    "revisions": {},
+    "unversioned": []
+  },
+  "renders": {
+    "latest": {
+      "id": "578d689a-e2a5-4a14-adec-c82f4ce36257",
+      "completedAt": 1792330179635,
+      "output": "/Users/nalindalal/DriftLock/brag-output/brag-output-2026-10-18-183000-t1-the-fix-I1/composition/renders/composition_2026-10-18_18-58-30.mp4",
+      "status": "completed",
+      "revision": null
+    },
+    "retainedRevisions": []
+  },
+  "pendingArtifactCleanup": []
+}

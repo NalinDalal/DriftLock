@@ -67,7 +67,7 @@ export default function DocsPage() {
                 <li>Scan: 10 credits. Drift detect: 20 credits. AI fix PR: 100 credits.</li>
                 <li>Starter $29/mo: 1,500 credits. Team $99/mo: 7,000 credits. Scale $299/mo: 25,000 credits.</li>
                 <li>Overage: $15 per 1,000 credits. Credits reset monthly, no rollover.</li>
-                <li>CONFIDENCE_THRESHOLD: optional, 0 to 100, default 0. Model fixes apply at confidence 60+.</li>
+                <li>CONFIDENCE_THRESHOLD: optional extra filter, 0 to 100, default 0 — drift scoring below it is skipped, with no alert and no fix. Model fixes separately require a hard minimum confidence of 60 (AI_FIX_CONFIDENCE_THRESHOLD), whatever this is set to.</li>
             </ul>
 
             <h2 className="mt-12 border-t border-[var(--color-line-strong)] pt-6 heading-section text-[var(--color-ink)]">Reading the report</h2>
@@ -75,7 +75,7 @@ export default function DocsPage() {
                 <li>Runs 1 to 3 open fix PRs while trial credits last (file, line, removed vs added fields).</li>
                 <li>Out of credits: runs stop with out_of_credits and a link to upgrade at /pricing. No silent skips.</li>
                 <li>Paid runs open mergeable PRs when verification passes, drafts when it cannot (labeled UNVERIFIED, unmergeable until marked ready).</li>
-                <li>With --json, the last stdout line is always a machine-readable summary for CI, including creditsRemaining once metering lands.</li>
+                <li>With --json, the last stdout line is always a machine-readable summary for CI: callSites, drifts, fixes, prs, baselines, pendingCapture, baselinesCommitted.</li>
             </ul>
 
             <div className="mt-10 flex flex-wrap gap-2 border-t border-[var(--color-line)] pt-6">

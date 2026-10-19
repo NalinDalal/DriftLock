@@ -42,7 +42,7 @@ Introducing DriftLock: Dependabot, but for APIs. When Stripe renames a field, it
 ## Audio direction
 - Role: warm bed with sparse professional accents
 - Music: happy-beats-business-moves-vol-12-by-ende-dot-app.mp3 (steady and clean, 109.96 BPM)
-- Music treatment: bed at 0.3 from 0s, gentle fade from 17s, out by 20s; no ducking needed (no voice)
+- Music treatment: bed at 0.3 from 0s, gentle fade from 17s, out by 17.5s (end of render); no ducking needed (no voice)
 - Music cue guidance: bundled preset read; strong cues at 8.74, 13.11, 17.47 available. Lock logo landing near 17.47 (±0.15s). PR-card arrival near 13.11. Sequential row reveals snap to every other beat (~1.1s apart) so labels stay readable.
 - Audio-reactive treatment: subtle; hero red glow and green flash breathe with RMS. No waveforms, no visualizers.
 - SFX posture: sparse, motion-matched, professional restraint
@@ -50,8 +50,8 @@ Introducing DriftLock: Dependabot, but for APIs. When Stripe renames a field, it
   - Hook line — none (let the red glow + bed carry it)
   - Code retyping — keyboard keypress ticks, randomized across keyboard/ set
   - Drift rows arriving — interface/drop_001 per row, first and last only
-  - PR card landing — impactBell_heavy_000, single hit
-  - Logo/outro — interface/bong_001, soft, then silence under the hold
+  - PR card landing — impactBell family, heavy single hit
+  - Logo/outro — impactBell family, soft hit (same family as the PR payoff), then silence under the hold
 - Restraint rule: never more than one SFX family per scene; no glitch/error sounds (nothing is broken *in* the video, the video *shows* something broken)
 
 ## Storyboard
@@ -75,8 +75,8 @@ Transition mood: soft fade-in from black → Scene 3
 ### Scene 3 — Outro — 4s (13.5–17.5)
 Lock mark draws in, "DriftLock" beneath, then held line: "APIs should maintain themselves." URL `driftlock.dev`, then explicit CTA "TRY THE BETA →" in emerald (2.9s local) — the curiosity-to-visit step. Everything holds still to 17.5 — mute-safe final frame.
 Sequential/interaction: none after the draw.
-Audio intent: resolution; bed fades 17→20s, bong rings over the fade.
-Audio-coupled idea: bong_001 at logo lock (~17.5s).
+Audio intent: resolution; bed fades 17→17.5s, a soft impactBell hit rings over the fade.
+Audio-coupled idea: soft impactBell hit at logo lock (~17.5s).
 Transition mood: none — hold to end.
 
 **Music mood for this video:** steady and clean, quietly confident.

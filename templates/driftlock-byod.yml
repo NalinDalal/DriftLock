@@ -44,10 +44,16 @@ jobs:
 
       - name: Install DriftLock CLI from source
         # @driftlock/cli is not on the npm registry yet, so bunx cannot
-        # resolve it. Clone and install until the first publish, then switch
-        # back to `bunx @driftlock/cli fix`.
+        # resolve it. Pin a single ref so upstream default-branch changes
+        # cannot break your runs — bump DRIFTLOCK_REF to pick up a newer
+        # release. After the first publish, switch to `bunx @driftlock/cli fix`.
+        env:
+          DRIFTLOCK_REF: bdee4d1104494ba0dfeaa8ce12c602f8750c4d2e # tag or commit SHA
         run: |
-          git clone --depth 1 https://github.com/nerdev-co/DriftLock.git /tmp/driftlock
+          git init -q /tmp/driftlock
+          git -C /tmp/driftlock remote add origin https://github.com/nerdev-co/DriftLock.git
+          git -C /tmp/driftlock fetch -q --depth 1 origin "$DRIFTLOCK_REF"
+          git -C /tmp/driftlock checkout -q --detach FETCH_HEAD
           cd /tmp/driftlock && bun install --frozen-lockfile
 
       - name: Detect drift and suggest fixes

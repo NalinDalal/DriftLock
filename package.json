@@ -31,6 +31,7 @@
     "typescript": "^5.3.0"
   },
   "dependencies": {
-    "@nerdev/skillset": "^0.2.7"
+    "@nerdev/skillset": "^0.2.7",
+    "hyperframes": "^0.8.171"
   }
 }

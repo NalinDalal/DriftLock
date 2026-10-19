@@ -1,0 +1,1 @@
+Introducing DriftLock: Dependabot, but for APIs. When Stripe renames a field, it rewrites your code and opens the PR. driftlock.dev

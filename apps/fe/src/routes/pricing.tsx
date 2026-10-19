@@ -23,9 +23,9 @@ export default function PricingPage() {
 
             <div className="mt-8 grid gap-4 sm:grid-cols-2">
                 <div className="border border-[var(--color-line-strong)] bg-[var(--color-ink)] p-5 text-[var(--color-paper)]">
-                    <p className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-paper)]/60">TRIAL · LIVE NOW</p>
+                    <p className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-paper)]/60">TRIAL</p>
                     <p className="mt-2 font-mono text-2xl font-semibold">$0</p>
-                    <ul className="mt-3 space-y-1.5 font-mono text-xs leading-4 text-[var(--color-paper)]/80"><li>• 300 credits free, no card, 14-day expiry</li><li>• 3 AI fix PRs to prove value</li><li>• 4th run stops with out_of_credits</li></ul>
+                    <ul className="mt-3 space-y-1.5 font-mono text-xs leading-4 text-[var(--color-paper)]/80"><li>• 300 credits free, no card, 14-day expiry</li><li>• 3 AI fix PRs to prove value</li></ul>
                     <Link to="/install" className="mt-4 inline-flex bg-[var(--color-paper)] px-4 py-2 font-mono text-xs tracking-wide text-[var(--color-ink)] hover:opacity-90 active:scale-[0.98] transition-[transform,opacity]">INSTALL GITHUB APP</Link>
                 </div>
                 <div className="border border-[var(--color-line-strong)] bg-[var(--color-surface)] p-5">
@@ -53,8 +53,7 @@ export default function PricingPage() {
                     <a href="mailto:nalin@nerdev.in?subject=DriftLock%20Enterprise%20plan" className="mt-4 inline-flex border border-[var(--color-line-strong)] bg-[var(--color-paper)] px-4 py-2 font-mono text-xs tracking-wide text-[var(--color-ink)] hover:bg-[var(--color-surface)] active:scale-[0.98] transition-[transform,background]">TALK TO US</a>
                 </div>
             </div>
-            <p className="mt-6 font-mono text-xs leading-4 text-[var(--color-muted)]">Managed models included: no API keys, nothing in repo secrets. 1 AI PR costs us ~$0.10 and sells for ~$1.50 (100 credits). Credits reset monthly, no rollover.</p>
-            <p className="mt-6 font-mono text-xs leading-4 text-[var(--color-muted)]">Billing starts at 10 active beta teams or infra over $500/mo, whichever first, with 30 days notice. First 10 design partners stay free 6 months.</p>
+            <p className="mt-6 font-mono text-xs leading-4 text-[var(--color-muted)]">Managed models included: no API keys, nothing in repo secrets. Credits reset monthly, no rollover.</p>
 
             <div className="mt-10 flex flex-wrap gap-2 border-t border-[var(--color-line)] pt-6">
                 <Link to="/features" className="border border-[var(--color-line-strong)] bg-[var(--color-ink)] px-4 py-2 font-mono text-xs tracking-wide text-[var(--color-paper)] hover:bg-[var(--color-ink)]/90">Features</Link>

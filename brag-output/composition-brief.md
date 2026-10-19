@@ -7,10 +7,10 @@ Create a short launch-style brag video for DriftLock.
 - Composition directory: `brag-output/composition/`
 - Rendered video: `brag-output/brag.mp4`
 - Format: landscape — 1920x1080
-- Duration: 20 seconds
+- Duration: 17.5 seconds
 
 ## Source Material
-- Project root: /Users/nalindalal/DriftLock
+- Project root: repository root of this checkout (`.`)
 - Primary files read: apps/fe/src/routes/index.tsx (hero: "APIs should maintain themselves", before/after PR sheet mock), apps/fe/src/styles.css (ink/mono/emerald tokens), README.md (Dependabot-but-for-APIs), apps/video/src/*.tsx (existing Remotion timing reference: red hold → delete → type → green flash)
 - Product name: DriftLock
 - Tagline / strongest claim: "APIs should maintain themselves."
@@ -23,6 +23,7 @@ Create a short launch-style brag video for DriftLock.
   - DriftLock
   - APIs should maintain themselves.
   - driftlock.dev
+  - TRY THE BETA →
 
 ## Creative Direction
 - Tone preset: polished
@@ -48,24 +49,24 @@ Create a short launch-style brag video for DriftLock.
 ## Storyboard
 Use the storyboard in `brag-output/brag-plan.md` as the creative contract.
 
-Scene summary:
-1. Hook — 3s — red code line + "Stripe renamed a field.", must be readable by 0.8s
-2. Problem — 5s — two zinc lines arriving 1.5s apart, must each hold ≥1.2s settled
-3. The fix — 8s — 3 drift rows arrive ~1.1s apart, then character-by-character retype red→green, hold green
-4. Outro — 4s — lock stroke-draw, name, tagline, URL; hold still to 20.0
+Scene summary (boundaries follow the storyboard in `brag-output/brag-plan.md`):
+1. Problem — 0.0–2.6 (2.6s) — two zinc lines ("Changelogs don't get read." / "Migration guides get skipped.") arriving ~1s apart
+2. Hook — 2.6–5.5 (2.9s) — red `paymentIntent.source` slams in with "Stripe renamed a field.", readable within ~0.8s of landing
+3. The fix — 5.5–13.5 (8s) — 3 drift rows arrive ~1.1s apart, then character-by-character retype red→green, hold green
+4. Outro — 13.5–17.5 (4s) — lock stroke-draw, name, tagline, URL, "TRY THE BETA →"; hold still to 17.5
 
 ## Audio
 - Audio role: warm bed with sparse professional accents
 - Audio arc: calm bed wall-to-wall, quiet industry mid-video (ticks + drops), two bell hits (PR + logo), fade to near-silence under the held tagline
 - Music: happy-beats-business-moves-vol-12-by-ende-dot-app.mp3 (bundled, 109.96 BPM)
-- Music treatment: bed at 0.3 from 0s, gentle fade 17→20s
+- Music treatment: bed at 0.3 from 0s, gentle fade 17→17.5s (end of render)
 - Music cue guidance: bundled preset at brag skill cues dir (vol-12 JSON); lock logo landing near 17.47 (±0.15s), PR-card arrival near 13.11; sequential rows snap to every other beat (~1.1s apart); ignore cues wherever they hurt readability
 - Audio-reactive treatment: subtle; hero red glow and green flash breathe with RMS. No waveforms or visualizers.
 - Audio-coupled moments:
   - Code retyping — keyboard keypress ticks, randomized across keyboard/ set
   - Drift rows — interface/drop_001 on first and last rows only
-  - PR card landing — impactBell_heavy_000, single hit
-  - Logo lock — interface/bong_001, soft
+  - PR card landing — impactBell family, heavy single hit
+  - Logo lock — impactBell family, soft hit (same family as the PR payoff)
 - SFX selection guidance: polished restraint; low high-frequency-risk files for repeated moments (ticks); one bell family for both payoffs so the video has a coherent sonic signature
 - SFX analysis guidance: brag skill sfx-analysis.md/json; prefer low/medium HF-risk for the repeated key ticks
 - Exact SFX choice: Hyperframes should choose filenames, timestamps, density, and volume based on the implemented animation.

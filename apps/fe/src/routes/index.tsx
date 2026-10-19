@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { track } from "../lib/analytics";
 import { getMe } from "../api/client";
@@ -207,20 +207,39 @@ function useReveal() {
     }, []);
 }
 
+function useReducedMotion(): boolean {
+    const [reduced, setReduced] = useState(false);
+    useEffect(() => {
+        const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+        setReduced(mq.matches);
+        const onChange = (e: MediaQueryListEvent) => setReduced(e.matches);
+        mq.addEventListener("change", onChange);
+        return () => mq.removeEventListener("change", onChange);
+    }, []);
+    return reduced;
+}
+
 export default function LandingPage() {
     const [mounted, setMounted] = useState(false);
     const [user, setUser] = useState<{ name: string; handle: string } | null>(null);
     useReveal();
+    const reducedMotion = useReducedMotion();
+    const videoRef = useRef<HTMLVideoElement>(null);
+    useEffect(() => {
+        const id = requestAnimationFrame(() => setMounted(true));
+        track("landing_view", { variant: "blueprint-rev01" });
+        return () => cancelAnimationFrame(id);
+    }, []);
     useEffect(() => {
         getMe()
             .then(({ user: me }) => setUser(me ?? null))
             .catch(() => setUser(null));
     }, []);
     useEffect(() => {
-        const id = requestAnimationFrame(() => setMounted(true));
-        track("landing_view", { variant: "blueprint-rev01" });
-        return () => cancelAnimationFrame(id);
-    }, []);
+        if (reducedMotion && videoRef.current) {
+            videoRef.current.pause();
+        }
+    }, [reducedMotion]);
 
     const stagger = (i: number): React.CSSProperties =>
         mounted
@@ -280,12 +299,13 @@ export default function LandingPage() {
                             </span>
                         </div>
                         <video
+                            ref={videoRef}
                             className="block aspect-video w-full border-b border-[var(--color-line-strong)] bg-[var(--color-ink)] object-cover"
                             src="/hero-loop.mp4"
                             poster="/hero-loop-poster.png"
-                            autoPlay
+                            autoPlay={!reducedMotion}
                             muted
-                            loop
+                            loop={!reducedMotion}
                             playsInline
                             preload="metadata"
                             aria-label="DriftLock renaming paymentIntent.source to paymentIntent.payment_method"

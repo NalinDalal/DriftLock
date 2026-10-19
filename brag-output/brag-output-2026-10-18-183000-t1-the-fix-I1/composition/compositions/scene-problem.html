@@ -1,0 +1,41 @@
+<!-- Scene 2 — Problem (local 0–5.4, comp 3.0–8.4). Two calm lines. -->
+<template>
+  <div data-hf-id="hf-5a27" id="problem" data-composition-id="problem" data-width="1920" data-height="1080" data-start="0" data-duration="5.0" style="width: 100%; height: 100%; position: relative;">
+    <style>
+      @font-face { font-family: "JetBrains Mono"; src: local("JetBrainsMono Nerd Font"); }
+      @font-face { font-family: "SFMono-Regular"; src: local("SFMono-Regular"); }
+      @font-face { font-family: "Instrument Serif"; src: local("Instrument Serif"); }
+      #problem .fill {
+        position: absolute; inset: 0; background: #0a0a0f;
+      }
+      #problem .center {
+        position: absolute; inset: 0;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 26px;
+      }
+      #problem .line {
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 44px; letter-spacing: 0.01em; color: #a1a1aa;
+        opacity: 0;
+      }
+    </style>
+    <div data-hf-id="hf-k1m2" class="fill" data-layout-ignore=""></div>
+    <div data-hf-id="hf-u5ny" id="problem-fade" style="position:absolute; inset:0;">
+      <div data-hf-id="hf-0oij" class="center">
+        <div data-hf-id="hf-ff7c" class="line" id="problem-l1">Changelogs don't get read.</div>
+        <div data-hf-id="hf-xkhp" class="line" id="problem-l2">Migration guides get skipped.</div>
+      </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      (function () {
+        var tl = gsap.timeline({ paused: true });
+        tl.fromTo("#problem-fade", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power1.out" }, 0);
+        tl.fromTo("#problem-l1", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.55, ease: "power2.out" }, 0.4);
+        tl.fromTo("#problem-l2", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.55, ease: "power2.out" }, 2.0);
+        window.__timelines = window.__timelines || {};
+        window.__timelines["problem"] = tl;
+      })();
+    </script>
+  </div>
+</template>

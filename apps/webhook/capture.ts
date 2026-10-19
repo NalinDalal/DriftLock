@@ -68,7 +68,9 @@ function logConfigSource(config: WebhookConfig, rowSource: "db" | "env"): void {
 /**
  * Dashboard-saved secrets (githubToken, aiApiKey) are encrypted at rest
  * with SESSION_ENC_KEY; legacy plaintext rows pass through untouched.
- * Undecryptable values stay as-is so downstream auth fails closed, loudly.
+ * Undecryptable values are dropped: an encrypted blob is not a usable
+ * credential, so getConfigValue falls back to the env var (or the usual
+ * missing-credential handling) instead of sending ciphertext downstream.
  */
 function decryptWebhookSecrets(config: WebhookConfig): WebhookConfig {
     const out = { ...config };
@@ -78,7 +80,8 @@ function decryptWebhookSecrets(config: WebhookConfig): WebhookConfig {
             try {
                 out[key] = decryptSecret(value);
             } catch {
-                console.warn(`[CONFIG] could not decrypt ${key}; using stored value as-is`);
+                console.warn(`[CONFIG] could not decrypt ${key}; removing it so the env fallback applies`);
+                delete out[key];
             }
         }
     }

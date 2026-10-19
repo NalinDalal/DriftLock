@@ -430,7 +430,7 @@ async function analyzePushInBackground(input: {
           `  [DRIFT] ${drift.callSite.method} recorded, 0 fixed`,
           ...removed.map((f) => `    removed: ${f}`),
           ...typeChanged.map((c) => `    type changed: ${c.field} (${c.from} → ${c.to})`),
-          `  Your fix is ready — set a model key to get it as a PR:`,
+          `  Your repo still reads the old fields. Set a model key and drifts become PRs:`,
           `    AI_PROVIDER=openai AI_API_KEY=sk-... (Settings → Secrets → Actions)`,
         ];
         console.log(lines.join("\n"));

@@ -16,56 +16,6 @@ interface Repo {
     description: string | null;
 }
 
-type Provider = "none" | "openai" | "anthropic" | "gemini";
-
-const PROVIDERS: Array<{ id: Provider; label: string; sub: string }> = [
-    { id: "none", label: "Deterministic", sub: "Renames, null checks, coercions. No key needed." },
-    { id: "openai", label: "OpenAI", sub: "Model fixes when confidence ≥ 60%." },
-    { id: "anthropic", label: "Anthropic", sub: "Model fixes when confidence ≥ 60%. Fixes only — agent PRs need OpenAI or Gemini." },
-    { id: "gemini", label: "Gemini", sub: "Model fixes when confidence ≥ 60%." },
-];
-
-function aiSecretFor(provider: Provider): string | null {
-    if (provider === "openai" || provider === "anthropic") return "DRIFTLOCK_AI_KEY";
-    if (provider === "gemini") return "DRIFTLOCK_AI_KEY";
-    return null;
-}
-
-const MODELS: Record<Exclude<Provider, "none">, Array<{ id: string; label: string }>> = {
-    openai: [
-        { id: "gpt-4o-mini", label: "gpt-4o-mini · cheap, default pick" },
-        { id: "gpt-4o", label: "gpt-4o · stronger" },
-        { id: "gpt-4.1", label: "gpt-4.1 · newest" },
-    ],
-    anthropic: [
-        { id: "claude-sonnet-4-20250514", label: "Sonnet 4 · default pick" },
-        { id: "claude-3-5-sonnet-20241022", label: "Sonnet 3.5 · proven" },
-        { id: "claude-3-5-haiku-20241022", label: "Haiku 3.5 · cheap" },
-    ],
-    gemini: [
-        { id: "gemini-3.8-flash", label: "3.8 Flash · default pick" },
-        { id: "gemini-3.7-flash", label: "3.7 Flash · proven" },
-        { id: "gemini-3.5-flash", label: "3.5 Flash · fallback" },
-    ],
-};
-
-const CUSTOM_MODEL = "__custom";
-
-function modelEnvFor(provider: Provider): string {
-    return provider === "gemini" ? "GEMINI_MODEL" : "AI_MODEL";
-}
-
-function applyProvider(yaml: string, provider: Provider, model: string | null): string {
-    if (provider === "none") return yaml;
-    const keyEnv = provider === "gemini" ? "GEMINI_API_KEY" : "AI_API_KEY";
-    const secret = aiSecretFor(provider) ?? "DRIFTLOCK_AI_KEY";
-    const modelLine = model ? `\n          ${modelEnvFor(provider)}: ${model}` : "";
-    return yaml.replace(
-        "          # AI_PROVIDER: openai              # openai, anthropic, or gemini\n          # AI_API_KEY: ${{ secrets.DRIFTLOCK_AI_KEY }}",
-        `          AI_PROVIDER: ${provider}\n          ${keyEnv}: \${{ secrets.${secret} }}${modelLine}`,
-    );
-}
-
 async function copy(text: string, label: string) {
     try {
         await navigator.clipboard.writeText(text);
@@ -82,28 +32,11 @@ export default function ActionsPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [repo, setRepo] = useState<Repo | null>(null);
-    const [provider, setProvider] = useState<Provider>("gemini");
-    // "" = provider default (model line omitted from the yml).
-    const [model, setModel] = useState<string>("");
-    const [customModel, setCustomModel] = useState<string>("");
     const [rawKey, setRawKey] = useState<string | null>(null);
     const [issuing, setIssuing] = useState(false);
     const [yaml, setYaml] = useState<string | null>(null);
     // Preselect after /install: /actions?repo=owner/name skips the picker.
     const { repo: preselectedFullName } = useSearch({ from: "/actions" });
-
-    function selectProvider(p: Provider) {
-        setProvider(p);
-        setModel("");
-        setCustomModel("");
-    }
-
-    /** Resolved model id, or null for the provider default. */
-    function effectiveModel(): string | null {
-        if (provider === "none") return null;
-        if (model === CUSTOM_MODEL) return customModel.trim() || null;
-        return model || null;
-    }
 
     useEffect(() => {
         document.title = "GitHub Actions | DriftLock";
@@ -151,8 +84,8 @@ export default function ActionsPage() {
             if (!res.ok) throw new Error("Failed to issue key");
             const data = (await res.json()) as { key: { raw: string } };
             setRawKey(data.key.raw);
-            track("actions_key_issued", { repo: repo.fullName, provider, model: effectiveModel() ?? "default" });
-            setStep(4);
+            track("actions_key_issued", { repo: repo.fullName });
+            setStep(3);
         } catch (err) {
             toast(err instanceof Error ? err.message : "Failed to issue key");
         } finally {
@@ -161,24 +94,23 @@ export default function ActionsPage() {
     }
 
     useEffect(() => {
-        if (step !== 4 || !repo) return;
+        if (step !== 3 || !repo) return;
         fetch(`${API_URL}/api/templates/actions`)
             .then((res) => {
                 if (!res.ok) throw new Error("Failed to load template");
                 return res.json();
             })
             .then((data: { yaml: string }) => {
-                const chosen = provider === "none" ? null : model === CUSTOM_MODEL ? customModel.trim() || null : model || null;
-                const filled = applyProvider(data.yaml, provider, chosen)
+                const filled = data.yaml
                     .replaceAll("__OWNER__", repo.owner)
                     .replaceAll("__REPO__", repo.name)
                     .replaceAll("__BRANCH__", repo.defaultBranch || "main")
                     .replaceAll("__API_URL__", API_URL || DEFAULT_API_URL);
                 setYaml(filled);
-                track("actions_yaml_viewed", { repo: repo.fullName, provider, model: chosen ?? "default" });
+                track("actions_yaml_viewed", { repo: repo.fullName });
             })
             .catch(() => setYaml(null));
-    }, [step, repo, provider, model, customModel]);
+    }, [step, repo]);
 
     if (loading) {
         return (
@@ -201,24 +133,20 @@ export default function ActionsPage() {
         );
     }
 
-    const aiSecret = aiSecretFor(provider);
-
     return (
         <div className="-mx-6 -mt-8">
             <div className="border-b border-[var(--color-line-strong)] bg-[var(--color-paper)]">
                 <div className="mx-auto max-w-[1080px] px-6 pt-10 pb-8 sm:pt-14 sm:pb-10">
                     <p className="font-mono text-[11px] tracking-[0.14em] text-[var(--color-muted)]">
-                        CONNECT · STEP {Math.min(step, 4)} OF 4 · RUNS ON YOUR RUNNERS
+                        CONNECT · STEP {Math.min(step, 3)} OF 3 · RUNS ON YOUR RUNNERS
                     </p>
                     <h1 className="display mt-4 max-w-[640px] text-[var(--color-ink)]">
                         {step === 2 && "Which repo do we protect?"}
-                        {step === 3 && "Model fixes, or deterministic?"}
-                        {step === 4 && "Paste two secrets, push one file."}
+                        {step === 3 && "Paste one secret, push one file."}
                     </h1>
                     <p className="mt-4 max-w-[520px] font-mono text-[13px] leading-5 text-[var(--color-ink)]/80">
                         {step === 2 && "Detection runs on GitHub Actions in your repo. Your code never leaves your infrastructure."}
-                        {step === 3 && "Deterministic fixes are free forever. Model fixes need your own AI key. It stays in your repo secrets, never on our servers."}
-                        {step === 4 && "This key is shown once. After this screen it exists only as a hash."}
+                        {step === 3 && "Models are managed and included in your credits — there is no AI key to add. This DriftLock key is shown once; after this screen it exists only as a hash."}
                     </p>
                 </div>
             </div>
@@ -252,64 +180,20 @@ export default function ActionsPage() {
                 )}
 
                 {step === 3 && repo && (
-                    <div>
+                    <div className="flex flex-col gap-6">
                         <p className="font-mono text-xs text-[var(--color-muted)]">
                             PROTECTING <span className="text-[var(--color-ink)]">{repo.fullName}</span>
                             <button onClick={() => setStep(2)} className="ml-3 underline underline-offset-2">CHANGE</button>
                         </p>
-                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                            {PROVIDERS.map((p) => (
-                                <button
-                                    key={p.id}
-                                    type="button"
-                                    onClick={() => selectProvider(p.id)}
-                                    className={`border p-5 text-left transition-[transform,background] active:scale-[0.99] ${provider === p.id ? "border-[var(--color-line-strong)] bg-[var(--color-paper)] shadow-[3px_3px_0_var(--color-line-strong)]" : "border-[var(--color-line-strong)] bg-[var(--color-surface)] hover:bg-[var(--color-paper)]"}`}
-                                >
-                                    <p className="font-mono text-sm font-semibold text-[var(--color-ink)]">{p.label}</p>
-                                    <p className="mt-1 font-mono text-xs text-[var(--color-muted)]">{p.sub}</p>
-                                </button>
-                            ))}
-                        </div>
-                        {provider !== "none" && (
-                            <div className="mt-4 border border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-3">
-                                <label htmlFor="dl-model" className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-muted)]">
-                                    MODEL · BAKED INTO THE YML AS {modelEnvFor(provider)}
-                                </label>
-                                <select
-                                    id="dl-model"
-                                    value={model}
-                                    onChange={(e) => setModel(e.target.value)}
-                                    className="mt-2 w-full border border-[var(--color-line-strong)]/15 bg-[var(--color-paper)] px-3 py-2 font-mono text-xs text-[var(--color-ink)]"
-                                >
-                                    <option value="">Provider default (recommended)</option>
-                                    {MODELS[provider].map((m) => (
-                                        <option key={m.id} value={m.id}>{m.label}</option>
-                                    ))}
-                                    <option value={CUSTOM_MODEL}>Custom…</option>
-                                </select>
-                                {model === CUSTOM_MODEL && (
-                                    <input
-                                        value={customModel}
-                                        onChange={(e) => setCustomModel(e.target.value)}
-                                        placeholder="e.g. gpt-4o-mini"
-                                        spellCheck={false}
-                                        className="mt-2 w-full border border-[var(--color-line-strong)]/15 bg-[var(--color-paper)] px-3 py-2 font-mono text-xs text-[var(--color-ink)] placeholder:text-[var(--color-muted)]"
-                                    />
-                                )}
-                            </div>
+                        {!rawKey && (
+                            <button
+                                onClick={issueKey}
+                                disabled={issuing}
+                                className="self-start bg-[var(--color-ink)] px-6 py-2.5 font-mono text-xs tracking-wide text-[var(--color-paper)] transition-[transform,background] hover:bg-[var(--color-ink)]/90 active:scale-[0.98] disabled:opacity-40"
+                            >
+                                {issuing ? "ISSUING…" : "ISSUE KEY AND CONTINUE →"}
+                            </button>
                         )}
-                        <button
-                            onClick={issueKey}
-                            disabled={issuing || (model === CUSTOM_MODEL && !customModel.trim())}
-                            className="mt-6 bg-[var(--color-ink)] px-6 py-2.5 font-mono text-xs tracking-wide text-[var(--color-paper)] transition-[transform,background] hover:bg-[var(--color-ink)]/90 active:scale-[0.98] disabled:opacity-40"
-                        >
-                            {issuing ? "ISSUING…" : "ISSUE KEY AND CONTINUE →"}
-                        </button>
-                    </div>
-                )}
-
-                {step === 4 && repo && (
-                    <div className="flex flex-col gap-6">
                         {rawKey && (
                             <div className="border border-[var(--color-signal-red)]/30 bg-[var(--color-red-bg)] px-4 py-3">
                                 <p className="font-mono text-[11px] font-semibold tracking-[0.08em] text-[var(--color-signal-red)]">
@@ -329,33 +213,36 @@ export default function ActionsPage() {
                             </div>
                         )}
 
-                        <div>
-                            <p className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-muted)]">1 · ADD SECRETS: REPO → SETTINGS → SECRETS → ACTIONS</p>
-                            <div className="mt-2 border border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-3 font-mono text-xs leading-6 text-[var(--color-ink)]">
-                                <p>DRIFTLOCK_API_KEY <span className="text-[var(--color-muted)]">= the key above (required)</span></p>
-                                {aiSecret && (
-                                    <p>{aiSecret} <span className="text-[var(--color-muted)]">= your {provider} key (model fixes)</span></p>
-                                )}
+                        {rawKey && (
+                            <div>
+                                <p className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-muted)]">1 · ADD SECRET: REPO → SETTINGS → SECRETS → ACTIONS</p>
+                                <div className="mt-2 border border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-3 font-mono text-xs leading-6 text-[var(--color-ink)]">
+                                    <p>DRIFTLOCK_API_KEY <span className="text-[var(--color-muted)]">= the key above (required)</span></p>
+                                </div>
                             </div>
-                        </div>
+                        )}
 
-                        <div>
-                            <div className="flex items-center justify-between">
-                                <p className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-muted)]">2 · SAVE AS .github/workflows/driftlock.yml</p>
-                                {yaml && (
-                                    <button onClick={() => copy(yaml, "Workflow")} className="border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-3 py-1 font-mono text-[11px] tracking-wide text-[var(--color-ink)] hover:bg-[var(--color-paper)]">
-                                        COPY YAML
-                                    </button>
-                                )}
+                        {rawKey && (
+                            <div>
+                                <div className="flex items-center justify-between">
+                                    <p className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-muted)]">2 · SAVE AS .github/workflows/driftlock.yml</p>
+                                    {yaml && (
+                                        <button onClick={() => copy(yaml, "Workflow")} className="border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-3 py-1 font-mono text-[11px] tracking-wide text-[var(--color-ink)] hover:bg-[var(--color-paper)]">
+                                            COPY YAML
+                                        </button>
+                                    )}
+                                </div>
+                                <pre className="mt-2 max-h-[420px] overflow-auto border border-[var(--color-line-strong)] bg-[var(--color-ink)] p-4 font-mono text-[11px] leading-5 text-[var(--color-paper)]">
+                                    {yaml ?? "LOADING TEMPLATE…"}
+                                </pre>
                             </div>
-                            <pre className="mt-2 max-h-[420px] overflow-auto border border-[var(--color-line-strong)] bg-[var(--color-ink)] p-4 font-mono text-[11px] leading-5 text-[var(--color-paper)]">
-                                {yaml ?? "LOADING TEMPLATE…"}
-                            </pre>
-                        </div>
+                        )}
 
-                        <p className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-muted)]">
-                            3 · PUSH. DETECTION RUNS ON EVERY PUSH TO {repo.defaultBranch.toUpperCase()}, FIX ARRIVES AS A PR
-                        </p>
+                        {rawKey && (
+                            <p className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-muted)]">
+                                3 · PUSH. DETECTION RUNS ON EVERY PUSH TO {repo.defaultBranch.toUpperCase()}, FIX ARRIVES AS A PR
+                            </p>
+                        )}
                     </div>
                 )}
             </div>
