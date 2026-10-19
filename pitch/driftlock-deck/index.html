@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DriftLock · APIs should maintain themselves</title>
+<link rel="stylesheet" href="assets/fonts.css">
+<link rel="stylesheet" href="assets/base.css">
+<link rel="stylesheet" href="assets/animations/animations.css">
+<link rel="stylesheet" href="assets/themes/driftlock.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="tpl-driftlock" data-logo="logo.svg" data-logo-position="top-left" data-logo-size="44px">
+<div class="deck">
+
+  <!-- 1. Cover -->
+  <section class="slide cover" data-title="Cover">
+    <div class="cover-grid"></div>
+    <div style="position:absolute;top:72px;left:112px;z-index:2">
+      <span class="brand-dot"></span><span class="brand">DriftLock</span>
+    </div>
+    <p class="kicker anim-fade-up" data-anim="fade-up">Client pitch · Stripe first</p>
+    <h1 class="h1 anim-fade-up" data-anim="fade-up" style="animation-delay:120ms">APIs<br>should maintain<br>themselves.</h1>
+    <p class="lede anim-fade-up mt-l" data-anim="fade-up" style="animation-delay:260ms">When a vendor ships a breaking change, DriftLock scans your codebase, finds every affected call site, and opens a PR with the fix. Nothing merges without you.</p>
+    <div class="row mt-x gap-3 anim-fade-up" data-anim="fade-up" style="animation-delay:400ms">
+      <span class="pill pill-accent">Dependabot, but for APIs</span>
+      <span class="pill">Free in beta · driftlock.dev</span>
+    </div>
+    <div class="deck-footer"><span>DriftLock · Client Deck v1</span><span class="slide-number" data-current="1" data-total="10"></span></div>
+  </section>
+
+  <!-- 2. Problem -->
+  <section class="slide" data-title="The Problem">
+    <span class="section-num">01</span>
+    <p class="num-tag">PROBLEM</p>
+    <h2 class="h2 mt-s">Vendors change APIs<br>under you. You pay.</h2>
+    <div class="grid g3 mt-l">
+      <div class="card"><h4 class="driftlock-red">Breaking changes ship silent</h4><p class="dim">Changelogs go unread. Migration guides get skipped. Semver is a convention, not a guarantee.</p></div>
+      <div class="card"><h4 class="driftlock-amber">The cost lands on you</h4><p class="dim">$2,300/mo leaked for 11 months from one missed Stripe webhook field. The dashboard looked normal.</p></div>
+      <div class="card"><h4 class="driftlock-red">Mocked tests can't catch it</h4><p class="dim">Most tests mock the vendor response. DriftLock classifies real vs mocked traffic — only real traffic reveals drift.</p></div>
+    </div>
+    <p class="lede mt-x" style="max-width:64ch">I lived this: Prisma 7 broke my Next.js app right before interviews. Dependabot said "out of date" but never touched the code. That gap is DriftLock.</p>
+    <div class="deck-footer"><span>01 · The Problem</span><span class="slide-number" data-current="2" data-total="10"></span></div>
+  </section>
+
+  <!-- 3. Solution -->
+  <section class="slide" data-title="The Solution">
+    <span class="section-num">02</span>
+    <p class="num-tag">SOLUTION</p>
+    <h2 class="h2 mt-s">Self-maintaining APIs.<br>Dependabot, but for APIs.</h2>
+    <div class="row mt-l gap-4">
+      <div class="fill card">
+        <p class="eyebrow">Outbound — APIs you call</p>
+        <h4>Scans every call site</h4>
+        <p class="dim mt-s">Static analysis finds <span class="driftlock-emerald">stripe.charges.create</span>, <span class="driftlock-emerald">stripe.refunds.create</span> and resolves each to an endpoint + HTTP method.</p>
+      </div>
+      <div class="fill card">
+        <p class="eyebrow">Inbound — webhooks you receive</p>
+        <h4>Flattens + diffs payloads</h4>
+        <p class="dim mt-s">Webhook payloads flattened to dot notation, stored per endpoint + event type, diffed for added / removed / type-changed fields.</p>
+      </div>
+    </div>
+    <div class="mt-x card" style="background:color-mix(in srgb,var(--accent) 8%,transparent);border:1px solid var(--border-strong)">
+      <p class="eyebrow mt-0">The move</p>
+      <h4 class="mt-s">Drift detected → fix suggested → PR opened.</h4>
+      <p class="dim mt-s">No vendor cooperation needed. We infer the API contract from your own code and sandbox runs — start with any vendor, immediately.</p>
+    </div>
+    <div class="deck-footer"><span>02 · The Solution</span><span class="slide-number" data-current="3" data-total="10"></span></div>
+  </section>
+
+  <!-- 4. How it works -->
+  <section class="slide" data-title="How it works">
+    <span class="section-num">03</span>
+    <p class="num-tag">HOW IT WORKS</p>
+    <h2 class="h2 mt-s">Four steps. One PR.</h2>
+    <div class="grid g4 mt-l">
+      <div class="step"><div class="step-num">01</div><h4>Scan</h4><p class="dim">AST finds every vendor call site in your repo.</p></div>
+      <div class="step"><div class="step-num">02</div><h4>Capture</h4><p class="dim">Sandbox proxy records real request/response shapes.</p></div>
+      <div class="step"><div class="step-num">03</div><h4>Diff</h4><p class="dim">Added, removed, type-changed — scored 0–100 confidence.</p></div>
+      <div class="step step-accent"><div class="step-num">04</div><h4>Fix PR</h4><p class="dim">Deterministic rename/null-check; PR via GitHub API.</p></div>
+    </div>
+    <p class="dim mt-x" style="max-width:60ch">Preview with <span class="mono">driftlock fix --dry-run</span>. Nothing is merged without your review.</p>
+    <div class="deck-footer"><span>03 · How it works</span><span class="slide-number" data-current="4" data-total="10"></span></div>
+  </section>
+
+  <!-- 5. Product demo (before/after) -->
+  <section class="slide" data-title="Product demo">
+    <span class="section-num">04</span>
+    <p class="num-tag">PRODUCT</p>
+    <h2 class="h2 mt-s">Stripe renamed <span class="driftlock-red">source</span> →<br><span class="driftlock-emerald">payment_method</span>.</h2>
+    <div class="grid g2 mt-x">
+      <div class="card diff-card diff-before">
+        <div class="diff-label">BEFORE · YOUR CODE</div>
+        <pre class="mono code"><span class="ln">144</span><span class="code-text">await stripe.charges.create({</span></pre>
+        <pre class="mono code"><span class="ln">145</span><span class="code-text">&nbsp;&nbsp;amount: 2000,</span></pre>
+        <pre class="mono code del"><span class="ln">146</span><span class="code-text">&nbsp;&nbsp;source: "tok_visa"</span></pre>
+        <pre class="mono code"><span class="ln">147</span><span class="code-text">});</span></pre>
+        <div class="diff-note mt-s"><span class="chip chip-red">− source</span> removed by Stripe</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="card diff-card diff-after">
+        <div class="diff-label">AFTER · PR BY DRIFTLOCK</div>
+        <pre class="mono code"><span class="ln">144</span><span class="code-text">await stripe.charges.create({</span></pre>
+        <pre class="mono code"><span class="ln">145</span><span class="code-text">&nbsp;&nbsp;amount: 2000,</span></pre>
+        <pre class="mono code add"><span class="ln">146</span><span class="code-text">&nbsp;&nbsp;payment_method: "pm_123"</span></pre>
+        <pre class="mono code"><span class="ln">147</span><span class="code-text">});</span></pre>
+        <div class="diff-note mt-s"><span class="chip chip-emerald">+ payment_method</span> · 1 file changed · confidence 84%</div>
+      </div>
+    </div>
+    <div class="deck-footer"><span>04 · Product demo</span><span class="slide-number" data-current="5" data-total="10"></span></div>
+  </section>
+
+  <!-- 6. Two surfaces -->
+  <section class="slide" data-title="Two surfaces">
+    <span class="section-num">05</span>
+    <p class="num-tag">TWO SURFACES</p>
+    <h2 class="h2 mt-s">Outbound calls. Inbound<br>webhooks. One pipeline.</h2>
+    <div class="grid g2 mt-l">
+      <div class="card surface-outbound">
+        <h4 class="driftlock-emerald">OUTBOUND · APIs you call</h4>
+        <ul class="mt-s space-y-2 pl-4 font-mono text-xs leading-5 text-[var(--text-2)]">
+          <li>stripe.charges.create, stripe.refunds.create</li>
+          <li>POST /v1/charges — endpoint inferred</li>
+          <li>Fix edits request arguments</li>
+        </ul>
+      </div>
+      <div class="card surface-inbound">
+        <h4 class="driftlock-amber">INBOUND · webhooks you receive</h4>
+        <ul class="mt-s space-y-2 pl-4 font-mono text-xs leading-5 text-[var(--text-2)]">
+          <li>payment_intent.succeeded payload</li>
+          <li>data.amount → "number" flattened</li>
+          <li>Fix edits payload readers only</li>
+        </ul>
+      </div>
+    </div>
+    <p class="lede mt-x" style="max-width:64ch">A drift in one surface never authorizes an edit to the other. Separate contracts, same PR model.</p>
+    <div class="deck-footer"><span>05 · Two surfaces</span><span class="slide-number" data-current="6" data-total="10"></span></div>
+  </section>
+
+  <!-- 7. Why not Renovate / Dependabot -->
+  <section class="slide" data-title="Why not Renovate / Dependabot">
+    <span class="section-num">06</span>
+    <p class="num-tag">DIFFERENTIATOR</p>
+    <h2 class="h2 mt-s">They bump versions.<br>We migrate code.</h2>
+    <div class="grid g2 mt-l">
+      <div class="card card-dark">
+        <p class="eyebrow driftlock-text-2">Renovate / Dependabot</p>
+        <h4>Bumps the version in package.json</h4>
+        <ul class="mt-s space-y-1.5 font-mono text-xs leading-4 text-[var(--text-2)]">
+          <li>• Avoid upgrades</li>
+          <li>• Grep, miss one</li>
+          <li>• Copy guide by hand</li>
+          <li>• Weeks, so you postpone</li>
+        </ul>
+        <p class="mt-s border-t border-[var(--border-strong)] pt-2 font-mono text-[11px] text-[var(--bad)]">Result: stuck</p>
+      </div>
+      <div class="card card-accent">
+        <p class="eyebrow driftlock-emerald">DriftLock</p>
+        <h4 class="driftlock-emerald">Migrates the call site, opens the PR</h4>
+        <ul class="mt-s space-y-1.5 font-mono text-xs leading-4 text-[var(--text-1)]/90">
+          <li class="text-[var(--text-1)]/90">• Every call found</li>
+          <li class="text-[var(--text-1)]/90">• Fix generated</li>
+          <li class="text-[var(--text-1)]/90">• PR opened</li>
+          <li class="text-[var(--text-1)]/90">• Minutes, not weeks</li>
+        </ul>
+        <p class="mt-s border-t border-white/15 pt-2 font-mono text-[11px] text-[var(--accent)]/90">Result: current</p>
+      </div>
+    </div>
+    <div class="deck-footer"><span>06 · Differentiator</span><span class="slide-number" data-current="7" data-total="10"></span></div>
+  </section>
+
+  <!-- 8. Market & vendors -->
+  <section class="slide" data-title="Market & vendors">
+    <span class="section-num">07</span>
+    <p class="num-tag">MARKET</p>
+    <h2 class="h2 mt-s">Stripe first. Twilio<br>and Shopify next.</h2>
+    <div class="grid g3 mt-l">
+      <div class="metric"><div class="n driftlock-emerald">#1</div><div class="l">first vendor — Stripe, mature test mode</div></div>
+      <div class="metric"><div class="n driftlock-amber">0</div><div class="l">vendor cooperation needed — we infer from your code</div></div>
+      <div class="metric"><div class="n driftlock-red">30%</div><div class="l">of AWS downtime from unnoticed API changes (YC RFS)</div></div>
+    </div>
+    <p class="lede mt-x" style="max-width:64ch">Target: TypeScript / JavaScript teams running Stripe checkout and billing. Fintech, marketplaces, B2B SaaS, developer tools.</p>
+    <div class="row mt-x gap-3">
+      <span class="pill">TypeScript · JavaScript</span>
+      <span class="pill">GitHub App · CLI</span>
+      <span class="pill">OpenAI · Anthropic · Gemini · Cloudflare</span>
+    </div>
+    <div class="deck-footer"><span>07 · Market & vendors</span><span class="slide-number" data-current="8" data-total="10"></span></div>
+  </section>
+
+  <!-- 9. Business model -->
+  <section class="slide" data-title="Business model">
+    <span class="section-num">08</span>
+    <p class="num-tag">BUSINESS MODEL</p>
+    <h2 class="h2 mt-s">Free in beta. Credits after.</h2>
+    <div class="grid g3 mt-l">
+      <div class="card card-dark">
+        <p class="eyebrow driftlock-text-2">TRIAL</p>
+        <p class="mono" style="font-size:48px;font-weight:900">$0</p>
+        <ul class="mt-s space-y-1.5 font-mono text-xs leading-4 text-[var(--text-2)]">
+          <li>• 300 credits free, no card</li>
+          <li>• 3 AI fix PRs to prove value</li>
+        </ul>
+      </div>
+      <div class="card card-accent">
+        <p class="eyebrow driftlock-emerald">TEAM · most popular</p>
+        <p class="mono driftlock-emerald" style="font-size:48px;font-weight:900">$99</p><span class="driftlock-text-2" style="font-size:16px">/mo</span>
+        <ul class="mt-s space-y-1.5 font-mono text-xs leading-4 text-[var(--text-1)]/90">
+          <li class="text-[var(--text-1)]/90">• 7,000 credits/mo · ~70 AI PRs</li>
+          <li class="text-[var(--text-1)]/90">• Up to 5 private repos</li>
+        </ul>
+      </div>
+      <div class="card card-dark">
+        <p class="eyebrow driftlock-text-2">SCALE</p>
+        <p class="mono" style="font-size:48px;font-weight:900">$299</p><span class="driftlock-text-2" style="font-size:16px">/mo</span>
+        <ul class="mt-s space-y-1.5 font-mono text-xs leading-4 text-[var(--text-2)]">
+          <li>• 25,000 credits/mo · ~250 AI PRs</li>
+          <li>• Up to 20 repos · priority models</li>
+        </ul>
+      </div>
+    </div>
+    <p class="dim mt-x" style="max-width:64ch">1 AI fix PR = 100 credits. Managed models included — no API keys, nothing in repo secrets.</p>
+    <div class="deck-footer"><span>08 · Business model</span><span class="slide-number" data-current="9" data-total="10"></span></div>
+  </section>
+
+  <!-- 10. Ask / CTA -->
+  <section class="slide cover tc" data-title="Ask">
+    <div class="cover-grid"></div>
+    <div style="z-index:2">
+      <h1 class="h1 anim-fade-up" data-anim="fade-up">Install the GitHub App.<br>Review the PRs.<br>Ship current code.</h1>
+      <p class="lede anim-fade-up mt-l" data-anim="fade-up" style="animation-delay:120ms">DriftLock makes APIs self-maintaining. Detect vendor drift, prove the impact, open the fix PR.</p>
+      <div class="row mt-x gap-3 justify-center anim-fade-up" data-anim="fade-up" style="animation-delay:260ms">
+        <a href="https://driftlock.dev/install" class="btn btn-accent">INSTALL GITHUB APP</a>
+        <a href="https://driftlock.dev" class="btn btn-outline">VIEW DASHBOARD</a>
+      </div>
+      <p class="dim mt-x">driftlock.dev · discord.gg/driftlock · nalin@nerdev.in · github.com/nerdev-co/DriftLock</p>
+    </div>
+    <div class="deck-footer"><span>DriftLock · Client Deck v1</span><span class="slide-number" data-current="10" data-total="10"></span></div>
+  </section>
+
+</div>
+<script src="assets/runtime.js"></script>
+</body></html>

@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Driftlock logo</title>
+<style>
+  body{margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;
+    background:var(--dl-bg);color:var(--dl-logo);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;transition:background-color .5s,color .5s}
+  nav{position:absolute;top:0;left:0;padding:18px 24px}
+  p{margin:0;opacity:.8;font-size:14px}
+</style>
+</head>
+<body>
+  <!-- Small logo in a navbar -->
+  <nav><button data-driftlock-logo style="--dl-size:40px" aria-label="Toggle theme"></button></nav>
+
+  <!-- Large logo -->
+  <button data-driftlock-logo style="--dl-size:220px;margin-top:120px" aria-label="Toggle theme"></button>
+
+  <script>
+/*!
+ * Driftlock logo - clickable theme toggle with plane fly-out animation.
+ * Usage:   add a button with the attribute data-driftlock-logo, then load this file with a script tag.
+ * The script sets <html data-theme="dark|light">, remembers the choice in localStorage,
+ * and exposes CSS variables --dl-bg / --dl-logo for your own styling.
+ */
+(function () {
+  var LOGO = {"w": 288, "h": 366, "pcx": 143.5, "pcy": 246.5, "lock": "M102.0 40.0 L87.0 50.0 L75.0 62.0 L69.0 70.0 L63.0 81.0 L63.0 83.0 L58.0 94.0 L57.0 102.0 L56.0 103.0 L56.0 108.0 L55.0 109.0 L55.0 147.0 L54.0 148.0 L30.0 148.0 L30.0 298.0 L41.0 302.0 L44.0 302.0 L47.0 304.0 L47.0 318.0 L241.0 318.0 L241.0 304.0 L244.0 302.0 L258.0 298.0 L258.0 149.0 L257.0 148.0 L234.0 148.0 L233.0 147.0 L233.0 111.0 L232.0 110.0 L232.0 104.0 L231.0 103.0 L230.0 95.0 L225.0 81.0 L216.0 66.0 L202.0 51.0 L186.0 40.0 L184.0 40.0 L177.0 36.0 L168.0 33.0 L159.0 32.0 L158.0 31.0 L137.0 30.0 L136.0 31.0 L129.0 31.0 L124.0 33.0 L120.0 33.0 L111.0 36.0 L104.0 40.0Z M99.0 93.0 L103.0 87.0 L111.0 79.0 L120.0 73.0 L130.0 69.0 L139.0 68.0 L140.0 67.0 L148.0 67.0 L149.0 68.0 L158.0 69.0 L168.0 73.0 L177.0 79.0 L187.0 90.0 L193.0 102.0 L194.0 109.0 L195.0 110.0 L195.0 147.0 L194.0 148.0 L93.0 148.0 L92.0 147.0 L92.0 115.0 L93.0 114.0 L94.0 105.0Z", "plane": "M32.0 297.0 L32.0 299.0 L47.0 303.0 L138.0 257.0 L139.0 258.0 L139.0 318.0 L149.0 318.0 L149.0 258.0 L151.0 257.0 L163.0 263.0 L165.0 265.0 L241.0 303.0 L255.0 299.0 L254.0 296.0 L158.0 233.0 L158.0 200.0 L157.0 199.0 L157.0 194.0 L153.0 182.0 L151.0 179.0 L146.0 175.0 L140.0 176.0 L135.0 182.0 L132.0 189.0 L132.0 193.0 L130.0 199.0 L130.0 208.0 L129.0 209.0 L129.0 233.0 L108.0 248.0 L105.0 249.0 L76.0 269.0 L73.0 270.0 L41.0 292.0Z M152.0 327.0 L152.0 345.0 L177.0 352.0 L177.0 345.0Z M141.0 327.0 L115.0 345.0 L115.0 352.0 L140.0 345.0 L141.0 344.0Z", "dark": {"bg": "#0a0a0f", "logo": "#10b981"}, "light": {"bg": "#f8f8f9", "logo": "#0a0a0f"}};
+  var FLIGHT = 1.2, EXIT_T = 1.0, ANGLE = Math.PI / 4, SVGNS = "http://www.w3.org/2000/svg", uid = 0; // 45deg = north-east
+
+  // D = flight distance in SVG units. exitPose: plane flies NORTH-EAST out of the lock.
+  // returnPose: plane arrives from the SOUTH-WEST flying north-east and settles into the lock.
+  function makePoses(D) {
+    function exitPose(t) {
+      var u = Math.max(t, 0), d = D * Math.pow(u, 1.9);
+      var k = Math.min(u / 0.4, 1), rot = 45 * (1 - Math.pow(1 - k, 3));
+      var op = u < 0.95 ? 1 : Math.max(0, 1 - (u - 0.95) / 0.2);
+      return { dx: d * Math.cos(ANGLE), dy: -d * Math.sin(ANGLE), rot: rot, op: op };
+    }
+    function returnPose(t) {
+      var p = exitPose(FLIGHT - Math.max(0, t));
+      return { dx: -p.dx, dy: -p.dy, rot: p.rot, op: p.op };
+    }
+    return { exitPose: exitPose, returnPose: returnPose };
+  }
+  var exitPose = makePoses(900).exitPose;
+
+  var css = document.createElement("style");
+  css.textContent =
+    'html[data-theme="dark"]{--dl-bg:' + LOGO.dark.bg + ';--dl-logo:' + LOGO.dark.logo + '}' +
+    'html[data-theme="light"]{--dl-bg:' + LOGO.light.bg + ';--dl-logo:' + LOGO.light.logo + '}' +
+    '::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}' +
+    '[data-driftlock-logo]{background:none;border:0;padding:0;cursor:pointer;position:relative;display:inline-block;' +
+    'width:var(--dl-size,64px);aspect-ratio:' + LOGO.w + '/' + LOGO.h + ';-webkit-tap-highlight-color:transparent;overflow:visible}' +
+    '[data-driftlock-logo] .dl-float{width:100%;height:100%;animation:dl-lev 3s ease-in-out infinite}' +
+    '[data-driftlock-logo] svg{width:100%;height:100%;overflow:visible;display:block}' +
+    '.dl-lock{fill:var(--dl-logo);transition:fill .5s}.dl-in{fill:var(--dl-bg);transition:fill .5s}.dl-out,.dl-trail{fill:var(--dl-logo);transition:fill .5s}' +
+    '@keyframes dl-lev{0%,100%{transform:translateY(0)}50%{transform:translateY(-6%)}}' +
+    '@keyframes dl-rip{from{transform:translate(-50%,-50%) scale(.2);opacity:.9}to{transform:translate(-50%,-50%) scale(1);opacity:0}}' +
+    '.dl-ripple{position:fixed;width:56px;height:56px;border:2px solid var(--dl-logo);border-radius:50%;pointer-events:none;z-index:9999;animation:dl-rip .6s ease-out forwards}' +
+    '@media (prefers-reduced-motion:reduce){[data-driftlock-logo] .dl-float{animation:none}}';
+  document.head.appendChild(css);
+
+  var root = document.documentElement, busy = false, instances = [];
+  var saved = null; try { saved = localStorage.getItem("driftlock-theme"); } catch (e) {}
+  root.dataset.theme = saved || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+  function setTheme(n) { root.dataset.theme = n; try { localStorage.setItem("driftlock-theme", n); } catch (e) {} }
+
+  function el(n, a, p) { var e = document.createElementNS(SVGNS, n); for (var k in a) e.setAttribute(k, a[k]); if (p) p.appendChild(e); return e; }
+
+  function build(btn) {
+    var id = "dl" + (++uid), wrap = document.createElement("div"); wrap.className = "dl-float";
+    var svg = el("svg", { viewBox: "0 0 " + LOGO.w + " " + LOGO.h, role: "img", "aria-label": "Driftlock" }, wrap);
+    var defs = el("defs", {}, svg);
+    var cIn = el("clipPath", { id: id + "i" }, defs); el("path", { d: LOGO.lock, "clip-rule": "evenodd" }, cIn);
+    var cOut = el("clipPath", { id: id + "o" }, defs);
+    el("path", { d: "M-4000 -4000H5000V5000H-4000Z" + LOGO.lock, "clip-rule": "evenodd" }, cOut);
+    el("path", { d: LOGO.lock, "class": "dl-lock", "fill-rule": "evenodd" }, svg);
+    var gIn = el("g", { "clip-path": "url(#" + id + "i)" }, svg), pIn = el("g", {}, gIn);
+    el("path", { d: LOGO.plane, "class": "dl-in", "fill-rule": "evenodd" }, pIn);
+    var gOut = el("g", { "clip-path": "url(#" + id + "o)" }, svg);
+    var trail = el("g", {}, gOut), segs = [];
+    for (var i = 0; i < 16; i++) segs.push(el("path", { "class": "dl-trail", d: "", opacity: 0 }, trail));
+    var pOut = el("g", {}, gOut); el("path", { d: LOGO.plane, "class": "dl-out", "fill-rule": "evenodd" }, pOut);
+    btn.appendChild(wrap);
+    return { btn: btn, pIn: pIn, pOut: pOut, segs: segs };
+  }
+
+  function apply(inst, p, t, poseFn, show) {
+    var tr = "translate(" + p.dx + " " + p.dy + ") rotate(" + p.rot + " " + LOGO.pcx + " " + LOGO.pcy + ")";
+    [inst.pIn, inst.pOut].forEach(function (g) { g.setAttribute("transform", tr); g.setAttribute("opacity", show ? p.op : 0); });
+    var pts = [];
+    for (var k = 0; k <= 16; k++) { var tk = t - k * 0.012; if (tk < 0) break; var q = poseFn(tk); pts.push({ x: LOGO.pcx + q.dx, y: LOGO.pcy + q.dy, op: q.op }); }
+    inst.segs.forEach(function (s, i) {
+      if (!show || i >= pts.length - 1) { s.setAttribute("opacity", 0); return; }
+      var a = pts[i], b = pts[i + 1], vx = b.x - a.x, vy = b.y - a.y, len = Math.hypot(vx, vy) || 1, nx = -vy / len, ny = vx / len;
+      var wa = 5 * (1 - i / 16), wb = 5 * (1 - (i + 1) / 16);
+      s.setAttribute("d", "M" + (a.x + nx * wa) + " " + (a.y + ny * wa) + "L" + (b.x + nx * wb) + " " + (b.y + ny * wb) + "L" + (b.x - nx * wb) + " " + (b.y - ny * wb) + "L" + (a.x - nx * wa) + " " + (a.y - ny * wa) + "Z");
+      s.setAttribute("opacity", 0.55 * (1 - i / 16) * a.op);
+    });
+  }
+  function rest(inst, visible) { apply(inst, { dx: 0, dy: 0, rot: 0, op: 1 }, 0, exitPose, visible); }
+
+  // One click = plane flies NORTH-EAST out, theme switches, plane comes back from the SOUTH-WEST.
+  function toggle(btn, ev) {
+    if (busy) return; busy = true;
+    var next = root.dataset.theme === "dark" ? "light" : "dark";
+    var r = btn.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+    var scale = r.width / LOGO.w;
+    var D = Math.min(9000, Math.max(700, Math.hypot(innerWidth, innerHeight) / scale));
+    var poses = makePoses(D);
+    var rip = document.createElement("div"); rip.className = "dl-ripple"; rip.style.left = (ev && ev.clientX || x) + "px"; rip.style.top = (ev && ev.clientY || y) + "px"; document.body.appendChild(rip); setTimeout(function () { rip.remove(); }, 650);
+    var reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var radius = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+    // the theme changes at the same moment the plane takes off
+    if (document.startViewTransition && !reduce) {
+      var vt = document.startViewTransition(function () { setTheme(next); });
+      vt.ready.then(function () { root.animate({ clipPath: ["circle(0px at " + x + "px " + y + "px)", "circle(" + radius + "px at " + x + "px " + y + "px)"] }, { duration: 800, easing: "ease-in-out", pseudoElement: "::view-transition-new(root)" }); });
+    } else setTheme(next);
+    var t0 = performance.now();
+    (function frame(now) {
+      var t = (now - t0) / 1000;
+      if (t >= EXIT_T + FLIGHT) { instances.forEach(function (i) { rest(i, true); }); busy = false; return; }
+      var poseFn = t < EXIT_T ? poses.exitPose : poses.returnPose;
+      var tt = t < EXIT_T ? t : t - EXIT_T;
+      var p = poseFn(tt);
+      instances.forEach(function (i) { apply(i, p, tt, poseFn, true); });
+      requestAnimationFrame(frame);
+    })(t0);
+  }
+
+  function init() {
+    document.querySelectorAll("[data-driftlock-logo]").forEach(function (b) {
+      if (b.__dl) return; b.__dl = true;
+      var inst = build(b); instances.push(inst); rest(inst, true);
+      b.addEventListener("click", function (e) { toggle(b, e); });
+    });
+  }
+  window.DriftlockLogo = { init: init };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
+})();
+
+</script>
+</body>
+</html>
